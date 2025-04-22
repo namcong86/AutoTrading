@@ -640,14 +640,13 @@ if len(ResultList) > 0:
 
     print("---------- 총 결과 ----------")
     print("최초 금액:", str(format(round(TotalOri), ','))  , " 최종 금액:", str(format(round(TotalFinal), ',')), "\n수익률:", round(((TotalFinal - TotalOri) / TotalOri) * 100,2) ,"% (단순보유수익률:" ,round(TotalHoldRevenue/InvestCnt,2) ,"%) 평균 MDD:",  round(TotalMDD,2),"%")
+    # CAGR 계산 추가
+    start_date = pd.to_datetime(FirstDateStr)
+    end_date = result_df.index[-1]
+    years = (end_date - start_date).days / 365.25
+    
+    CAGR = (pow((TotalFinal / TotalOri), (1/years)) - 1) * 100
+    print("CAGR(연복리수익률):", round(CAGR,2), "%")
+    
     print("------------------------------")
     print("####################################")
-
-
-
-
-
-
-
-
-
