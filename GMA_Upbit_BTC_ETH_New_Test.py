@@ -27,8 +27,8 @@ https://blog.naver.com/zacra/223170880153
 안전 전략 개선!
 https://blog.naver.com/zacra/223238532612
 
-최근 마지막 수정 포스팅
-https://blog.naver.com/zacra/223805709477
+전략 수익률 2배로 끌어올리기
+https://blog.naver.com/zacra/223456069194
 
 위 포스팅을 꼭 참고하세요!!!
 
@@ -65,7 +65,7 @@ InvestCoinList.append(InvestDataDict)
 
 # InvestDataDict = dict()
 # InvestDataDict['ticker'] = "KRW-ETH"
-# InvestDataDict['rate'] = 0
+# InvestDataDict['rate'] = 0.5
 # InvestCoinList.append(InvestDataDict)
 
 
@@ -115,7 +115,7 @@ for coin_data in InvestCoinList:
 
 
     #일봉 정보를 가지고 온다! 
-    df = pyupbit.get_ohlcv(coin_ticker,interval="day",count=3200, period=0.3) #day/minute1/minute3/minute5/minute10/minute15/minute30/minute60/minute240/week/month
+    df = pyupbit.get_ohlcv(coin_ticker,interval="day",count=3600, period=0.3) #day/minute1/minute3/minute5/minute10/minute15/minute30/minute60/minute240/week/month
     print(len(df))
 
     ########## RSI 지표 구하는 로직! ##########
@@ -133,6 +133,7 @@ for coin_data in InvestCoinList:
 
     ########################################
     df['rsi_ma'] = df['rsi'].rolling(10).mean()
+    df['rsi_5ma'] = df['rsi'].rolling(5).mean()
     df['prev_close'] = df['close'].shift(1)
     df['change'] = (df['close']-df['prev_close'])/df['prev_close']
     
@@ -143,6 +144,13 @@ for coin_data in InvestCoinList:
     ########################################
     df['value_ma'] = df['value'].rolling(window=10).mean().shift(1)
 
+    df['7ma'] = df['close'].rolling(window=7).mean()
+    df['16ma'] = df['close'].rolling(window=16).mean()
+    df['73ma'] = df['close'].rolling(window=73).mean()
+    df['30ma'] = df['close'].rolling(window=30).mean()  # 30일 이평선 추가
+
+    # 30일 이평선 5일 전체 하락률 계산 (퍼센트)
+    df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
 
     df = df[:len(df)-1]
 
@@ -271,20 +279,7 @@ for coin_data in InvestCoinList:
                     IsSellGo = False
 
 
-            #도지 캔들 패턴 체크
-            prev_high_low_gap = abs(df['high'].iloc[i-2] - df['low'].iloc[i-2])
-            prev_open_close_gap = abs(df['open'].iloc[i-2] - df['close'].iloc[i-2])
 
-            #윗꼬리와 아래꼬리 길이 계산
-            upper_tail = df['high'].iloc[i-1] - max(df['open'].iloc[i-1], df['close'].iloc[i-1])
-            lower_tail = min(df['open'].iloc[i-1], df['close'].iloc[i-1]) - df['low'].iloc[i-1]
-
-
-            if (prev_high_low_gap > 0 and (prev_open_close_gap / prev_high_low_gap) <= 0.4) and upper_tail > lower_tail:
-                    
-                #저전저가보다 이전종가가 낮으면서 수익률이 0보다 작다면..
-                if df['low'].iloc[i-2] > df['close'].iloc[i-1] and RevenueRate < 0:
-                    IsSellGo = True
 
             if IsSellGo == True :
 
@@ -397,16 +392,18 @@ for coin_data in InvestCoinList:
                 DolPaSt = max(df[str(ma1)+'ma'].iloc[i-1],df[str(ma2)+'ma'].iloc[i-1],df[str(ma3)+'ma'].iloc[i-1])
 
                 if DolPaSt == df[str(ma3)+'ma'].iloc[i-1] and df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt:
-
+                    
                     #비트코인은 추가 조건 체크 없이 그냥 돌파했으면 매수!
-                    BUY_PRICE = DolPaSt
-                    IsDolpaDay = True
-                    IsMaDone = True
+                    #30일 이평선이 5일 동안 -3% 이상 하락하지 않을 때만 매수       
+                    if df['30ma_slope'].iloc[i-1] > -2.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
+                        BUY_PRICE = DolPaSt
+                        IsDolpaDay = True
+                        IsMaDone = True
                 else:
                 
 
                     #2연속 양봉이면서 고가도 증가되는데 7일선이 증가되고 있으면서 16일선,73일선 위에 있을 때 비트 매수!
-                    if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1]   and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['73ma'].iloc[i-1] < df['close'].iloc[i-1] :
+                    if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1]   and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['73ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > -3.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
                         
                         BUY_PRICE = NowOpenPrice
                         IsDolpaDay = False
@@ -430,33 +427,8 @@ for coin_data in InvestCoinList:
 
 
 
-            IsAdditionalCondition = False
-            
-            if coin_ticker == 'KRW-ETH':
-                if (df['5ma'].iloc[i-2] <= df['5ma'].iloc[i-1] and df['5ma'].iloc[i-1] <= PrevClosePrice) and (df['24ma'].iloc[i-2] <= df['24ma'].iloc[i-1] and df['24ma'].iloc[i-1] <= PrevClosePrice):
-                    IsAdditionalCondition = True
-                        
-
-
-            else:
-                if (df['3ma'].iloc[i-2] <= df['3ma'].iloc[i-1] and df['3ma'].iloc[i-1] <= PrevClosePrice) and (df['33ma'].iloc[i-2] <= df['33ma'].iloc[i-1] and df['33ma'].iloc[i-1] <= PrevClosePrice):
-                    IsAdditionalCondition = True
-                    
-            #도지 캔들 패턴 체크
-            prev_high_low_gap = abs(df['high'].iloc[i-1] - df['low'].iloc[i-1])
-            prev_open_close_gap = abs(df['open'].iloc[i-1] - df['close'].iloc[i-1])
-
-
-
-            #시가와 종가의 갭이 고가와 저가의 갭의 10% 이하라면 도지 캔들로 판단
-            if (prev_high_low_gap > 0 and (prev_open_close_gap / prev_high_low_gap) <= 0.1) :
-                IsMaDone = False
-
-
-                
-                
             #이평선 조건을 만족한다면..
-            if IsMaDone == True and IsAdditionalCondition == True :
+            if IsMaDone == True  :
  
                 Rate = 1.0
 
@@ -486,8 +458,8 @@ for coin_data in InvestCoinList:
             if IsBuyGo == True :
 
                 #투자금 거래대금 10일 평균의 1/2000수준으로 제한!
-                if InvestGoMoney > df['value_ma'].iloc[i-1] / 2000:
-                    InvestGoMoney = df['value_ma'].iloc[i-1]/ 2000
+                if InvestGoMoney > df['value_ma'].iloc[i-1] / 1000:
+                    InvestGoMoney = df['value_ma'].iloc[i-1]/ 1000
 
                 if InvestGoMoney < 10000:
                     InvestGoMoney = 10000
@@ -668,14 +640,6 @@ if len(ResultList) > 0:
 
     print("---------- 총 결과 ----------")
     print("최초 금액:", str(format(round(TotalOri), ','))  , " 최종 금액:", str(format(round(TotalFinal), ',')), "\n수익률:", round(((TotalFinal - TotalOri) / TotalOri) * 100,2) ,"% (단순보유수익률:" ,round(TotalHoldRevenue/InvestCnt,2) ,"%) 평균 MDD:",  round(TotalMDD,2),"%")
-    # CAGR 계산 추가
-    start_date = pd.to_datetime(FirstDateStr)
-    end_date = result_df.index[-1]
-    years = (end_date - start_date).days / 365.25
-    
-    CAGR = (pow((TotalFinal / TotalOri), (1/years)) - 1) * 100
-    print("CAGR(연복리수익률):", round(CAGR,2), "%")
-    
     print("------------------------------")
     print("####################################")
 
