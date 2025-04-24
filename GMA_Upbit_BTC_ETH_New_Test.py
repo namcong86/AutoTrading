@@ -395,7 +395,7 @@ for coin_data in InvestCoinList:
                     
                     #비트코인은 추가 조건 체크 없이 그냥 돌파했으면 매수!
                     #30일 이평선이 5일 동안 -3% 이상 하락하지 않을 때만 매수       
-                    if df['30ma_slope'].iloc[i-1] > -2.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
+                    if df['30ma_slope'].iloc[i-1] > -4.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1] :
                         BUY_PRICE = DolPaSt
                         IsDolpaDay = True
                         IsMaDone = True
@@ -403,7 +403,7 @@ for coin_data in InvestCoinList:
                 
 
                     #2연속 양봉이면서 고가도 증가되는데 7일선이 증가되고 있으면서 16일선,73일선 위에 있을 때 비트 매수!
-                    if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1]   and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['73ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > -3.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
+                    if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1]   and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['73ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > -4.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
                         
                         BUY_PRICE = NowOpenPrice
                         IsDolpaDay = False
@@ -417,7 +417,7 @@ for coin_data in InvestCoinList:
 
                     DolPaSt = NowOpenPrice + (((max(df['high'].iloc[i-1],df['high'].iloc[i-2])- min(df['low'].iloc[i-1],df['low'].iloc[i-2])) * DolpaRate))
 
-                    if df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt and df[str(ma2)+'ma'].iloc[i-2] < PrevClosePrice and df['low'].iloc[i-2] < df['low'].iloc[i-1] and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df[str(ma3)+'ma'].iloc[i-2] < df[str(ma2)+'ma'].iloc[i-1] < df[str(ma1)+'ma'].iloc[i-1] :
+                    if df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt and df[str(ma2)+'ma'].iloc[i-2] < PrevClosePrice and df['low'].iloc[i-2] < df['low'].iloc[i-1] and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df[str(ma3)+'ma'].iloc[i-2] < df[str(ma2)+'ma'].iloc[i-1] < df[str(ma1)+'ma'].iloc[i-1]  and df['30ma_slope'].iloc[i-1] > -4.0 :
                         BUY_PRICE = DolPaSt
                         IsDolpaDay = True
                         IsMaDone = True
