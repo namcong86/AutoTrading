@@ -61,12 +61,12 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000
-leverage = 3  # 레버리지 3배 설정
-fee = 0.0004  # 바이낸스 선물 수수료(0.04%)
+leverage = 5  # 레버리지 3배 설정
+fee = 0.0005  # 바이낸스 선물 수수료(0.05%)
 
 # 투자 종목 설정
 InvestCoinList = [
-    {'ticker': 'DOGE/USDT', 'rate': 1}
+    {'ticker': 'BTC/USDT', 'rate': 1}
 ]
 
 ResultList = []
@@ -78,7 +78,7 @@ for coin_data in InvestCoinList:
 
     # 헤지 모드 및 레버리지 설정 (백테스팅에서는 시뮬레이션용)
     try:
-        binanceX.set_margin_mode('iDOGEated', coin_ticker)
+        binanceX.set_margin_mode('iBTCated', coin_ticker)
         binanceX.set_leverage(leverage, coin_ticker)
     except Exception as e:
         print(f"헤지 모드/레버리지 설정 오류: {e}")
@@ -92,8 +92,9 @@ for coin_data in InvestCoinList:
     TotalPureMoney = 0
     AvgPrice = 0
 
-    df = GetOhlcv2(binanceX, coin_ticker, '1d', 2023, 11, 28, 0, 0)
-    print(len(df))
+    df = GetOhlcv2(binanceX, coin_ticker, '1d', 2022, 1, 1, 0, 0)
+    df = df[df.index < '2025-04-24']  # 데이터 기간 제한 (2022-02-28까지)
+    print(f"Data length: {len(df)}, Start: {df.index[0]}, End: {df.index[-1]}")  # 디버깅: 데이터 범위 출력
 
     # RSI 지표 계산
     period = 14
@@ -135,7 +136,7 @@ for coin_data in InvestCoinList:
     TotalMoneyList = []
     ma1, ma2, ma3 = 3, 12, 24
     BUY_PRICE = 0
-    IsDolpDOGEy = False
+    IsDolpBTCy = False
 
     for i in range(len(df)):
         if FirstDateStr == "":
@@ -151,10 +152,10 @@ for coin_data in InvestCoinList:
             SellPrice = NowOpenPrice
 
             # 레버리지 반영: 수익률에만 3배 적용
-            if IsDolpDOGEy:
+            if IsDolpBTCy:
                 price_change = (SellPrice - BUY_PRICE) / BUY_PRICE * leverage
                 RealInvestMoney = RealInvestMoney * (1.0 + price_change)
-                IsDolpDOGEy = False
+                IsDolpBTCy = False
             else:
                 price_change = (SellPrice - PrevOpenPrice) / PrevOpenPrice * leverage
                 RealInvestMoney = RealInvestMoney * (1.0 + price_change)
@@ -182,7 +183,7 @@ for coin_data in InvestCoinList:
                 Rate = (SellPrice - AvgPrice) / AvgPrice * leverage
                 RevenueRate = (Rate - fee) * 100.0
 
-            if coin_ticker == 'DOGE/USDT':
+            if coin_ticker == 'BTC/USDT':
                 if ((df['high'].iloc[i-2] > df['high'].iloc[i-1] and df['low'].iloc[i-2] > df['low'].iloc[i-1]) or 
                     (df['open'].iloc[i-1] > df['close'].iloc[i-1] and df['open'].iloc[i-2] > df['close'].iloc[i-2]) or 
                     RevenueRate < 0):
@@ -216,24 +217,24 @@ for coin_data in InvestCoinList:
             InvestGoMoney = 0
             IsMaDone = False
 
-            if coin_ticker == 'DOGE/USDT':
+            if coin_ticker == 'BTC/USDT':
                 DolPaSt = max(df[str(ma1)+'ma'].iloc[i-1], df[str(ma2)+'ma'].iloc[i-1], df[str(ma3)+'ma'].iloc[i-1])
                 if DolPaSt == df[str(ma3)+'ma'].iloc[i-1] and df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt:
                     if df['30ma_slope'].iloc[i-1] > DiffValue and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1] and df['30ma'].iloc[i] < DolPaSt:
                         BUY_PRICE = DolPaSt
-                        IsDolpDOGEy = True
+                        IsDolpBTCy = True
                         IsMaDone = True
                 else:
                     if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1] and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['73ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > DiffValue and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
                         BUY_PRICE = NowOpenPrice
-                        IsDolpDOGEy = False
+                        IsDolpBTCy = False
                         IsMaDone = True
                 if not IsMaDone:
                     DolpaRate = 0.7
                     DolPaSt = NowOpenPrice + (((max(df['high'].iloc[i-1], df['high'].iloc[i-2]) - min(df['low'].iloc[i-1], df['low'].iloc[i-2])) * DolpaRate))
                     if df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt and df[str(ma2)+'ma'].iloc[i-2] < PrevClosePrice and df['low'].iloc[i-2] < df['low'].iloc[i-1] and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df[str(ma3)+'ma'].iloc[i-2] < df[str(ma2)+'ma'].iloc[i-1] < df[str(ma1)+'ma'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > DiffValue and df['30ma'].iloc[i] < DolPaSt:
                         BUY_PRICE = DolPaSt
-                        IsDolpDOGEy = True
+                        IsDolpBTCy = True
                         IsMaDone = True
 
             if IsMaDone:
@@ -257,7 +258,7 @@ for coin_data in InvestCoinList:
                 RemainInvestMoney -= NowFee
                 InvestMoney = RealInvestMoney + RemainInvestMoney
                 AvgPrice = BUY_PRICE
-                if IsDolpDOGEy:
+                if IsDolpBTCy:
                     print(f"{coin_ticker} {df.iloc[i].name} 회차 >>>> !!!돌파!!! 매수수량: {BuyAmt} 누적수량: {TotalBuyAmt} 평단: {round(AvgPrice,2)} >>>>>>> 매수시작! \n투자금 수익률: 0% ,종목 잔고: {round(RemainInvestMoney,2)} + {round(RealInvestMoney,2)} = {round(InvestMoney,2)} 매수가격: {round(BUY_PRICE,2)}\n")
                 else:
                     print(f"{coin_ticker} {df.iloc[i].name} 회차 >>>> 매수수량: {BuyAmt} 누적수량: {TotalBuyAmt} 평단: {round(AvgPrice,2)} >>>>>>> 매수시작! \n투자금 수익률: 0% ,종목 잔고: {round(RemainInvestMoney,2)} + {round(RealInvestMoney,2)} = {round(InvestMoney,2)} 매수가격: {round(BUY_PRICE,2)}\n")
