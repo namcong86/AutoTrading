@@ -62,7 +62,7 @@ binanceX = ccxt.binance(config={
 
 InvestTotalMoney = 5000
 leverage = 5  # 레버리지 3배 설정
-fee = 0.0005  # 바이낸스 선물 수수료(0.05%)
+fee = 0.002  # 바이낸스 선물 수수료(0.05%)
 
 # 투자 종목 설정
 InvestCoinList = [
@@ -247,8 +247,8 @@ for coin_data in InvestCoinList:
             if IsBuyGo:
                 if InvestGoMoney > df['value_ma'].iloc[i-1] / 1000:
                     InvestGoMoney = df['value_ma'].iloc[i-1] / 1000
-                if InvestGoMoney < 10000:
-                    InvestGoMoney = 10000
+                if InvestGoMoney < 100:
+                    InvestGoMoney = 100
                 BuyAmt = float(InvestGoMoney / BUY_PRICE)
                 NowFee = (BuyAmt * BUY_PRICE) * fee
                 TotalBuyAmt += BuyAmt
