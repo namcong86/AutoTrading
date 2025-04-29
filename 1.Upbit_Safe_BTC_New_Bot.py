@@ -31,6 +31,7 @@ import pprint
 import json
 import urllib3
 import telegram_alert
+import socket
 
 # 암복호화 클래스 객체 생성
 simpleEnDecrypt = myUpbit.SimpleEnDecrypt(ende_key.ende_key)
@@ -75,10 +76,18 @@ def GetRevenueMoneyAndRate(balances, Ticker):
             print("---:", e)
     return revenue_data
 
+
+pcServerGb = socket.gethostname()
+
 # 봇 상태 저장 파일
 BotDataDict = dict()
-botdata_file_path = "/var/services/homes/AutoBot/Upbit_Safe_Data.json"
-#botdata_file_path = "C:\\AutoTrading\\AutoTrading\\Upbit_Safe_Data.json"
+if pcServerGb == "congsnas" :
+    #서버: 
+    botdata_file_path = "/var/services/homes/AutoBot/Upbit_Safe_Data.json"
+else:
+    #PC
+    botdata_file_path = "C:\\AutoTrading\\AutoTrading\\Upbit_Safe_Data.json"
+
 
 try:
     with open(botdata_file_path, 'r') as json_file:
