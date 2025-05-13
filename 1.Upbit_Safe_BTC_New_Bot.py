@@ -227,7 +227,7 @@ for coin_data in InvestCoinList:
                     df_day['close'].iloc[-3] < df_day['close'].iloc[-2] and df_day['high'].iloc[-3] < df_day['high'].iloc[-2] and
                     df_day['7ma'].iloc[-3] < df_day['7ma'].iloc[-2] and df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2] and
                     df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2] and df_day['30ma_slope'].iloc[-2] > -4.0 and
-                    df_day['rsi_5ma'].iloc[-1] > df_day['rsi_5ma'].iloc[-2] and (hour_n == 0 and min_n <= 5)):
+                    df_day['rsi_5ma'].iloc[-1] > df_day['rsi_5ma'].iloc[-2] and (hour_n == 0 and min_n < 5)):
                     BUY_PRICE = NowCurrentPrice
                     IsDolpaDay = False
                     IsMaDone = True
@@ -273,7 +273,7 @@ for coin_data in InvestCoinList:
                 print(msg)
                 telegram_alert.SendMessage(msg)
         else:
-            if hour_n == 0 and min_n <= 5:
+            if hour_n == 0 and min_n <5:
                 msg = coin_ticker + " 업비트 안전 전략 봇: 조건 만족하지 않아 현금 보유 합니다!"
                 print(msg)
                 telegram_alert.SendMessage(msg)
