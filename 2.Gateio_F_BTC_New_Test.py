@@ -180,7 +180,7 @@ InvestCoinList = [
     {'ticker': 'BTC/USDT:USDT', 'rate': 1}
 ]
 
-from_date = datetime.datetime(2019, 10, 1)
+from_date = datetime.datetime(2022, 10, 1)
 to_date = datetime.datetime(2025, 5, 7)
 
 ResultList = []
@@ -277,32 +277,6 @@ for coin_data in InvestCoinList:
             IsSellGo = False
             SellPrice = NowOpenPrice
 
-            # if IsDolpaDay:
-            #     price_change = (SellPrice - BUY_PRICE) / BUY_PRICE * leverage
-            #     RealInvestMoney = RealInvestMoney * (1.0 + price_change)
-            #     IsDolpaDay = False
-            # else:
-            #     price_change = (SellPrice - PrevOpenPrice) / PrevOpenPrice * leverage
-            #     print(f"{SellPrice} {PrevOpenPrice} >>> 오류확인: {price_change}")
-            #     RealInvestMoney = RealInvestMoney * (1.0 + price_change)
-
-            # InvestMoney = RealInvestMoney + RemainInvestMoney
-
-            # if InvestMoney < InvestTotalMoney / 3:
-            #     print(f"{coin_ticker} {df.iloc[i].name} >>> 강제 청산! 잔고 부족: {round(InvestMoney, 2)}")
-            #     IsSellGo = True
-            #     SellPrice = NowOpenPrice
-            #     RealInvestMoney = 0
-            #     RemainInvestMoney = InvestMoney
-            #     TotalBuyAmt = 0
-            #     TotalPureMoney = 0
-            #     AvgPrice = 0
-            #     IsBuy = False
-            #     TryCnt += 1
-            #     MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
-            #     FailCnt += 1
-            #     print(f"DEBUG: Total_Money={InvestMoney:.2f}, RealInvestMoney={RealInvestMoney:.2f}, RemainInvestMoney={RemainInvestMoney:.2f}")
-            #     continue
 
             Rate = 0
             RevenueRate = 0
@@ -315,8 +289,6 @@ for coin_data in InvestCoinList:
                     (df['open'].iloc[i-1] > df['close'].iloc[i-1] and df['open'].iloc[i-2] > df['close'].iloc[i-2]) or 
                     RevenueRate < 0.5):
                     IsSellGo = True
-                # if df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df['3ma'].iloc[i-2] < df['3ma'].iloc[i-1]:
-                #     IsSellGo = False
 
                 if IsSellGo:
 
@@ -364,30 +336,8 @@ for coin_data in InvestCoinList:
                     IsDolpaDay = False
                     IsMaDone = True
 
-            # if coin_ticker == 'BTC/USDT:USDT':
-            #     DolPaSt = max(df[str(ma1)+'ma'].iloc[i-1], df[str(ma2)+'ma'].iloc[i-1], df[str(ma3)+'ma'].iloc[i-1])
-            #     if DolPaSt == df[str(ma3)+'ma'].iloc[i-1] and df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt:
-            #         if df['30ma_slope'].iloc[i-1] > DiffValue and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1] and df['30ma'].iloc[i] < DolPaSt:
-            #             BUY_PRICE = DolPaSt
-            #             IsDolpaDay = True
-            #             IsMaDone = True
-            #     else:
-            #         if df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and df['close'].iloc[i-2] < df['close'].iloc[i-1] and df['high'].iloc[i-2] < df['high'].iloc[i-1] and df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > DiffValue and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
-            #             BUY_PRICE = NowOpenPrice
-            #             IsDolpaDay = False
-            #             IsMaDone = True
-            #     if not IsMaDone:
-            #         DolpaRate = 0.7
-            #         DolPaSt = NowOpenPrice + (((max(df['high'].iloc[i-1], df['high'].iloc[i-2]) - min(df['low'].iloc[i-1], df['low'].iloc[i-2])) * DolpaRate))
-            #         if df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt and df[str(ma2)+'ma'].iloc[i-2] < PrevClosePrice and df['low'].iloc[i-2] < df['low'].iloc[i-1] and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df[str(ma3)+'ma'].iloc[i-2] < df[str(ma2)+'ma'].iloc[i-1] < df[str(ma1)+'ma'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > DiffValue and df['30ma'].iloc[i] < DolPaSt:
-            #             BUY_PRICE = DolPaSt
-            #             IsDolpaDay = True
-            #             IsMaDone = True
-
             if IsMaDone:
                 Rate = 1.0
-                # if df['50ma'].iloc[i-2] > df['50ma'].iloc[i-1] or df['50ma'].iloc[i-1] > df['close'].iloc[i-1]:
-                #     Rate *= 0.5
                 InvestGoMoney = RemainInvestMoney * Rate * (1.0 - fee)
                 IsBuyGo = True
 

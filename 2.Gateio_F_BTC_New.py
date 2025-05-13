@@ -331,16 +331,17 @@ for coin_data in InvestCoinList:
         #     IsSellGo = False
         # 강제 청산 조건
         current_account = gateio_api.get_futures_account(settle='usdt')
-        current_balance = float(current_account['total']) if current_account and 'total' in current_account else 0
-        if current_balance < TotalMoney / 3:
-            IsSellGo = True
-            IsDolpaCut = True
+        current_balance = float(current_account['isolated_position_margin']) if current_account and 'isolated_position_margin' in current_account else 0
+        # if current_balance < TotalMoney / 3:
+        #     IsSellGo = True
+        #     IsDolpaCut = True
 
         if BotDataDict[coin_ticker + "_BUY_DATE"] == day_str:
             IsSellGo = False
 
         if IsSellGo:
-            order = gateio.create_market_sell_order(Target_Coin_Ticker, abs(amt_b), params={'type': 'swap'})
+            logger.info(f"아오: {amt_b}")
+            order = gateio.create_market_sell_order(Target_Coin_Ticker, current_balance, params={'type': 'swap','reduce_only': True})
             msg = f"2.Gate.io 일봉 단타봇 매도! => 수익률: {round(revenue_rate_b * set_leverage, 2)}% 수익금: {format(round(unrealizedProfit_b,2), ',')} USDT"
             logger.info(msg)
             telegram_alert.SendMessage(msg)
