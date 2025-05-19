@@ -180,7 +180,7 @@ InvestCoinList = [
     {'ticker': 'BTC/USDT:USDT', 'rate': 1}
 ]
 
-from_date = datetime.datetime(2022, 10, 1)
+from_date = datetime.datetime(2019, 10, 1)
 to_date = datetime.datetime(2025, 5, 7)
 
 ResultList = []
@@ -244,7 +244,7 @@ for coin_data in InvestCoinList:
         DiffValue = -0.8
 
         print("Trimming and cleaning DataFrame...")
-        df = df[:len(df)-1]
+        df = df[:len(df)]
         df.dropna(inplace=True)
         print("Technical indicators calculated successfully.")
     except Exception as e:
@@ -293,7 +293,7 @@ for coin_data in InvestCoinList:
                 if IsSellGo:
 
                     price_change = (SellPrice - BUY_PRICE) / BUY_PRICE * leverage
-                    RealInvestMoney = RealInvestMoney * (1.0 + price_change)
+                    RealInvestMoney = TotalPureMoney * (1.0 + price_change)
 
                     SellAmt = TotalBuyAmt
                     SellPrice = NowOpenPrice
@@ -319,6 +319,10 @@ for coin_data in InvestCoinList:
                     IsBuy = False
                     IsSellToday = True
                     print(f"DEBUG: Total_Money={InvestMoney:.2f}, RealInvestMoney={RealInvestMoney:.2f}, RemainInvestMoney={RemainInvestMoney:.2f}, RevenueRate={RevenueRate:.2f}")
+                else:
+                    daily_price_change = (df['close'].iloc[i-1] - BUY_PRICE) / BUY_PRICE * leverage
+                    RealInvestMoney = TotalPureMoney * (1.0 + daily_price_change)
+                    InvestMoney = RealInvestMoney + RemainInvestMoney    
 
         if not IsBuy and i > 2 and not IsSellToday:
             if not IsFirstDateSet:
@@ -338,7 +342,7 @@ for coin_data in InvestCoinList:
 
             if IsMaDone:
                 Rate = 1.0
-                InvestGoMoney = RemainInvestMoney * Rate * (1.0 - fee)
+                InvestGoMoney = RemainInvestMoney * Rate * (1.0 - (fee*leverage))
                 IsBuyGo = True
 
             if IsBuyGo:
@@ -364,7 +368,6 @@ for coin_data in InvestCoinList:
                 print(f"DEBUG: Total_Money={InvestMoney:.2f}, RealInvestMoney={RealInvestMoney:.2f}, RemainInvestMoney={RemainInvestMoney:.2f}")
                 print("\n")
 
-        InvestMoney = RealInvestMoney + RemainInvestMoney
         TotalMoneyList.append(InvestMoney)
 
     if len(TotalMoneyList) > 0:
