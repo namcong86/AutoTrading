@@ -92,7 +92,7 @@ for coin_data in InvestCoinList:
     df['73ma'] = df['close'].rolling(window=73).mean()
     df['30ma'] = df['close'].rolling(window=30).mean()  # 30일 이평선 추가
     df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
-    df = df[:len(df) - 1]
+    df = df[:len(df)]
     df.dropna(inplace=True)  # 데이터 없는건 날린다!
     pprint.pprint(df)
 
