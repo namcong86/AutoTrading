@@ -1,10 +1,14 @@
 import ccxt
+import socket
 import requests
 import telegram_alert
 import time
 import pyupbit
 import myUpbit  # 우리가 만든 함수들이 들어있는 모듈
 from datetime import datetime
+from collections import defaultdict
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # 업비트 키
 Upbit_AccessKey = "AYneBweCn6FFMeWtTO0Cxq0XJxU7rCZ6WpzUsvNk"
@@ -70,6 +74,19 @@ MEXC_exchange = ccxt.mexc({
     "secret": MEXC_api_secret,
     "enableRateLimit": True,
 })
+
+exchanges = {
+    "Binance":   Binance_exchange,
+    "OKX":       OKX_exchange,
+    "Bybit":     Bybit_exchange,
+    "Bitget":    Bitget_exchange,
+    "MEXC":      MEXC_exchange,
+}
+
+EXCLUDE_COINS = {
+    "BTC", "ETH", "BNB", "TRX", "ATOM", "DOGE", "DOT",
+    "ETHW", "STRK", "KAITO", "XRP", "LTC", "IP"
+}
 
 # 거래소별 현물 잔액 조회 함수
 def get_spot_balance(exchange, name):
@@ -234,7 +251,54 @@ def get_exchange_rate():
         print(f"Error fetching exchange rate: {e}")
         return 1200  # 에러 발생 시 기본값 설정
 
+# --- 1) 개별 거래소 현물 코인 USDT 환산 잔액 조회 함수 ---
+def get_spot_coin_balances(exchange, name):
+    balances = {}
+    try:
+        # CCXT 통일: spot 지갑에서만 조회
+        raw = exchange.fetch_balance(params={"type": "spot"})
+        for coin, amt in raw.get("total", {}).items():
+            if amt and amt > 0:
+                balances[coin] = amt
+    except Exception as e:
+        print(f"{name} spot balance fetch error: {e}")
+        return {}
+
+    usdt_dict = {}
+    for coin, amt in balances.items():
+        if coin == "USDT":
+            usdt_dict["USDT"] = amt
+        else:
+            try:
+                ticker = f"{coin}/USDT"
+                price  = exchange.fetch_ticker(ticker)["last"]
+                usdt_dict[coin] = amt * price
+            except Exception:
+                # 환산 불가 코인은 스킵
+                continue
+    return usdt_dict
+
+# ──────────────────────────────────────────────────────────
+# 3) 모든 거래소 Spot 잔액을 합산
+# ──────────────────────────────────────────────────────────
+def aggregate_spot_balances():
+    total = defaultdict(float)
+    for name, exchange in exchanges.items():
+        for coin, usdt_amt in get_spot_coin_balances(exchange, name).items():
+            total[coin] += usdt_amt
+    return total
+
+# --- 2) 모든 거래소에서 가져온 현물 잔액을 코인별로 합산 ---
+def aggregate_spot_balances():
+    total = defaultdict(float)
+    for name, exchange in exchanges.items():
+        for coin, usdt_amt in get_spot_coin_balances(exchange, name).items():
+            total[coin] += usdt_amt
+    return total
+
+
 print("===== 자산 조회 시작 =====")
+
 
 # API 키가 설정되었는지 확인
 if not Binance_api_key or not Binance_api_secret:
@@ -303,5 +367,56 @@ try:
     print("텔레그램 알림 전송 완료")
 except Exception as e:
     print(f"텔레그램 알림 전송 실패: {e}")
+
+# --- 기존에 쓰시던 “현재 총잔액 알림” 부분 바로 아래에 추가 ---
+aggregated = aggregate_spot_balances()
+
+# 2) 제외 코인 필터링 후 내림차순 정렬
+sorted_balances = sorted(
+    ((coin, amt) for coin, amt in aggregated.items() if coin not in EXCLUDE_COINS),
+    key=lambda x: x[1],
+    reverse=True
+)
+
+# 3) 콘솔 출력 (디버깅 & 확인용)
+print("⛳ 현물 코인별 합산 잔액 (콘솔 출력) - 내림차순")
+for coin, amt in sorted_balances:
+    print(f"{coin} {int(amt)}")
+
+# 4) Telegram 메시지 생성 & 전송
+lines = [f"{coin} {int(amt)}" for coin, amt in sorted_balances]
+message = "⛳ 현물 코인별 합산 잔액\n" + "\n".join(lines)
+telegram_alert.SendMessage(message)
+
+# 스프레드시트 데이터 갱신
+gspreadJsonPath = dict()
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong" :
+    #서버: 
+    gspreadJsonPath = "/var/AutoBot/json/autobot.json"
+else:
+    #PC
+    gspreadJsonPath = "C:\\AutoTrading\\AutoTrading\\json\\autobot.json"
+
+# 구글 스프레드시트 인증
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name(gspreadJsonPath, scope)
+client = gspread.authorize(creds)
+
+# 스프레드시트 열기 (문서 이름 또는 ID 사용)
+sheet = client.open("코인투자").worksheet("예치")  # 예: 'Sheet1' 탭
+
+# A2부터 코인명, B2부터 잔액 입력
+start_row = 24  # A24 부터 시작
+
+# 준비: 코인명과 금액을 담은 리스트
+coin_names = [[coin] for coin, _ in sorted_balances]
+amounts = [[int(amount)] for _, amount in sorted_balances]
+
+# 범위: A24:A54, B24:B54
+end_row = 24 + len(sorted_balances) - 1
+sheet.update(f"A24:A{end_row}", coin_names)
+sheet.update(f"B24:B{end_row}", amounts)
+
 
 print("===== 자산 조회 완료 =====")
