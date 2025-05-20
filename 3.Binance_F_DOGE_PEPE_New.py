@@ -37,7 +37,7 @@ except:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = 5
+    set_leverage = 4
 
 InvestRate = 1  # 0.1%
 fee = 0.001  # 0.2%
@@ -155,6 +155,15 @@ for coin_data in InvestCoinList:
         macd_2to1_down = macd_2ago > macd_1ago
         macd_condition = not (macd_3to2_down and macd_2to1_down)
 
+        # 전일캔들이 윗꼬리가 긴 도지형캔들이면 매수x
+        prev_high = df['high'].iloc[-2]
+        prev_low = df['low'].iloc[-2]
+        prev_open = df['open'].iloc[-2]
+        prev_close = df['close'].iloc[-2]
+        upper_shadow = prev_high - max(prev_open, prev_close)
+        candle_length = prev_high - prev_low
+        upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
+
         cond_o1 = (df['open'].iloc[-2] < df['close'].iloc[-2])
         cond_o2 = (df['open'].iloc[-3] < df['close'].iloc[-3])
         cond_close_inc = (df['close'].iloc[-3] < df['close'].iloc[-2])
@@ -163,16 +172,18 @@ for coin_data in InvestCoinList:
         cond_50ma = (df['50ma'].iloc[-3] < df['50ma'].iloc[-2])
         cond_slope = (df['30ma_slope'].iloc[-2] > DiffValue)
         cond_rsi_inc = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
-        cond_MACD= (macd_positive and macd_condition)
+        cond_MACD = (macd_positive and macd_condition)
+        cond_doji = upper_shadow_ratio <= 0.6
 
         analysis_msg = (f"{coin_ticker} 매수조건 분석: 연속양봉={cond_o1 and cond_o2}, "
                         f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
                         f"7이평증가={cond_7ma}, 50이평증가={cond_50ma}, 30이평기울기={cond_slope}, "
                         f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]}->{df['rsi_ma'].iloc[-2]}), "
-                        f"MACD={cond_MACD}")
+                        f"MACD={cond_MACD}"
+                        f"도지캔들={cond_doji}")
         
         telegram_alert.SendMessage(analysis_msg)
-        buy = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD
+        buy = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD and cond_doji
         if buy:
             if BotDataDict[coin_ticker + '_BUY_DATE'] != day_str:
                 # ------ 여기서 투자금액 결정! ------

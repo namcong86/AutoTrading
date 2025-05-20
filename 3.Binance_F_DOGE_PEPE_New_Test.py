@@ -61,13 +61,13 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000
-leverage = 5  # 레버리지 5배 설정
+leverage = 4  # 레버리지 5배 설정
 fee = 0.001  # 바이낸스 선물 수수료(0.05%) 보수적으로 0.1% 적용
 
 # 투자 종목 설정 - 1000PEPE와 DOGE 각각 50%씩 투자
 InvestCoinList = [
-    {'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2024, 'month': 2, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2024, 'month': 2, 'day': 1}}
+    {'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 2, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 2, 'day': 1}}
 ]
 
 ResultList = []
@@ -218,7 +218,7 @@ for coin_data in InvestCoinList:
             IsBuyGo = False
             InvestGoMoney = 0
             IsMaDone = False
-
+            # MACD 조건
             macd_3ago = df['macd'].iloc[i-3]-df['macd_signal'].iloc[i-3]
             macd_2ago = df['macd'].iloc[i-2]-df['macd_signal'].iloc[i-2]
             macd_1ago = df['macd'].iloc[i-1]-df['macd_signal'].iloc[i-1]
@@ -226,6 +226,16 @@ for coin_data in InvestCoinList:
             macd_3to2_down = macd_3ago > macd_2ago
             macd_2to1_down = macd_2ago > macd_1ago
             macd_condition = not (macd_3to2_down and macd_2to1_down)
+
+            # 전일캔들이 윗꼬리가 긴 도지형캔들이면 매수x
+            prev_high = df['high'].iloc[i-1]
+            prev_low = df['low'].iloc[i-1]
+            prev_open = df['open'].iloc[i-1]
+            prev_close = df['close'].iloc[i-1]
+            upper_shadow = prev_high - max(prev_open, prev_close)
+            candle_length = prev_high - prev_low
+            upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
+            
 
             # 매수 조건 - 모든 코인에 동일하게 적용
             if (df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and 
@@ -236,7 +246,8 @@ for coin_data in InvestCoinList:
                 df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and 
                 df['30ma_slope'].iloc[i-1] > DiffValue and 
                 df['rsi_ma'].iloc[i] > df['rsi_ma'].iloc[i-1] and 
-                (macd_positive and macd_condition)):
+                (macd_positive and macd_condition) and 
+                (upper_shadow_ratio <= 0.6)):
                     BUY_PRICE = NowOpenPrice
                     IsMaDone = True
 
