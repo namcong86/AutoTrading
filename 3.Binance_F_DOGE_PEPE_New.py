@@ -37,7 +37,7 @@ except:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = 4
+    set_leverage = 6
 
 InvestRate = 1  # 0.1%
 fee = 0.001  # 0.2%
@@ -54,8 +54,8 @@ if hour_n == 0 and min_n <= 2:
 
 # 투자 종목: DOGE, 1000PEPE - 50:50 비중
 InvestCoinList = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.6},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.4}
+    {'ticker': 'DOGE/USDT', 'rate': 0.5},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.5}
 ]
 
 # ----- 여기서부터 전체 포지션 체크 변수를 선언 -----
