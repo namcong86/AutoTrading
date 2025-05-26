@@ -78,8 +78,7 @@ for coin_data in InvestCoinList:
     _loss = down.abs().ewm(com=(period - 1), min_periods=period).mean()
     RS = _gain / _loss
     df['rsi'] = pd.Series(100 - (100 / (1 + RS)), name="RSI")
-    df['rsi_ma'] = df['rsi'].rolling(10).mean()
-    df['rsi_5ma'] = df['rsi'].rolling(5).mean()
+    df['rsi_ma'] = df['rsi'].rolling(14).mean()
     df['prev_close'] = df['close'].shift(1)
     df['change'] = (df['close'] - df['prev_close']) / df['prev_close']
 
@@ -176,19 +175,22 @@ for coin_data in InvestCoinList:
             InvestGoMoney = 0
             IsMaDone = False
 
+
             if coin_ticker == 'KRW-BTC':
                 DolPaSt = max(df[str(ma1) + 'ma'].iloc[i-1], df[str(ma2) + 'ma'].iloc[i-1], df[str(ma3) + 'ma'].iloc[i-1])
                 if DolPaSt == df[str(ma3) + 'ma'].iloc[i-1] and df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt:
-                    if df['30ma_slope'].iloc[i-1] > -4.0 and df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]:
-                        BUY_PRICE = DolPaSt
-                        IsDolpaDay = True
-                        IsMaDone = True
+                    BUY_PRICE = DolPaSt
+                    IsDolpaDay = True
+                    IsMaDone = True
                 else:
-                    if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and df['open'].iloc[i-2] < df['close'].iloc[i-2] and 
-                        df['close'].iloc[i-2] < df['close'].iloc[i-1] and df['high'].iloc[i-2] < df['high'].iloc[i-1] and 
-                        df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and 
-                        df['73ma'].iloc[i-1] < df['close'].iloc[i-1] and df['30ma_slope'].iloc[i-1] > -4.0 and 
-                        df['rsi_5ma'].iloc[i] > df['rsi_5ma'].iloc[i-1]):
+                    if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and 
+                        df['open'].iloc[i-2] < df['close'].iloc[i-2] and 
+                        df['close'].iloc[i-2] < df['close'].iloc[i-1] and 
+                        df['high'].iloc[i-2] < df['high'].iloc[i-1] and 
+                        df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and 
+                        df['16ma'].iloc[i-1] < df['close'].iloc[i-1] and 
+                        df['73ma'].iloc[i-1] < df['close'].iloc[i-1]
+                        ):
                         BUY_PRICE = NowOpenPrice
                         IsDolpaDay = False
                         IsMaDone = True
@@ -196,9 +198,8 @@ for coin_data in InvestCoinList:
                     DolpaRate = 0.7
                     DolPaSt = NowOpenPrice + (((max(df['high'].iloc[i-1], df['high'].iloc[i-2]) - min(df['low'].iloc[i-1], df['low'].iloc[i-2])) * DolpaRate))
                     if (df['high'].iloc[i] >= DolPaSt and NowOpenPrice < DolPaSt and df[str(ma2) + 'ma'].iloc[i-2] < PrevClosePrice and 
-                        df['low'].iloc[i-2] < df['low'].iloc[i-1] and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and 
-                        df[str(ma3) + 'ma'].iloc[i-2] < df[str(ma2) + 'ma'].iloc[i-1] < df[str(ma1) + 'ma'].iloc[i-1] and 
-                        df['30ma_slope'].iloc[i-1] > -4.0):
+                        df['low'].iloc[i-2] < df['low'].iloc[i-1] and 
+                        df[str(ma3) + 'ma'].iloc[i-2] < df[str(ma2) + 'ma'].iloc[i-1] < df[str(ma1) + 'ma'].iloc[i-1]):
                         BUY_PRICE = DolPaSt
                         IsDolpaDay = True
                         IsMaDone = True

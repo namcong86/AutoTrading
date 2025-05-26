@@ -156,8 +156,7 @@ for coin_data in InvestCoinList:
     _loss = down.abs().ewm(com=(period - 1), min_periods=period).mean()
     RS = _gain / _loss
     df_day['rsi'] = pd.Series(100 - (100 / (1 + RS)), name="RSI")
-    df_day['rsi_ma'] = df_day['rsi'].rolling(10).mean()
-    df_day['rsi_5ma'] = df_day['rsi'].rolling(5).mean()
+    df_day['rsi_ma'] = df_day['rsi'].rolling(14).mean()
 
     # 이동평균선 계산
     for ma in [3, 7, 12, 16, 24, 30, 73]:
@@ -217,27 +216,33 @@ for coin_data in InvestCoinList:
 
         if coin_ticker == 'KRW-BTC':
             DolPaSt = max(df_day[str(ma1) + 'ma'].iloc[-2], df_day[str(ma2) + 'ma'].iloc[-2], df_day[str(ma3) + 'ma'].iloc[-2])
-            if DolPaSt == df_day[str(ma3) + 'ma'].iloc[-2] and df_day['high'].iloc[-1] >= DolPaSt and df_day['open'].iloc[-1] < DolPaSt:
-                if df_day['30ma_slope'].iloc[-2] > -4.0 and df_day['rsi_5ma'].iloc[-1] > df_day['rsi_5ma'].iloc[-2]:
-                    BUY_PRICE = DolPaSt
-                    IsDolpaDay = True
-                    IsMaDone = True
+            if (DolPaSt == df_day[str(ma3) + 'ma'].iloc[-2] and 
+                df_day['high'].iloc[-1] >= DolPaSt and 
+                df_day['open'].iloc[-1] < DolPaSt):
+                BUY_PRICE = DolPaSt
+                IsDolpaDay = True
+                IsMaDone = True
             else: #일반매수 조건은 오전 9시 캔들 마감직후에만 적용 
-                if (df_day['open'].iloc[-2] < df_day['close'].iloc[-2] and df_day['open'].iloc[-3] < df_day['close'].iloc[-3] and
-                    df_day['close'].iloc[-3] < df_day['close'].iloc[-2] and df_day['high'].iloc[-3] < df_day['high'].iloc[-2] and
-                    df_day['7ma'].iloc[-3] < df_day['7ma'].iloc[-2] and df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2] and
-                    df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2] and df_day['30ma_slope'].iloc[-2] > -4.0 and
-                    df_day['rsi_5ma'].iloc[-1] > df_day['rsi_5ma'].iloc[-2] and (hour_n == 0 and min_n < 5)):
+                if (df_day['open'].iloc[-2] < df_day['close'].iloc[-2] and 
+                    df_day['open'].iloc[-3] < df_day['close'].iloc[-3] and
+                    df_day['close'].iloc[-3] < df_day['close'].iloc[-2] and 
+                    df_day['high'].iloc[-3] < df_day['high'].iloc[-2] and
+                    df_day['7ma'].iloc[-3] < df_day['7ma'].iloc[-2] and 
+                    df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2] and
+                    df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2] and 
+                    (hour_n == 0 and min_n < 5)):
                     BUY_PRICE = NowCurrentPrice
                     IsDolpaDay = False
                     IsMaDone = True
             if not IsMaDone:
                 DolpaRate = 0.7
                 DolPaSt = df_day['open'].iloc[-1] + ((max(df_day['high'].iloc[-2], df_day['high'].iloc[-3]) - min(df_day['low'].iloc[-2], df_day['low'].iloc[-3])) * DolpaRate)
-                if (df_day['high'].iloc[-1] >= DolPaSt and df_day['open'].iloc[-1] < DolPaSt and df_day[str(ma2) + 'ma'].iloc[-3] < df_day['close'].iloc[-2] and
-                    df_day['low'].iloc[-3] < df_day['low'].iloc[-2] and df_day['rsi_ma'].iloc[-3] < df_day['rsi_ma'].iloc[-2] and
-                    df_day[str(ma3) + 'ma'].iloc[-3] < df_day[str(ma2) + 'ma'].iloc[-2] < df_day[str(ma1) + 'ma'].iloc[-2] and
-                    df_day['30ma_slope'].iloc[-2] > -4.0):
+                if (df_day['high'].iloc[-1] >= DolPaSt and 
+                    df_day['open'].iloc[-1] < DolPaSt and 
+                    df_day[str(ma2) + 'ma'].iloc[-3] < df_day['close'].iloc[-2] and
+                    df_day['low'].iloc[-3] < df_day['low'].iloc[-2] and
+                    df_day[str(ma3) + 'ma'].iloc[-3] < df_day[str(ma2) + 'ma'].iloc[-2] < df_day[str(ma1) + 'ma'].iloc[-2]
+                    ):
                     BUY_PRICE = DolPaSt
                     IsDolpaDay = True
                     IsMaDone = True
