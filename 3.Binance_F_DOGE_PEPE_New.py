@@ -37,7 +37,7 @@ except:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = 6
+    set_leverage = 5
 
 InvestRate = 1  # 0.1%
 fee = 0.001  # 0.2%
@@ -103,7 +103,6 @@ for coin_data in InvestCoinList:
     RS = gain / loss
     df['rsi'] = 100 - (100 / (1 + RS))
     df['rsi_ma'] = df['rsi'].rolling(14).mean()
-    df['rsi_5ma'] = df['rsi'].rolling(5).mean()
 
     # MACD 계산
     ema12 = df['close'].ewm(span=12, adjust=False).mean()

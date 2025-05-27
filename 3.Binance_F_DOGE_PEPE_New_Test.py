@@ -61,13 +61,13 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000
-leverage = 6  # 레버리지 5배 설정
+leverage = 5  # 레버리지 5배 설정
 fee = 0.001  # 바이낸스 선물 수수료(0.05%) 보수적으로 0.1% 적용
 
 # 투자 종목 설정 - 1000PEPE와 DOGE 각각 50%씩 투자
 InvestCoinList = [
-    {'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 2, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 2, 'day': 1}}
+     {'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
+     {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}}
 ]
 
 ResultList = []
@@ -238,16 +238,17 @@ for coin_data in InvestCoinList:
             
 
             # 매수 조건 - 모든 코인에 동일하게 적용
-            if (df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and 
-                df['open'].iloc[i-1] < df['close'].iloc[i-1] and 
+            if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and 
                 df['open'].iloc[i-2] < df['close'].iloc[i-2] and 
                 df['close'].iloc[i-2] < df['close'].iloc[i-1] and 
                 df['high'].iloc[i-2] < df['high'].iloc[i-1] and 
                 df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and 
                 df['30ma_slope'].iloc[i-1] > DiffValue and 
                 df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and 
+                df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and 
                 (macd_positive and macd_condition) and 
-                (upper_shadow_ratio <= 0.6)):
+                (upper_shadow_ratio <= 0.6)
+                ):
                     BUY_PRICE = NowOpenPrice
                     IsMaDone = True
 
