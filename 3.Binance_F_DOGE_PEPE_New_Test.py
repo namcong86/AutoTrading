@@ -124,6 +124,7 @@ cash_balance = InvestTotalMoney
 positions = {}  # key: ticker, value: {'margin': margin, 'entry_price': price, 'quantity': qty, 'leverage': leverage}
 total_equity_list = []
 MonthlyTryCnt = {}
+CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in [coin['ticker'] for coin in InvestCoinList]}
 
 # 백테스팅 루프
 for date in common_dates:
@@ -150,6 +151,11 @@ for date in common_dates:
                 realized_value = margin * (1 + price_change)
                 cash_balance += realized_value * (1 - fee)
                 print(f"{ticker} {date} >>> 매도: 수익률 {round(RevenueRate, 2)}%, 잔액 {round(cash_balance, 2)}")
+                # 익절/손절 카운트
+                if RevenueRate > 0:
+                    CoinStats[ticker]['SuccessCnt'] += 1
+                else:
+                    CoinStats[ticker]['FailCnt'] += 1
                 del positions[ticker]
                 month_key = date.strftime('%Y-%m')
                 MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
@@ -275,6 +281,16 @@ yearly_stats.columns = ['수익률 (%)', '잔액 (USDT)', '거래 횟수']
 yearly_stats['수익률 (%)'] = yearly_stats['수익률 (%)'].round(2)
 yearly_stats['잔액 (USDT)'] = yearly_stats['잔액 (USDT)'].round(2)
 yearly_stats.index = yearly_stats.index.strftime('%Y')
+
+# 코인별 익절/손절 통계 출력
+print("\n---------- 코인별 거래 통계 ----------")
+for ticker in CoinStats:
+    success = CoinStats[ticker]['SuccessCnt']
+    fail = CoinStats[ticker]['FailCnt']
+    total_trades = success + fail
+    win_rate = (success / total_trades * 100) if total_trades > 0 else 0
+    print(f"{ticker} >>> 성공: {success} 실패: {fail} -> 승률: {round(win_rate, 2)}%")
+print("------------------------------")
 
 # 그래프 생성
 fig, axs = plt.subplots(2, 1, figsize=(10, 10))
