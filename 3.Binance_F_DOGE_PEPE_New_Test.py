@@ -59,7 +59,7 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000  # 초기 총 투자 금액
-leverage = 2  # 레버리지 2배 설정
+leverage = 5  # 레버리지 2배 설정
 fee = 0.001  # 수수료 0.1%
 allocation_percentage = 0.5  # 각 코인에 50%씩 할당
 
