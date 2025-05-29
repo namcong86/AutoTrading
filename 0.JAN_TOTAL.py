@@ -371,9 +371,10 @@ except Exception as e:
 # --- 기존에 쓰시던 “현재 총잔액 알림” 부분 바로 아래에 추가 ---
 aggregated = aggregate_spot_balances()
 
-# 2) 제외 코인 필터링 후 내림차순 정렬
+# 2) 제외 코인 필터링 및 잔액 100 이하 제외 후 내림차순 정렬
+# 잔액(amt)이 100을 초과하는 코인만 포함하도록 필터링 조건을 추가합니다.
 sorted_balances = sorted(
-    ((coin, amt) for coin, amt in aggregated.items() if coin not in EXCLUDE_COINS),
+    ((coin, amt) for coin, amt in aggregated.items() if coin not in EXCLUDE_COINS and amt > 100),
     key=lambda x: x[1],
     reverse=True
 )
@@ -406,17 +407,27 @@ client = gspread.authorize(creds)
 # 스프레드시트 열기 (문서 이름 또는 ID 사용)
 sheet = client.open("코인투자").worksheet("예치")  # 예: 'Sheet1' 탭
 
-# A2부터 코인명, B2부터 잔액 입력
+# A24부터 코인명, B24부터 잔액 입력
 start_row = 24  # A24 부터 시작
 
 # 준비: 코인명과 금액을 담은 리스트
 coin_names = [[coin] for coin, _ in sorted_balances]
 amounts = [[int(amount)] for _, amount in sorted_balances]
 
-# 범위: A24:A54, B24:B54
+# 스프레드시트에 업데이트하기 전에 기존 셀을 초기화합니다.
+# 최대 30개의 코인을 표시한다고 가정하고, 해당 범위를 초기화합니다.
+# 이 범위는 필요에 따라 조정할 수 있습니다.
+# 예를 들어, A24부터 A53, B24부터 B53까지 초기화합니다.
+clear_range_end_row = start_row + 30 - 1 # 예를 들어, 최대 30개 코인까지 표시한다고 가정
+sheet.update(f"A{start_row}:B{clear_range_end_row}", [['', ''] for _ in range(clear_range_end_row - start_row + 1)])
+
+
+# 범위: A24부터, B24부터
+# 필터링된 sorted_balances의 길이에 맞춰 업데이트합니다.
 end_row = 24 + len(sorted_balances) - 1
-sheet.update(f"A24:A{end_row}", coin_names)
-sheet.update(f"B24:B{end_row}", amounts)
+if len(sorted_balances) > 0: # 잔액이 100 초과하는 코인이 있을 경우에만 업데이트
+    sheet.update(f"A24:A{end_row}", coin_names)
+    sheet.update(f"B24:B{end_row}", amounts)
 
 
 print("===== 자산 조회 완료 =====")
