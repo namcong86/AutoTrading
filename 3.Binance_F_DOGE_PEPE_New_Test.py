@@ -194,7 +194,7 @@ for date in common_dates:
                     df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and 
                     df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and 
                     (macd_positive and macd_condition) and 
-                    (upper_shadow_ratio <= 0.5)):
+                    (upper_shadow_ratio <= 0.6)):
                     # 매수 실행
                     buy_price = current_data[ticker]['open']
                     # 각 코인에 잔액의 50% 투자
