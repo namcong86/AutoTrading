@@ -139,8 +139,8 @@ allocation_percentage = 0.5  # 각 코인에 50%씩 할당
 # Gate.io Perpetual Swap 심볼은 보통 COIN/USDT 형태 (ccxt 표준) 또는 COIN_USDT (Gate.io API)
 # ccxt는 COIN/USDT를 적절한 마켓 ID로 변환해줍니다.
 InvestCoinList = [
-    {'ticker': 'PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2024, 'month': 3, 'day': 1}}, # 1000PEPE -> PEPE로 변경, 시작일은 PEPE 상장일(대략 4~5월)에 맞춰 예시로 변경
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2024, 'month': 3, 'day': 1}}
+    {'ticker': 'PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 3, 'day': 1}}, # 1000PEPE -> PEPE로 변경, 시작일은 PEPE 상장일(대략 4~5월)에 맞춰 예시로 변경
+    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 3, 'day': 1}}
 ]
 
 # 데이터 가져오기 및 전처리
@@ -359,7 +359,7 @@ for date in common_dates:
                     df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and # RSI 이동평균선 상승 중
                     df_coin['50ma'].iloc[i-2] < df_coin['50ma'].iloc[i-1] and   # 50일 이동평균선 상승 중
                     (macd_positive and macd_condition) and                      # MACD 조건 충족
-                    (upper_shadow_ratio <= 0.5)):                               # 윗꼬리가 너무 길지 않음
+                    (upper_shadow_ratio <= 0.6)):                               # 윗꼬리가 너무 길지 않음
                     buy_condition_triggered = True
 
                 if buy_condition_triggered:
