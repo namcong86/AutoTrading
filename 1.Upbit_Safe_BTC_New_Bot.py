@@ -52,8 +52,11 @@ day_str = str(time_info.tm_year) + str(time_info.tm_mon) + str(time_info.tm_mday
 print("hour_n:", hour_n)
 print("min_n:", min_n)
 
+#알림 첫문구
+first_String = "1.Upbit BTC 안전매매"
+
 if hour_n == 0 and min_n < 5:
-    telegram_alert.SendMessage("1.업비트 BTC 안전매매 정상 시작 되었습니다")
+    telegram_alert.SendMessage(first_String +" 시작")
     time.sleep(0.04)
 
 # 수익금과 수익률 계산 함수
@@ -175,16 +178,33 @@ for coin_data in InvestCoinList:
         revenue_data = GetRevenueMoneyAndRate(balances, coin_ticker)
 
         if BotDataDict[coin_ticker + "_DATE_CHECK"] != day_n:
-            msg = coin_ticker + " 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
+            msg = first_String + " 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
             print(msg)
             telegram_alert.SendMessage(msg)
             time.sleep(1.0)
 
+            #고점저점 하락
+            cond_hdown_ldown = (df_day['high'].iloc[-3] > df_day['high'].iloc[-2] and df_day['low'].iloc[-3] > df_day['low'].iloc[-2])
+            #연속음봉 발생
+            cond_2down = (df_day['open'].iloc[-2] > df_day['close'].iloc[-2] and df_day['open'].iloc[-3] > df_day['close'].iloc[-3])
+            #수익률 마이너스 진입
+            cond_rev_minus = (revenue_data['revenue_rate'] < -0.7)
+
+            analysis_msg = (f"{first_String} 매도조건 분석:" 
+                            f"고점저점하락={cond_hdown_ldown}, "
+                            f"2일음봉={cond_2down}," 
+                            f"손실여부={cond_rev_minus}")
+
+            sell = cond_hdown_ldown or cond_2down or cond_rev_minus
+
+            #매도조건 알림
+            if hour_n == 0 and min_n <= 4:
+                print(analysis_msg)
+                telegram_alert.SendMessage(analysis_msg)
+
             IsSellGo = False
             if coin_ticker == 'KRW-BTC':
-                if ((df_day['high'].iloc[-3] > df_day['high'].iloc[-2] and df_day['low'].iloc[-3] > df_day['low'].iloc[-2]) or
-                    (df_day['open'].iloc[-2] > df_day['close'].iloc[-2] and df_day['open'].iloc[-3] > df_day['close'].iloc[-3]) or
-                    revenue_data['revenue_rate'] < -0.7):
+                if sell:
                     IsSellGo = True
                 if df_day['rsi_ma'].iloc[-3] < df_day['rsi_ma'].iloc[-2] and df_day['3ma'].iloc[-3] < df_day['3ma'].iloc[-2]:
                     IsSellGo = False
@@ -199,7 +219,7 @@ for coin_data in InvestCoinList:
             if IsSellGo:
                 AllAmt = upbit.get_balance(coin_ticker)
                 balances = myUpbit.SellCoinMarket(upbit, coin_ticker, AllAmt)
-                msg = coin_ticker + " 업비트 안전 전략 봇: 조건 불만족하여 모두 매도!! 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
+                msg = first_String + " 업비트 안전 전략 봇: 조건 불만족하여 모두 매도!! 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
                 print(msg)
                 telegram_alert.SendMessage(msg)
                 BotDataDict[coin_ticker + "_HAS"] = False
@@ -223,17 +243,31 @@ for coin_data in InvestCoinList:
                 IsDolpaDay = True
                 IsMaDone = True
             else: #일반매수 조건은 오전 9시 캔들 마감직후에만 적용 
-                if (df_day['open'].iloc[-2] < df_day['close'].iloc[-2] and 
-                    df_day['open'].iloc[-3] < df_day['close'].iloc[-3] and
-                    df_day['close'].iloc[-3] < df_day['close'].iloc[-2] and 
-                    df_day['high'].iloc[-3] < df_day['high'].iloc[-2] and
-                    df_day['7ma'].iloc[-3] < df_day['7ma'].iloc[-2] and 
-                    df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2] and
-                    df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2] and 
-                    (hour_n == 0 and min_n < 5)):
+
+                cond_up1 = (df_day['open'].iloc[-2] < df_day['close'].iloc[-2])
+                cond_up2 = (df_day['open'].iloc[-3] < df_day['close'].iloc[-3])
+                cond_close_inc = (df_day['close'].iloc[-3] < df_day['close'].iloc[-2])
+                cond_high_inc = (df_day['high'].iloc[-3] < df_day['high'].iloc[-2])
+                cond_7ma = (df_day['7ma'].iloc[-3] < df_day['7ma'].iloc[-2])
+                cond_16ma = (df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2])
+                cond_73ma = (df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2])
+
+                analysis_msg = (f"{first_String} 매수조건 분석: 연속양봉={cond_up1 and cond_up2}, "
+                                f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
+                                f"7이평증가={cond_7ma}, 16이평증가={cond_16ma}, 73이평증가={cond_73ma}")
+
+                buy = cond_up1 and cond_up2 and cond_close_inc and cond_high_inc and cond_7ma and cond_16ma and cond_73ma
+
+                #매수조건 알림
+                if hour_n == 0 and min_n <= 4:
+                    print(analysis_msg)
+                    telegram_alert.SendMessage(analysis_msg)
+
+                if buy and  (hour_n == 0 and min_n <= 4):
                     BUY_PRICE = NowCurrentPrice
                     IsDolpaDay = False
                     IsMaDone = True
+
             if not IsMaDone:
                 DolpaRate = 0.7
                 DolPaSt = df_day['open'].iloc[-1] + ((max(df_day['high'].iloc[-2], df_day['high'].iloc[-3]) - min(df_day['low'].iloc[-2], df_day['low'].iloc[-3])) * DolpaRate)
@@ -253,7 +287,7 @@ for coin_data in InvestCoinList:
         print("투자여부:",IsMaDone)
 
         if IsMaDone:
-
+            
             print("돌파여부:",IsDolpaDay)
 
             Rate = 1.0
@@ -274,14 +308,14 @@ for coin_data in InvestCoinList:
                 BotDataDict[coin_ticker + "_BUY_DATE"] = day_str
                 with open(botdata_file_path, 'w') as outfile:
                     json.dump(BotDataDict, outfile)
-                msg = coin_ticker + " 업비트 안전 전략 봇: 조건 만족하여 매수!! " + str(BuyMoney) + "원어치 매수! (돌파:" + str(IsDolpaDay) + ")"
+                msg = first_String + ": 조건 만족하여 매수!! " + str(BuyMoney) + "원어치 매수! (돌파:" + str(IsDolpaDay) + ")"
                 print(msg)
                 telegram_alert.SendMessage(msg)
         else:
             if hour_n == 0 and min_n <5:
-                msg = coin_ticker + " 업비트 안전 전략 봇: 조건 만족하지 않아 현금 보유 합니다!"
+                msg = first_String + " 조건 만족하지 않아 현금 보유 합니다!"
                 print(msg)
                 telegram_alert.SendMessage(msg)
 
 if hour_n == 0 and min_n < 5:
-    telegram_alert.SendMessage("1.업비트 BTC 안전매매 정상 종료되었습니다")
+    telegram_alert.SendMessage(first_String +" 종료")
