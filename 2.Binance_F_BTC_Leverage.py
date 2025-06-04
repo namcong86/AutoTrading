@@ -39,7 +39,7 @@ if len(sys.argv) > 1:
 else:
     set_leverage = 5
 
-InvestRate = 1  # 0.1%
+InvestRate = 0.01  # 0.1%
 fee = 0.001  # 0.2%
 
 #알림 첫문구
