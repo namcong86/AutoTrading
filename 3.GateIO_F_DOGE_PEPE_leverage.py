@@ -104,6 +104,9 @@ else:
 InvestRate = 1
 fee = 0.001
 
+#알림 첫문구
+first_String = f"3.GateIO DOGE+PEPE {set_leverage}배 "
+
 t = time.gmtime()
 hour_n = t.tm_hour
 min_n = t.tm_min
@@ -111,7 +114,7 @@ day_n = t.tm_mday
 day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
 if hour_n == 0 and min_n <= 2:
-    start_msg = f"[3.GateIO DOGE+PEPE] {set_leverage}배 시작"
+    start_msg = f"{first_String} 시작"
     telegram_alert.SendMessage(start_msg)
     logger.info(start_msg)
 
@@ -249,8 +252,8 @@ for coin_data in InvestCoinList:
                     break
 
     except Exception as e:
-        logger.error(f"{coin_ticker} 포지션 조회 오류: {e}")
-        telegram_alert.SendMessage(f"{coin_ticker} 포지션 조회 오류: {e}")
+        logger.error(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
+        telegram_alert.SendMessage(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
 
     # 지표용 일봉 데이터 조회
     df = get_ohlcv_gateio(exchange, coin_ticker, '1d', limit=100)
@@ -306,7 +309,7 @@ for coin_data in InvestCoinList:
         cond_revenue = (unrealizedProfit < 0)
         cond_cancel = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
         
-        analysis_msg = (f"3.GateIO {coin_ticker} 매도조건 분석: high_low={cond_high_low}, "
+        analysis_msg = (f"{first_String}  매도조건 분석 ({coin_ticker}): high_low={cond_high_low}, "
                          f"open_close={cond_open_close}, revenue<0={cond_revenue}, "
                          f"cancel_by_rsi_ma={cond_cancel}")
         logger.info(analysis_msg)
@@ -323,7 +326,7 @@ for coin_data in InvestCoinList:
                 sell_params = {'reduceOnly': True, 'settle': 'usdt'}
                 exchange.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params=sell_params)
                 
-                exec_msg = f"3.GateIO {coin_ticker} 봇: 조건 만족하여 매도!! (참고 미실현수익: {unrealizedProfit:.2f} USDT)"
+                exec_msg = f"{first_String} 조건 만족하여 매도 ({coin_ticker}) (참고 미실현수익: {unrealizedProfit:.2f} USDT)"
                 logger.info(exec_msg)
                 telegram_alert.SendMessage(exec_msg)
                 
@@ -332,7 +335,7 @@ for coin_data in InvestCoinList:
                 with open(botdata_file_path, 'w') as f:
                     json.dump(BotDataDict, f)
             except Exception as e:
-                err_msg = f"{coin_ticker} 매도 주문 실패: {e}"
+                err_msg = f"{first_String} {coin_ticker} 매도 주문 실패: {e}"
                 logger.error(err_msg)
                 telegram_alert.SendMessage(err_msg)
     # --- 매수 로직 (포지션 없음) ---
@@ -367,7 +370,7 @@ for coin_data in InvestCoinList:
         cond_MACD = (macd_positive and macd_condition)
         cond_doji = upper_shadow_ratio <= 0.6
 
-        analysis_msg = (f"{coin_ticker} 매수조건 분석: 연속양봉={cond_o1 and cond_o2}, "
+        analysis_msg = (f"{first_String} 매수조건 분석 ({coin_ticker}): 연속양봉={cond_o1 and cond_o2}, "
                         f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
                         f"7이평증가={cond_7ma}, 50이평증가={cond_50ma}, 30이평기울기={cond_slope}, "
                         f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]:.2f}->{df['rsi_ma'].iloc[-2]:.2f}), "
@@ -420,7 +423,7 @@ for coin_data in InvestCoinList:
                         # 로그 메시지에 실제 매수될 '코인 수량' (계약 수 * contractSize)을 표시합니다.
                         actual_bought_coin_quantity = amount_to_buy * contractSize
                         
-                        exec_msg = (f"3.GateIO {coin_ticker} 봇: 조건 만족하여 매수!! "
+                        exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
                                     f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, "
                                     f"매수 계약 수: {amount_to_buy:.6f}, "
@@ -436,7 +439,7 @@ for coin_data in InvestCoinList:
 
         else:
             if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                warn_msg = f"3.GateIO {set_leverage}배 {coin_ticker}: 조건 만족하지 않아 현금 보유 합니다!"
+                warn_msg = f"{first_String} 조건 만족하지 않아 현금 보유 합니다({coin_ticker})"
                 logger.info(warn_msg)
                 telegram_alert.SendMessage(warn_msg)
                 
@@ -446,6 +449,6 @@ for coin_data in InvestCoinList:
 
 # --- 루프 종료 후 작업 ---
 if hour_n == 0 and min_n <= 2:
-    end_msg = f"[3.GateIO DOGE+PEPE] {set_leverage}배 종료 "
+    end_msg = f"{first_String} 종료 "
     telegram_alert.SendMessage(end_msg)
     logger.info(end_msg)
