@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 '''
-파일이름: 4.GateIO_F_Grid_Danta_Test.py
-설명: 볼린저밴드와 RSI를 이용한 그리드 매매 전략 (백테스트용 최종본 - 월별 요약 추가)
+파일이름: 4.GateIO_F_Grid_Danta_Test_with_withdrawal.py
+설명: 볼린저밴드와 RSI를 이용한 그리드 매매 전략 (월별 수익금 출금 기능 추가)
 '''
 import ccxt
 import time
@@ -14,14 +14,14 @@ import os
 # ==============================================================================
 # 1. 백테스트 환경 설정
 # ==============================================================================
-TEST_START_DATE = datetime.datetime(2024, 1, 1)  # 시작일
+TEST_START_DATE = datetime.datetime(2023, 1, 1)  # 시작일
 TEST_END_DATE = datetime.datetime.now()          # 종료일 (현재)
 INITIAL_CAPITAL = 100000      # 시작 자본 (USDT)
 TIMEFRAME = '5m'             # 5분봉 데이터 사용
 LEVERAGE = 10                # 레버리지
-STOP_LOSS_PNL_RATE = -0.9    # 할당 자본 대비 손절 PNL 비율 (-50%)
-INVEST_COIN_LIST = ['DOGE/USDT'] # 백테스트할 코인 목록
-FEE_RATE = 0.0002            # 거래 수수료 (시장가 0.05% 가정)
+STOP_LOSS_PNL_RATE = -0.9    # 할당 자본 대비 손절 PNL 비율 (-90%)
+INVEST_COIN_LIST = ['BTC/USDT'] # 백테스트할 코인 목록
+FEE_RATE = 0.0005            # 거래 수수료 (시장가 0.02%)
 
 # ==============================================================================
 # 2. 데이터 처리 및 보조지표 계산 함수
@@ -30,15 +30,15 @@ def load_data(ticker, timeframe, start_date, end_date):
     """로컬 CSV 파일 또는 API를 통해 OHLCV 데이터를 로드합니다."""
     print(f"--- [{ticker}] 데이터 준비 중 ---")
     df = pd.DataFrame()
-    doge_csv_file = 'doge_usdt_5m_2022_to_202505.csv'
-    if ticker == 'DOGE/USDT' and os.path.exists(doge_csv_file):
+    csv_file = 'btc_usdt_5m_2020_to_202505.csv'
+    if os.path.exists(csv_file):
         try:
-            print(f"'{doge_csv_file}' 파일에서 데이터를 로드합니다.")
-            df = pd.read_csv(doge_csv_file, index_col=0, parse_dates=True)
+            print(f"'{csv_file}' 파일에서 데이터를 로드합니다.")
+            df = pd.read_csv(csv_file, index_col=0, parse_dates=True)
             df = df.loc[start_date:end_date]
-            if df.empty: print(f"경고: '{doge_csv_file}' 파일에 해당 기간의 데이터가 없습니다.")
+            if df.empty: print(f"경고: '{csv_file}' 파일에 해당 기간의 데이터가 없습니다.")
         except Exception as e:
-            print(f"오류: '{doge_csv_file}' 파일 로드 중 오류 발생: {e}.")
+            print(f"오류: '{csv_file}' 파일 로드 중 오류 발생: {e}.")
             df = pd.DataFrame()
     if df.empty:
         print(f"로컬 파일이 없거나 사용할 수 없어 API를 통해 데이터를 다운로드합니다.")
@@ -98,10 +98,13 @@ def run_backtest(data_frames):
     """전략에 따라 백테스트를 실행하고 포트폴리오 가치 변화와 일별 실현 손익을 기록합니다."""
     print("\n백테스트를 시작합니다...")
     cash = INITIAL_CAPITAL
+    total_withdrawn = 0.0 # 총 출금액
+    monthly_withdrawals = {} # 월별 출금액 기록
+    
     portfolio_history = []
     daily_realized_pnl = {}
-    new_cycle_dates = set() # 신규 포지션 시작일 기록
-    
+    new_cycle_dates = set()
+
     positions = {}
     for ticker in data_frames.keys():
         allocated_capital = INITIAL_CAPITAL / len(data_frames)
@@ -112,14 +115,38 @@ def run_backtest(data_frames):
             "cumulative_realized_pnl": 0.0,
             "entries": []
         }
+    
     common_index = data_frames[INVEST_COIN_LIST[0]].index
     for ticker in INVEST_COIN_LIST[1:]:
         if ticker in data_frames:
             common_index = common_index.intersection(data_frames[ticker].index)
     common_index = common_index.sort_values()
+    
+    if common_index.empty:
+        print("공통 데이터 기간이 없습니다.")
+        return pd.DataFrame(), {}, set(), {}, 0.0
+
     print(f"공통 데이터 기간: {common_index.min()} ~ {common_index.max()}")
 
+    previous_time = None
     for current_time in common_index:
+        # --- 월초 수익금 출금 로직 ---
+        if previous_time and current_time.month != previous_time.month:
+            target_year = previous_time.year
+            target_month = previous_time.month
+
+            last_month_pnl = sum(pnl for date, pnl in daily_realized_pnl.items() if date.year == target_year and date.month == target_month)
+            
+            if last_month_pnl > 0:
+                withdrawal_amount = last_month_pnl * 0.3
+                cash -= withdrawal_amount
+                total_withdrawn += withdrawal_amount
+                
+                month_key = f"{target_year}-{target_month:02d}"
+                monthly_withdrawals[month_key] = withdrawal_amount
+                
+                print(f"[{current_time.strftime('%Y-%m-%d')}] 💸 {target_year}년 {target_month}월 수익금 출금: {withdrawal_amount:,.2f} USDT (해당 월 수익: {last_month_pnl:,.2f} USDT)")
+
         current_portfolio_value = cash
         for ticker, df in data_frames.items():
             if current_time not in df.index: continue
@@ -148,7 +175,7 @@ def run_backtest(data_frames):
                 daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + realized_pnl_from_stoploss
 
                 cash += (pos['total_collateral'] + unrealized_pnl)
-                cash -= (pos['total_collateral'] * LEVERAGE) * FEE_RATE
+                cash -= (pos['total_quantity'] * pos['average_price']) * FEE_RATE
                 new_allocated_asset = cash / len(data_frames)
                 positions[ticker] = {
                     "allocated_capital": new_allocated_asset, "base_buy_amount": new_allocated_asset * 0.01,
@@ -157,36 +184,6 @@ def run_backtest(data_frames):
                     "cumulative_realized_pnl": 0.0, "entries": []
                 }
                 continue
-
-            # if pos['current_entry_count'] >= 6:
-            #     stuck_entries = [e for e in pos['entries'] if e['entry_num'] <= 5]
-            #     unrealized_pnl_of_stuck = 0
-            #     if stuck_entries:
-            #         unrealized_pnl_of_stuck = sum([(mtm_price - e['price']) * e['quantity'] for e in stuck_entries])
-                
-            #     cumulative_profit = pos.get('cumulative_realized_pnl', 0)
-
-            #     if (cumulative_profit + unrealized_pnl_of_stuck) > 0:
-            #         print(f"[{current_time}] ✨ {ticker} 전략적 포지션 전체 종료! (누적수익으로 손실분 상쇄)")
-            #         print(f"    - 누적 실현수익: {cumulative_profit:,.2f} USDT")
-            #         print(f"    - 물린 포지션 손실: {unrealized_pnl_of_stuck:,.2f} USDT")
-            #         print(f"    - 최종 합산 이익: {(cumulative_profit + unrealized_pnl_of_stuck):,.2f} USDT")
-                    
-            #         pnl_from_sell = sum([(execution_price - e['price']) * e['quantity'] for e in pos['entries']])
-            #         current_date = current_time.date()
-            #         daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + pnl_from_sell
-
-            #         cash += pos['total_collateral'] + pnl_from_sell
-            #         cash -= (pos['total_collateral'] * LEVERAGE) * FEE_RATE
-                    
-            #         new_allocated_asset = cash / len(data_frames)
-            #         positions[ticker] = {
-            #             "allocated_capital": new_allocated_asset, "base_buy_amount": new_allocated_asset * 0.01,
-            #             "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0,
-            #             "total_collateral": 0.0, "last_buy_timestamp": None,
-            #             "cumulative_realized_pnl": 0.0, "entries": []
-            #         }
-            #         continue
 
             if pos['current_entry_count'] > 0:
                 entries_to_sell_indices, sell_reason = [], ""
@@ -223,8 +220,9 @@ def run_backtest(data_frames):
                             print(f"    - {entry['entry_num']}차 매도 PNL: {pnl_per_entry:,.2f} USDT")
 
                     removed_collateral = sum([(e['price'] * e['quantity'] / LEVERAGE) for e in sold_entries])
+                    qty_sold = sum(e['quantity'] for e in sold_entries)
                     cash += removed_collateral + pnl_from_sell
-                    cash -= (removed_collateral * LEVERAGE) * FEE_RATE
+                    cash -= (qty_sold * execution_price) * FEE_RATE
                     pos['total_collateral'] -= removed_collateral
                     for i in sorted(entries_to_sell_indices, reverse=True): del pos['entries'][i]
                     for new_idx, entry in enumerate(pos['entries']): entry['entry_num'] = new_idx + 1
@@ -278,15 +276,16 @@ def run_backtest(data_frames):
                         pos['total_quantity'] = sum(e['quantity'] for e in pos['entries'])
                         pos['average_price'] = sum(e['price'] * e['quantity'] for e in pos['entries']) / pos['total_quantity']
         
+        previous_time = current_time
         total_entry_count = sum(p.get('current_entry_count', 0) for p in positions.values())
         portfolio_history.append({'timestamp': current_time, 'value': current_portfolio_value, 'entry_count': total_entry_count})
 
-    return pd.DataFrame(portfolio_history).set_index('timestamp'), daily_realized_pnl, new_cycle_dates
+    return pd.DataFrame(portfolio_history).set_index('timestamp'), daily_realized_pnl, new_cycle_dates, monthly_withdrawals, total_withdrawn
 
 # ==============================================================================
 # 4. 결과 분석 및 시각화 함수
 # ==============================================================================
-def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates):
+def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, monthly_withdrawals, total_withdrawn):
     """백테스트 결과를 분석하고 그래프로 시각화합니다."""
     if portfolio_df.empty:
         print("백테스트 결과가 없어 분석을 종료합니다.")
@@ -294,15 +293,18 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates):
 
     # --- 1. 전체 성과 지표 계산 ---
     final_value = portfolio_df['value'].iloc[-1]
-    total_return = (final_value / INITIAL_CAPITAL - 1) * 100
-    portfolio_df['cum_return'] = portfolio_df['value'] / INITIAL_CAPITAL
+    total_return = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100
+    portfolio_df['cum_return'] = (portfolio_df['value'] + total_withdrawn) / INITIAL_CAPITAL
     portfolio_df['mdd'] = (portfolio_df['cum_return'].cummax() - portfolio_df['cum_return']) / portfolio_df['cum_return'].max()
     max_dd = portfolio_df['mdd'].max() * 100
     
-    print("\n" + "="*50 + "\n                 백테스트 최종 결과\n" + "="*50)
-    print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT\n  - 최종 자산: {final_value:,.2f} USDT")
-    print(f"  - 총 수익률: {total_return:.2f}%\n  - 최대 낙폭 (MDD): {max_dd:.2f}%")
-    print("="*50)
+    print("\n" + "="*60 + "\n                 백테스트 최종 결과\n" + "="*60)
+    print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT")
+    print(f"  - 최종 자산: {final_value:,.2f} USDT")
+    print(f"  - 총 출금액: {total_withdrawn:,.2f} USDT")
+    print(f"  - 총 수익률 (출금액 포함): {total_return:.2f}%")
+    print(f"  - 최대 낙폭 (MDD): {max_dd:.2f}%")
+    print("="*60)
 
     # --- 2. 일별/월별 요약 계산 및 출력 ---
     daily_summary = portfolio_df[['value', 'entry_count']].resample('D').last()
@@ -332,19 +334,30 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates):
     })
     monthly_summary.index = monthly_summary.index.strftime('%Y-%m')
 
-    print("\n" + "="*70)
-    print("                           월별 요약 (실현 손익 기준)")
-    print("="*70)
+    # 월별 출금액 데이터 추가
+    monthly_withdrawal_series = pd.Series(monthly_withdrawals, name="Withdrawal")
+    monthly_summary = monthly_summary.join(monthly_withdrawal_series)
+    monthly_summary['Withdrawal'].fillna(0, inplace=True)
+
+    print("\n" + "="*90)
+    print("                                   월별 요약 (실현 손익 기준)")
+    print("="*90)
     for index, row in monthly_summary.iterrows():
-        print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 PNL:{row['Realized PNL']:>+11,.2f} USDT,   누적 실현 PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT")
-    print("="*70)
+        print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 PNL:{row['Realized PNL']:>+11,.2f} USDT,   누적 실현 PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT,   출금액: {row['Withdrawal']:>10,.2f} USDT")
+    print("="*90)
 
 
     # --- 3. 그래프 시각화 ---
     plt.figure(figsize=(15, 8))
-    plt.rc('font', family='Malgun Gothic'); plt.rcParams['axes.unicode_minus'] = False
+    # 한글 폰트 설정
+    try:
+        plt.rc('font', family='Malgun Gothic') # For Windows
+    except:
+        plt.rc('font', family='AppleGothic') # For MacOS
+    plt.rcParams['axes.unicode_minus'] = False
+    
     ax1 = plt.subplot(2, 1, 1)
-    (portfolio_df['cum_return'] * 100 - 100).plot(ax=ax1, title='자산 추이 (Cumulative Return)')
+    (portfolio_df['cum_return'] * 100 - 100).plot(ax=ax1, title='자산 추이 (누적 수익률, 출금액 포함)')
     ax1.set_ylabel('누적 수익률 (%)'); ax1.grid(True)
     ax2 = plt.subplot(2, 1, 2)
     (portfolio_df['mdd'] * 100).plot(ax=ax2, title='최대 낙폭 (Maximum Drawdown)', color='red')
@@ -363,5 +376,5 @@ if __name__ == '__main__':
     if not all_data_frames:
         print("백테스트를 위한 데이터를 로드하지 못했습니다. 프로그램을 종료합니다.")
     else:
-        portfolio_result, realized_pnl, new_cycles = run_backtest(all_data_frames)
-        analyze_and_plot_results(portfolio_result, realized_pnl, new_cycles)
+        portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn = run_backtest(all_data_frames)
+        analyze_and_plot_results(portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn)
