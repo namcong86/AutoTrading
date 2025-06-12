@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 '''
-Binance 선물 운영 봇 (DOGE + 1000PEPE 50:50, 매수/매도 조건 동일)
+Binance 선물 운영 봇 (DOGE + 1000PEPE 50:50, 매수/매도 조건 동일) - 수정된 버전
 '''
 import ccxt
 import time
@@ -39,8 +39,8 @@ if len(sys.argv) > 1:
 else:
     set_leverage = 5
 
-InvestRate = 1  # 0.1%
-fee = 0.001  # 0.2%
+InvestRate = 1
+fee = 0.001
 
 #알림 첫문구
 first_String = f"3.Binance DOGE+PEPE {set_leverage}배 "
@@ -61,36 +61,42 @@ InvestCoinList = [
     {'ticker': '1000PEPE/USDT', 'rate': 0.5}
 ]
 
-# ----- 여기서부터 전체 포지션 체크 변수를 선언 -----
-
-
-for coin_data in InvestCoinList:
-
-    # balance를 루프 안에서만 가져오면 여러 번 호출하니, 루프 전에 한 번만 호출
+# --- [수정] 스크립트 실행 시점의 투자 기준금을 설정 ---
+try:
     balance = binanceX.fetch_balance(params={"type": "future"})
     time.sleep(0.1)
-    total_usdt = float(balance['USDT']['free'])
+    initial_usdt_balance = float(balance['USDT']['free'])
+    print(f"스크립트 시작. 투자 기준금: {initial_usdt_balance:.2f} USDT")
+except Exception as e:
+    print(f"잔고 조회 실패, 봇을 종료합니다: {e}")
+    telegram_alert.SendMessage(f"{first_String} 잔고 조회 실패, 봇 종료")
+    sys.exit()
 
+# --- 메인 루프 시작 ---
+for coin_data in InvestCoinList:
     coin_ticker = coin_data['ticker']
+    
     # BotData 기본 키 초기화
     for key in ["_BUY_DATE", "_SELL_DATE", "_DATE_CHECK"]:
         full_key = coin_ticker + key
         if full_key not in BotDataDict:
             BotDataDict[full_key] = "" if key != "_DATE_CHECK" else 0
     with open(botdata_file_path, 'w') as f:
-        json.dump(BotDataDict, f)
-
-    # 전체 포지션 중 하나라도 존재하면 True
-    any_position_exist = False
+        json.dump(BotDataDict, f, indent=4)
 
     # 포지션 정보 (LONG)
-    amt_b = 0; unrealizedProfit = 0.0
-    for pos in balance['info']['positions']:
-        any_position_exist = True
-        if pos['symbol'] == coin_ticker.replace("/", ""):
-            amt_b = float(pos['positionAmt'])
-            unrealizedProfit = float(pos['unrealizedProfit'])
-            break
+    amt_b = 0
+    unrealizedProfit = 0.0
+    try:
+        balance_check = binanceX.fetch_balance(params={"type": "future"})
+        for pos in balance_check['info']['positions']:
+            if pos['symbol'] == coin_ticker.replace("/", ""):
+                amt_b = float(pos['positionAmt'])
+                unrealizedProfit = float(pos['unrealizedProfit'])
+                break
+    except Exception as e:
+        print(f"포지션 정보 조회 오류 for {coin_ticker}: {e}")
+        continue # 해당 코인 처리 건너뛰기
 
     # 지표용 일봉 데이터 조회
     df = myBinance.GetOhlcv(binanceX, coin_ticker, '1d')
@@ -103,7 +109,7 @@ for coin_data in InvestCoinList:
     down = (-delta).clip(lower=0)
     gain = up.ewm(com=period-1, min_periods=period).mean()
     loss = down.ewm(com=period-1, min_periods=period).mean()
-    RS = gain / loss
+    RS = gain / loss.replace(0, 1e-9) # 0으로 나누기 방지
     df['rsi'] = 100 - (100 / (1 + RS))
     df['rsi_ma'] = df['rsi'].rolling(14).mean()
 
@@ -130,22 +136,24 @@ for coin_data in InvestCoinList:
         cond_open_close = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
         cond_revenue = (unrealizedProfit < 0)
         cond_cancel = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
-        analysis_msg = (f"{first_String} 매도조건 분석 {coin_ticker}: high_low={cond_high_low}, "
-                         f"open_close={cond_open_close}, revenue<0={cond_revenue}, "
-                         f"cancel_by_rsi_ma={cond_cancel}")
-        telegram_alert.SendMessage(analysis_msg)
+        
         sell = (cond_high_low or cond_open_close or cond_revenue) and not cond_cancel
-        if BotDataDict[coin_ticker + '_DATE_CHECK'] == day_n:
+        if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
             sell = False
+
         if sell:
-            binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
-            exec_msg = f"{first_String} 조건 만족하여 매도!! (수익금: {unrealizedProfit:.2f}%)"
-            print(exec_msg)
-            telegram_alert.SendMessage(exec_msg)
-            BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
-            BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
-            with open(botdata_file_path, 'w') as f:
-                json.dump(BotDataDict, f)
+            try:
+                binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
+                exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT)"
+                print(exec_msg)
+                telegram_alert.SendMessage(exec_msg)
+                BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
+                BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
+                with open(botdata_file_path, 'w') as f:
+                    json.dump(BotDataDict, f, indent=4)
+            except Exception as e:
+                print(f"매도 주문 실패 for {coin_ticker}: {e}")
+
     # --- 매수 로직 (포지션 없음) ---
     else:
         #MACD 조건
@@ -177,23 +185,17 @@ for coin_data in InvestCoinList:
         cond_MACD = (macd_positive and macd_condition)
         cond_doji = upper_shadow_ratio <= 0.6
 
-        analysis_msg = (f"{first_String} 매수조건 분석 {coin_ticker}: 연속양봉={cond_o1 and cond_o2}, "
-                        f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
-                        f"7이평증가={cond_7ma}, 50이평증가={cond_50ma}, 30이평기울기={cond_slope}, "
-                        f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]}->{df['rsi_ma'].iloc[-2]}), "
-                        f"MACD={cond_MACD}"
-                        f"도지캔들={cond_doji}")
-        
-        telegram_alert.SendMessage(analysis_msg)
         buy = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD and cond_doji
         if buy:
-            if BotDataDict[coin_ticker + '_BUY_DATE'] != day_str:
-                # ------ 여기서 투자금액 결정! ------
-                if not any_position_exist:
-                    InvestMoney = total_usdt * InvestRate * coin_data['rate']
-                else:
-                    InvestMoney = total_usdt * InvestRate
+            if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
+                
+                # ------ [수정] 투자금액 결정! ------
+                # 항상 스크립트 시작 시점의 잔고(initial_usdt_balance)를 기준으로 투자금을 계산합니다.
+                InvestMoney = initial_usdt_balance * InvestRate * coin_data['rate']
                 # ----------------------------------
+                
+                print(f"{coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {initial_usdt_balance:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
+
                 BuyMoney = InvestMoney * (1.0 - fee * set_leverage)
                 cap = df['value_ma'].iloc[-2] / 10
                 BuyMoney = min(max(BuyMoney, 10), cap)
@@ -202,30 +204,31 @@ for coin_data in InvestCoinList:
                 #강제 cross 마진 모드 및 레버리지 변경
                 market_symbol = coin_ticker.replace("/", "")
                 try:
-                    binanceX.set_margin_mode('cross', market_symbol, params={'leverage': 5})
+                    binanceX.set_margin_mode('cross', market_symbol)
+                    binanceX.set_leverage(set_leverage, market_symbol)
+                    print(f"{market_symbol} 마진모드: cross, 레버리지: {set_leverage} 설정 완료")
                 except Exception as e:
                     print(f"마진모드/레버리지 세팅 오류: {e}")
 
                 try:
-                    binanceX.set_leverage(5, market_symbol)
+                    binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
+                    BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
+                    BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
+                    with open(botdata_file_path, 'w') as f:
+                        json.dump(BotDataDict, f, indent=4)
+                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매수!!"
+                    print(exec_msg)
+                    telegram_alert.SendMessage(exec_msg)
                 except Exception as e:
-                    print(f"레버리지 세팅 오류: {e}")
-
-                binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
-                BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
-                with open(botdata_file_path, 'w') as f:
-                    json.dump(BotDataDict, f)
-                exec_msg = f"{first_String} {coin_ticker} 바이낸스 전략 봇: 조건 만족하여 매수!!"
-                print(exec_msg)
-                telegram_alert.SendMessage(exec_msg)
+                    print(f"매수 주문 실패 for {coin_ticker}: {e}")
         else:
-            if hour_n == 0 and min_n == 0 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
+            if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                 warn_msg = f"{first_String} {coin_ticker} : 조건 만족하지 않아 현금 보유 합니다!"
                 print(warn_msg)
                 telegram_alert.SendMessage(warn_msg)
                 BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                 with open(botdata_file_path, 'w') as f:
-                    json.dump(BotDataDict, f)
+                    json.dump(BotDataDict, f, indent=4)
 
 if hour_n == 0 and min_n <= 2:
     end_msg = f"{first_String} 종료"
