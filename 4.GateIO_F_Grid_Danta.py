@@ -15,6 +15,7 @@ import json
 import logging
 import sys
 import os
+import socket
 import telegram_alert # telegram_alert.py 파일이 필요합니다.
 
 # ==============================================================================
@@ -25,7 +26,13 @@ GATEIO_ACCESS_KEY = "07a0ba2f6ed018fcb0fde7d08b58b40c"
 GATEIO_SECRET_KEY = "7fcd29026f6d7d73647981fe4f4b4f75f4569ad0262d0fada5db3a558b50072a"
 
 # 알림 첫 문구
-FIRST_STRING = "4.GateIO 그리드봇 "
+FIRST_STRING = "4.GateIO 단타 그리드봇 "
+
+t = time.gmtime()
+hour_n = t.tm_hour
+min_n = t.tm_min
+day_n = t.tm_mday
+day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
 # 로깅 설정
 logging.basicConfig(
@@ -66,8 +73,13 @@ SHORT_RSI_ADJUSTMENT = 0
 # 롱 포지션이 숏 포지션보다 이 횟수 이상 많고, 특정 조건 만족 시 추가 롱 진입 방지
 LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 7
 
+pcServerGb = socket.gethostname()
 # 상태 저장 파일
-BOT_DATA_FILE_PATH = "./GateIO_F_Grid_Danta_Data.json"
+if pcServerGb == "AutoBotCong":
+    BOT_DATA_FILE_PATH = "/var/AutoBot/json/GateIO_F_Grid_Danta_Data.json"
+else:
+    BOT_DATA_FILE_PATH = "./GateIO_F_Grid_Danta_Data.json"
+
 
 # ==============================================================================
 # 3. CCXT 및 상태 파일 초기화
@@ -421,8 +433,12 @@ def run_bot():
 
 if __name__ == '__main__':
     # 프로그램 시작 시 알림
-    telegram_alert.SendMessage(FIRST_STRING + "프로그램 시작")
+    if hour_n == 0 and min_n <= 2:
+        telegram_alert.SendMessage(FIRST_STRING + "시작")
     
     # 이 스크립트를 cron이나 작업 스케줄러에 등록하여 '15분'마다 실행되도록 설정해야 합니다.
     # 예: */15 * * * * python /path/to/GateIO_F_Grid_Danta_Operational.py
     run_bot()
+
+    if hour_n == 0 and min_n <= 2:
+        telegram_alert.SendMessage(FIRST_STRING + "종료")

@@ -15,8 +15,8 @@ import os
 # 1. 백테스트 환경 설정
 # ==============================================================================
 COIN_EXCHANGE = "gateio"  # 거래소 이름 (예: 'binance', 'gateio')
-TEST_START_DATE = datetime.datetime(2021, 1, 1)  # 시작일
-TEST_END_DATE = datetime.datetime(2025, 6, 23)   # 종료일 (현재)
+TEST_START_DATE = datetime.datetime(2025, 5, 1)  # 시작일
+TEST_END_DATE = datetime.datetime(2025, 6, 25)   # 종료일 (현재)
 INITIAL_CAPITAL = 100000      # 시작 자본 (USDT)
 TIMEFRAME = '15m'             # 15분봉 데이터 사용
 LEVERAGE = 10                # 레버리지
@@ -57,51 +57,92 @@ LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 7
 # (이전과 동일)
 # ==============================================================================
 def load_data(ticker, timeframe, start_date, end_date):
-    """로컬 CSV 파일 또는 API를 통해 OHLCV 데이터를 로드합니다."""
+    """
+    로컬 CSV 파일의 데이터를 우선 로드하고, 부족한 최신 데이터는 API를 통해 다운로드하여 병합합니다.
+    """
     print(f"--- [{ticker}] 데이터 준비 중 ---")
-    df = pd.DataFrame()
+    csv_df = pd.DataFrame()
     safe_ticker_name = ticker.replace('/', '_').lower()
+    # CSV 파일 이름 규칙을 스크립트 설정과 일치시킵니다.
     csv_file = f"{str(INVEST_COIN_LIST).replace('/USDT', '').lower()}_usdt_{COIN_EXCHANGE}_{TIMEFRAME}.csv"
-    
+
+    print(f"--- [{csv_file}] 데이터 준비 중 ---")
+
+    # 1. 로컬 CSV 파일에서 데이터 로드 시도
     if os.path.exists(csv_file):
         try:
             print(f"'{csv_file}' 파일에서 데이터를 로드합니다.")
-            df = pd.read_csv(csv_file, index_col=0, parse_dates=True)
-            df = df.loc[start_date:end_date]
-            if df.empty: print(f"경고: '{csv_file}' 파일에 해당 기간의 데이터가 없습니다.")
+            csv_df = pd.read_csv(csv_file, index_col=0, parse_dates=True)
+            if csv_df.index.tz is None:
+                csv_df.index = csv_df.index.tz_localize('UTC')
+            csv_df.index = csv_df.index.tz_convert(None) # 시간대 정보 제거하여 단순화
         except Exception as e:
             print(f"오류: '{csv_file}' 파일 로드 중 오류 발생: {e}.")
-            df = pd.DataFrame()
+            csv_df = pd.DataFrame()
 
-    if df.empty:
-        print(f"로컬 파일이 없거나 사용할 수 없어 API를 통해 데이터를 다운로드합니다.")
-        exchange = ccxt.gateio()
+    # 2. 데이터 필요 여부 및 다운로드 시작 시점 결정
+    fetch_from_api = False
+    since = int(start_date.timestamp() * 1000)
+
+    if not csv_df.empty:
+        last_date_in_csv = csv_df.index.max()
+        if last_date_in_csv < end_date:
+            print(f"로컬 데이터가 최신이 아닙니다. 마지막 데이터: {last_date_in_csv}. 이후 데이터를 API로 가져옵니다.")
+            # 마지막 데이터 다음 캔들부터 가져오기 위해 시간 증분
+            timeframe_duration = pd.to_timedelta(timeframe)
+            since = int((last_date_in_csv + timeframe_duration).timestamp() * 1000)
+            fetch_from_api = True
+        else:
+            print("로컬 데이터가 최신 상태입니다. API 호출을 건너뜁니다.")
+    else:
+        print("로컬 데이터가 없습니다. 전체 기간 데이터를 API로 다운로드합니다.")
+        fetch_from_api = True
+
+    # 3. 필요한 경우 API를 통해 데이터 다운로드
+    if fetch_from_api:
+        print(f"API 다운로드 시작: {datetime.datetime.fromtimestamp(since/1000)}")
+        exchange = getattr(ccxt, COIN_EXCHANGE)() # 설정된 거래소 객체 생성
         all_ohlcv = []
-        since = int(start_date.timestamp() * 1000)
         end_ms = int(end_date.timestamp() * 1000)
-        
         timeframe_duration_in_ms = exchange.parse_timeframe(timeframe) * 1000
 
         while since < end_ms:
             try:
                 ohlcv = exchange.fetch_ohlcv(ticker, timeframe, since, limit=1000)
-                if not ohlcv: break
+                if not ohlcv:
+                    break
                 all_ohlcv.extend(ohlcv)
                 since = ohlcv[-1][0] + timeframe_duration_in_ms
                 print(f"[{ticker}] API 다운로드 중... 마지막 날짜: {datetime.datetime.fromtimestamp(ohlcv[-1][0]/1000)}")
                 time.sleep(exchange.rateLimit / 1000)
             except Exception as e:
-                print(f"API 데이터 다운로드 오류: {e}"); break
+                print(f"API 데이터 다운로드 오류: {e}")
+                break
         
         if all_ohlcv:
-            df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            df = df.loc[start_date:end_date]
-            df.to_csv(csv_file)
-            print(f"데이터를 '{csv_file}' 파일로 저장했습니다.")
+            api_df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            api_df['timestamp'] = pd.to_datetime(api_df['timestamp'], unit='ms')
+            api_df.set_index('timestamp', inplace=True)
             
-    return df
+            # 4. 기존 데이터와 새로 받은 데이터 병합 및 저장
+            combined_df = pd.concat([csv_df, api_df])
+            # 중복된 인덱스(날짜)가 있을 경우, 새로 받은 데이터(keep='last')를 유지
+            combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+            combined_df.sort_index(inplace=True)
+            
+            combined_df.to_csv(csv_file)
+            print(f"업데이트된 데이터를 '{csv_file}' 파일로 저장했습니다.")
+            df = combined_df
+        else:
+            df = csv_df # API로 가져온 데이터가 없으면 기존 데이터 사용
+    else:
+        df = csv_df # API 호출이 필요 없으면 기존 데이터 사용
+
+    # 5. 최종적으로 백테스트 기간에 맞춰 데이터 필터링 후 반환
+    if not df.empty:
+        return df.loc[start_date:end_date]
+    else:
+        return pd.DataFrame()
 
 def calculate_indicators(df):
     """DataFrame에 보조지표(BB, RSI, MACD)를 추가합니다."""
@@ -581,7 +622,7 @@ def run_backtest(data_frames):
 def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl,
                              total_long_position_opened, total_long_position_closed, total_long_trades,
                              total_short_position_opened, total_short_position_closed, total_short_trades):
-    """백테스트 결과를 분석하고 그래프로 시각화합니다."""
+    """백테스트 결과를 분석하고 그래프로 시각화합니다. (경고 수정 버전)"""
     if portfolio_df.empty:
         print("백테스트 결과가 없어 분석을 종료합니다.")
         return
@@ -589,24 +630,31 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     final_value = portfolio_df['value'].iloc[-1]
 
     # --- MDD 계산을 위한 데이터 준비 ---
-    # 1. '전략 성과 자산 (adjusted_value)' 생성 (출금 영향 제거)
     withdrawal_series = pd.Series(monthly_withdrawals)
     if not withdrawal_series.empty:
         withdrawal_series.index = pd.to_datetime(withdrawal_series.index, format='%Y-%m').to_period('M').asfreq('M', 'end').to_timestamp() + pd.Timedelta(days=1)
         daily_cumulative_withdrawals = withdrawal_series.resample('D').sum().cumsum()
         portfolio_df = portfolio_df.join(daily_cumulative_withdrawals.rename('cumulative_withdrawal'))
-        portfolio_df['cumulative_withdrawal'].fillna(method='ffill', inplace=True)
-        portfolio_df['cumulative_withdrawal'].fillna(0, inplace=True)
+        
+        # --- 수정된 부분 1: fillna(method=...) 경고 해결 및 연쇄 할당 경고 해결 ---
+        # portfolio_df['cumulative_withdrawal'].fillna(method='ffill', inplace=True) -> 아래 코드로 변경
+        portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].ffill()
+        
     else:
         portfolio_df['cumulative_withdrawal'] = 0
+    
+    # --- 수정된 부분 2: 연쇄 할당 경고 해결 ---
+    # portfolio_df['cumulative_withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
+    portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].fillna(0)
     
     portfolio_df['adjusted_value'] = portfolio_df['value'] + portfolio_df['cumulative_withdrawal']
 
     def get_top_mdds(balance_series, value_series):
-        """주어진 자산 시리즈에 대해 TOP 3 MDD 기간을 계산하는 함수"""
         peak_series = balance_series.cummax()
         drawdown_series = (peak_series - balance_series) / peak_series.replace(0, np.nan)
-        drawdown_series.fillna(0, inplace=True)
+        # --- 수정된 부분 3: 연쇄 할당 경고 해결 ---
+        # drawdown_series.fillna(0, inplace=True) -> 아래 코드로 변경
+        drawdown_series = drawdown_series.fillna(0)
         
         periods = []
         is_in_dd = False
@@ -621,112 +669,89 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
                 period_slice = drawdown_series.iloc[start_idx:i]
                 if not period_slice.empty:
                     trough_date = period_slice.idxmax()
-                    periods.append({
-                        'max_dd': period_slice.loc[trough_date],
-                        'peak_date': balance_series.index[start_idx],
-                        'peak_value': balance_series.iloc[start_idx],
-                        'trough_date': trough_date,
-                        'trough_value': balance_series.loc[trough_date]
-                    })
-        if is_in_dd: # 마지막까지 하락세인 경우
+                    periods.append({'max_dd': period_slice.loc[trough_date], 'peak_date': balance_series.index[start_idx], 'peak_value': balance_series.iloc[start_idx], 'trough_date': trough_date, 'trough_value': balance_series.loc[trough_date]})
+        if is_in_dd:
              period_slice = drawdown_series.iloc[start_idx:]
              if not period_slice.empty:
                 trough_date = period_slice.idxmax()
-                periods.append({
-                        'max_dd': period_slice.loc[trough_date],
-                        'peak_date': balance_series.index[start_idx],
-                        'peak_value': balance_series.iloc[start_idx],
-                        'trough_date': trough_date,
-                        'trough_value': balance_series.loc[trough_date]
-                    })
+                periods.append({'max_dd': period_slice.loc[trough_date], 'peak_date': balance_series.index[start_idx], 'peak_value': balance_series.iloc[start_idx], 'trough_date': trough_date, 'trough_value': balance_series.loc[trough_date]})
         return sorted(periods, key=lambda x: x['max_dd'], reverse=True)[:3]
 
-    # --- 2. 두 가지 기준의 MDD 계산 ---
-    # 2-1. 전략 성과 기준 MDD
     mdd_performance = get_top_mdds(portfolio_df['adjusted_value'], portfolio_df['adjusted_value'])
-    # 2-2. 실제 자산 기준 MDD (청산 위험성 파악용)
     mdd_equity = get_top_mdds(portfolio_df['value'], portfolio_df['value'])
 
     def format_mdd_string(mdd_list, prefix="성과"):
         info_str = ""
-        if not mdd_list:
-            return "  - 0.00% (No drawdown recorded)"
+        if not mdd_list: return "  - 0.00% (No drawdown recorded)"
         for i, mdd in enumerate(mdd_list):
-            info_str += (
-                f"    - [TOP {i+1}] {mdd['max_dd']*100:.2f}% "
-                f"({prefix} Peak: {mdd['peak_value']:,.0f} USDT on {mdd['peak_date'].strftime('%Y-%m-%d')} -> "
-                f"{prefix} Trough: {mdd['trough_value']:,.0f} USDT on {mdd['trough_date'].strftime('%Y-%m-%d')})"
-            )
-            if i < len(mdd_list) - 1:
-                info_str += "\n"
+            info_str += (f"    - [TOP {i+1}] {mdd['max_dd']*100:.2f}% (Peak: {mdd['peak_value']:,.0f} USDT on {mdd['peak_date'].strftime('%Y-%m-%d')} -> Trough: {mdd['trough_value']:,.0f} USDT on {mdd['trough_date'].strftime('%Y-%m-%d')})")
+            if i < len(mdd_list) - 1: info_str += "\n"
         return info_str
 
     mdd_perf_str = format_mdd_string(mdd_performance, prefix="성과")
     mdd_equity_str = format_mdd_string(mdd_equity, prefix="실제잔고")
     
-    # --- 요약 데이터 생성 ---
     daily_summary = portfolio_df[['value', 'adjusted_value', 'long_entry_count', 'short_entry_count']].resample('D').last().ffill()
     realized_pnl_series = pd.Series(realized_pnl_data, name="Realized PNL")
-    # ... (이하 월별/일별 요약 데이터 생성 부분은 기존과 동일) ...
+    
     if not realized_pnl_series.empty:
         realized_pnl_series.index = pd.to_datetime(realized_pnl_series.index)
         daily_summary = daily_summary.join(realized_pnl_series.resample('D').sum())
-    daily_summary['Realized PNL'].fillna(0, inplace=True)
+    
+    # --- 수정된 부분 4: 연쇄 할당 경고 해결 ---
+    # daily_summary['Realized PNL'].fillna(0, inplace=True) -> 아래 코드로 변경
+    daily_summary['Realized PNL'] = daily_summary['Realized PNL'].fillna(0)
+    
     total_realized_pnl = daily_summary['Realized PNL'].sum()
     daily_summary['Cumulative Realized PNL'] = daily_summary['Realized PNL'].cumsum()
     fees_series = pd.Series(daily_fees, name="fees")
+    
     if not fees_series.empty:
         fees_series.index = pd.to_datetime(fees_series.index)
         daily_summary = daily_summary.join(fees_series.resample('D').sum())
-    daily_summary['fees'].fillna(0, inplace=True)
+        
+    # --- 수정된 부분 5: 연쇄 할당 경고 해결 ---
+    # daily_summary['fees'].fillna(0, inplace=True) -> 아래 코드로 변경
+    daily_summary['fees'] = daily_summary['fees'].fillna(0)
 
-    monthly_summary = daily_summary.resample('M').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
+    # --- 수정된 부분 6: resample('M') 경고 해결 ---
+    # monthly_summary = daily_summary.resample('M').agg(...) -> 'ME'로 변경
+    monthly_summary = daily_summary.resample('ME').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
+    
     monthly_summary['begin_value'] = monthly_summary['value'].shift(1).fillna(INITIAL_CAPITAL)
     monthly_summary['monthly_return'] = (monthly_summary['Realized PNL'] / monthly_summary['begin_value'].replace(0, np.nan)) * 100
     monthly_summary.index = monthly_summary.index.strftime('%Y-%m')
     monthly_withdrawal_series = pd.Series(monthly_withdrawals, name="Withdrawal")
     monthly_summary = monthly_summary.join(monthly_withdrawal_series)
-    monthly_summary['Withdrawal'].fillna(0, inplace=True)
+    
+    # --- 수정된 부분 7: 연쇄 할당 경고 해결 ---
+    # monthly_summary['Withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
+    monthly_summary['Withdrawal'] = monthly_summary['Withdrawal'].fillna(0)
 
-    print("\n" + "="*110)
-    print("                                               일별 요약 (실현 손익 기준)")
-    print("="*110)
+    # (이하 출력 및 시각화 부분은 동일)
+    print("\n" + "="*110 + "\n" + " " * 35 + "일별 요약 (실현 손익 기준)\n" + "="*110)
     for index, row in daily_summary.iterrows():
         new_cycle_marker = " « 신규 포지션" if index.date() in new_cycle_dates else ""
-        long_entry_count = int(row.get('long_entry_count', 0))
-        short_entry_count = int(row.get('short_entry_count', 0))
+        long_entry_count = int(row.get('long_entry_count', 0)); short_entry_count = int(row.get('short_entry_count', 0))
         position_str = f"롱:{long_entry_count}개, 숏:{short_entry_count}개"
         print(f"{index.strftime('%Y-%m-%d')}: 총잔액:{row['value']:>12,.2f} USDT,  일일 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,  누적 실현 Net PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT,  포지션: {position_str:<15}" + new_cycle_marker)
     print("="*110)
 
-    print("\n" + "="*125)
-    print("                                                            월별 요약 (실현 손익 기준)")
-    print("="*125)
+    print("\n" + "="*125 + "\n" + " " * 45 + "월별 요약 (실현 손익 기준)\n" + "="*125)
     for index, row in monthly_summary.iterrows():
         print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,   수익률: {row.get('monthly_return', 0):>+7.2f}%,   수수료: {row.get('fees', 0):>8,.2f} USDT,   출금액: {row['Withdrawal']:>10,.2f} USDT")
     print("="*125)
     
     total_return_if_no_withdrawal = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100 
-
     print("\n" + "="*80 + "\n" + " " * 30 + "백테스트 최종 결과\n" + "="*80)
-    print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT")
-    print(f"  - 최종 자산: {final_value:,.2f} USDT")
-    print(f"  - 총 실현 손익: {total_realized_pnl:,.2f} USDT")
-    print(f"    - 롱 포지션 수익: {total_long_pnl:,.2f} USDT")
-    print(f"    - 숏 포지션 수익: {total_short_pnl:,.2f} USDT")
-    print(f"  - 총 출금액: {total_withdrawn:,.2f} USDT")
-    total_fees = sum(daily_fees.values())
-    print(f"  - 총 수수료: {total_fees:,.2f} USDT")
+    print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT"); print(f"  - 최종 자산: {final_value:,.2f} USDT")
+    print(f"  - 총 실현 손익: {total_realized_pnl:,.2f} USDT"); print(f"    - 롱 포지션 수익: {total_long_pnl:,.2f} USDT"); print(f"    - 숏 포지션 수익: {total_short_pnl:,.2f} USDT")
+    print(f"  - 총 출금액: {total_withdrawn:,.2f} USDT"); total_fees = sum(daily_fees.values()); print(f"  - 총 수수료: {total_fees:,.2f} USDT")
     print(f"  - 총 수익률 (출금액 포함 가정): {total_return_if_no_withdrawal:.2f}%")
-    print("-" * 80)
-    print(f"  - MDD (전략 성과 기준 / 출금 영향 제거):\n{mdd_perf_str}")
-    print(f"  - MDD (실제 자산 기준 / 청산 위험성 참고):\n{mdd_equity_str}")
+    print("-" * 80); print(f"  - MDD (전략 성과 기준 / 출금 영향 제거):\n{mdd_perf_str}"); print(f"  - MDD (실제 자산 기준 / 청산 위험성 참고):\n{mdd_equity_str}")
     print("    (참고: '실제 자산 기준 MDD'는 출금도 자산 감소로 계산되어 변동성이 크게 나타날 수 있습니다.)")
-    print("\n" + " " * 31 + "최종 거래 횟수\n" + "-"*80)
-    print(f"  - 롱 포지션 시작/종료: {total_long_position_opened}회 / {total_long_position_closed}회")
-    print(f"  - 롱 포지션 총 거래(매수/매도) 횟수: {total_long_trades}회")
-    print(f"  - 숏 포지션 시작/종료: {total_short_position_opened}회 / {total_short_position_closed}회")
-    print(f"  - 숏 포지션 총 거래(매수/매도) 횟수: {total_short_trades}회")
+    print("\n" + " " * 31 + "최종 거래 횟수\n" + "-"*80); print(f"  - 롱 포지션 시작/종료: {total_long_position_opened}회 / {total_long_position_closed}회"); print(f"  - 롱 포지션 총 거래(매수/매도) 횟수: {total_long_trades}회")
+    print(f"  - 숏 포지션 시작/종료: {total_short_position_opened}회 / {total_short_position_closed}회"); print(f"  - 숏 포지션 총 거래(매수/매도) 횟수: {total_short_trades}회")
     print("="*80)
 
     plt.figure(figsize=(15, 10))
@@ -734,17 +759,11 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     except: plt.rc('font', family='AppleGothic')
     plt.rcParams['axes.unicode_minus'] = False
     
-    # --- 그래프 수정 ---
-    # 자산 추이 그래프
-    ax1 = plt.subplot(2, 1, 1)
-    portfolio_df['adjusted_value'].plot(ax=ax1, label='전략 성과 자산 (출금 보정)')
-    portfolio_df['value'].plot(ax=ax1, label='실제 계좌 자산', linestyle='--')
-    ax1.set_title('자산 추이 비교')
-    ax1.set_ylabel('자산 가치 (USDT)'); ax1.grid(True); ax1.legend()
+    ax1 = plt.subplot(2, 1, 1); portfolio_df['adjusted_value'].plot(ax=ax1, label='전략 성과 자산 (출금 보정)'); portfolio_df['value'].plot(ax=ax1, label='실제 계좌 자산', linestyle='--')
+    ax1.set_title('자산 추이 비교'); ax1.set_ylabel('자산 가치 (USDT)'); ax1.grid(True); ax1.legend()
     
-    # MDD 그래프 (전략 성과 기준)
     ax2 = plt.subplot(2, 1, 2)
-    mdd_perf_series = (portfolio_df['value'].cummax() - portfolio_df['value']) / portfolio_df['value'].cummax()
+    mdd_perf_series = (portfolio_df['adjusted_value'].cummax() - portfolio_df['adjusted_value']) / portfolio_df['adjusted_value'].cummax()
     (mdd_perf_series * 100).plot(ax=ax2, title='최대 낙폭 (MDD, 전략 성과 기준)', color='red')
     ax2.set_ylabel('낙폭 (%)'); ax2.grid(True)
     plt.xlabel('날짜'); plt.tight_layout(); plt.show()
