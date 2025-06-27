@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 """
-파일이름: GateIO_F_Grid_Danta_Operational.py
-설명: 볼린저밴드, RSI, MACD, ADX를 이용한 롱/숏 그리드 매매 전략 (운영용)
+파일이름: GateIO_F_Grid_Danta_Operational_v2.py
+설명: 볼린저밴드, RSI, MACD, ADX를 이용한 롱/숏 그리드 매매 전략 (운영용) - 로깅 강화 버전
 참조:
   - 전략 로직: 4.GateIO_F_Grid_Danta_Test.py
   - 운영 구조: 3.GateIO_F_DOGE_PEPE_leverage.py
@@ -245,7 +245,7 @@ def calculate_order_amount(ticker, usdt_amount, price, leverage):
     return contract_amount
 
 # ==============================================================================
-# 6. 메인 실행 로직
+# 6. 메인 실행 로직 (로깅 강화)
 # ==============================================================================
 def run_bot():
     """봇의 메인 실행 로직입니다."""
@@ -270,7 +270,7 @@ def run_bot():
             logger.warning(f"[{coin_ticker}] 지표 계산을 위한 데이터가 부족합니다 (가져온 데이터 수: {len(df)}). 건너뜁니다.")
             continue
 
-        df.name = coin_ticker # 다음 함수에서 사용하기 위해 df에 이름 부여
+        df.name = coin_ticker
         df = calculate_indicators(df)
         df = calculate_adx(df)
         if USE_SHORT_STRATEGY:
@@ -284,19 +284,22 @@ def run_bot():
         prev_candle = df.iloc[-2]
         prev_prev_candle = df.iloc[-3]
         current_price = df['close'].iloc[-1]
+        logger.info(f"[{coin_ticker}] 현재 가격: {current_price:.5f}, 이전 봉 RSI: {prev_candle['rsi']:.2f}, MACD Hist: {prev_candle['macd_histogram']:.4f}")
+
 
         # 3. 포지션 동기화 및 자산 확인
         cash = get_available_balance()
         long_pos_live, short_pos_live = get_current_position(coin_ticker)
         
-        # --- (참고) 만약 로컬 데이터와 실제 포지션이 불일치할 경우, 여기서 동기화 로직을 추가할 수 있습니다 ---
-        # 예: if long_pos_live is None and len(long_pos_data['entries']) > 0: ...
-
         # 4. 롱/숏 포지션 청산(Exit) 로직
         # 4-1. 롱 포지션 익절/손절 로직
+        logger.info(f"[롱 청산 조건] 현재 롱 포지션 수: {len(long_pos_data['entries'])}")
         if len(long_pos_data['entries']) > 0:
             is_ma_cross_up = prev_candle['high'] > prev_candle['ma30'] and prev_prev_candle['close'] < prev_prev_candle['ma30']
             is_bb_upper_break = prev_candle['close'] > prev_candle['bb_upper']
+            
+            logger.info(f"[롱 청산 조건] MA 상향 돌파(이전봉 고가[{prev_candle['high']:.5f}] > MA30[{prev_candle['ma30']:.5f}] AND 전전봉 종가[{prev_prev_candle['close']:.5f}] < 전전봉 MA30[{prev_prev_candle['ma30']:.5f}]): {is_ma_cross_up}")
+            logger.info(f"[롱 청산 조건] BB 상단 돌파(이전봉 종가[{prev_candle['close']:.5f}] > BB상단[{prev_candle['bb_upper']:.5f}]): {is_bb_upper_break}")
 
             if is_ma_cross_up or is_bb_upper_break:
                 try:
@@ -313,11 +316,17 @@ def run_bot():
                     save_bot_data()
                 except Exception as e:
                     logger.error(f"[{coin_ticker}] 롱 포지션 청산 주문 실패: {e}")
+            else:
+                logger.info(f"[{coin_ticker}] 롱 포지션 청산 조건 미충족. 대기합니다.")
 
-        # 4-2. 숏 포지션 익절/손절 로직 (롱 로직 대칭으로 구현)
+        # 4-2. 숏 포지션 익절/손절 로직
+        logger.info(f"[숏 청산 조건] 숏 전략 사용: {USE_SHORT_STRATEGY}, 현재 숏 포지션 수: {len(short_pos_data['entries'])}")
         if len(short_pos_data['entries']) > 0 and USE_SHORT_STRATEGY:
             is_ma_cross_down = prev_candle['low'] < prev_candle['ma30'] and prev_prev_candle['close'] > prev_prev_candle['ma30']
             is_bb_lower_break = prev_candle['close'] < prev_candle['bb_lower']
+
+            logger.info(f"[숏 청산 조건] MA 하향 돌파(이전봉 저가[{prev_candle['low']:.5f}] < MA30[{prev_candle['ma30']:.5f}] AND 전전봉 종가[{prev_prev_candle['close']:.5f}] > 전전봉 MA30[{prev_prev_candle['ma30']:.5f}]): {is_ma_cross_down}")
+            logger.info(f"[숏 청산 조건] BB 하단 돌파(이전봉 종가[{prev_candle['close']:.5f}] < BB하단[{prev_candle['bb_lower']:.5f}]): {is_bb_lower_break}")
 
             if is_ma_cross_down or is_bb_lower_break:
                 try:
@@ -334,33 +343,45 @@ def run_bot():
                     save_bot_data()
                 except Exception as e:
                     logger.error(f"[{coin_ticker}] 숏 포지션 청산 주문 실패: {e}")
+            else:
+                logger.info(f"[{coin_ticker}] 숏 포지션 청산 조건 미충족. 대기합니다.")
         
         # 5. 포지션 진입(Entry) 로직
         # 5-1. 롱 포지션 신규 진입 로직
+        logger.info(f"[롱 진입 조건] 확인 시작. 현재 진입 수: {len(long_pos_data['entries'])}, 최대 진입 수: {MAX_LONG_BUY_COUNT}")
         if len(long_pos_data['entries']) < MAX_LONG_BUY_COUNT:
             base_buy_cond = prev_candle['rsi'] < 25 and prev_candle['close'] < prev_candle['bb_lower']
+            logger.info(f"[롱 진입 조건] 기본 조건 (RSI < 25 AND 종가 < BB하단): {base_buy_cond}. (RSI: {prev_candle['rsi']:.2f}, 종가: {prev_candle['close']:.5f}, BB하단: {prev_candle['bb_lower']:.5f})")
+            
             should_buy = False
             if base_buy_cond:
                 if len(long_pos_data['entries']) == 0:
                     should_buy = True
+                    logger.info("[롱 진입 조건] 첫 진입이므로 매수 조건 충족.")
                 else:
-                    # 추가 매수 조건 (RSI 리셋 또는 더 낮은 RSI)
                     last_entry_rsi = long_pos_data['entries'][-1]['trigger_rsi']
-                    if prev_candle['rsi'] < last_entry_rsi - 2: # 간단하게 이전 RSI보다 2 낮을 때 추가 매수
+                    logger.info(f"[롱 진입 조건] 추가 매수 조건 확인. 이전 진입 RSI: {last_entry_rsi:.2f}, 현재 RSI: {prev_candle['rsi']:.2f}")
+                    if prev_candle['rsi'] < last_entry_rsi - 2:
                          should_buy = True
+                         logger.info(f"[롱 진입 조건] 현재 RSI가 이전 RSI-2 보다 낮아 추가매수 조건 충족.")
+                    else:
+                         logger.info(f"[롱 진입 조건] 현재 RSI가 이전 RSI-2 보다 낮지 않아 추가매수 조건 미충족.")
             
             # MACD 잠금 조건 확인
-            if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] < 0:
-                long_pos_data['buy_blocked_by_macd'] = True
-            if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] > 0:
-                 long_pos_data['buy_blocked_by_macd'] = False
+            if USE_MACD_BUY_LOCK:
+                logger.info(f"[롱 진입 조건] MACD 잠금 확인. MACD Hist: {prev_candle['macd_histogram']:.4f}")
+                if prev_candle['macd_histogram'] < 0 and not long_pos_data['buy_blocked_by_macd']:
+                    long_pos_data['buy_blocked_by_macd'] = True
+                    logger.info("[롱 진입 조건] MACD 히스토그램이 음수로 전환되어 '매수 잠금' 활성화.")
+                elif prev_candle['macd_histogram'] > 0 and long_pos_data['buy_blocked_by_macd']:
+                    long_pos_data['buy_blocked_by_macd'] = False
+                    logger.info("[롱 진입 조건] MACD 히스토그램이 양수로 전환되어 '매수 잠금' 해제.")
             
-            if should_buy and not long_pos_data['buy_blocked_by_macd']:
+            logger.info(f"[롱 진입 최종 결정] 매수 실행 여부(should_buy): {should_buy}, 매수 잠금 상태(buy_blocked_by_macd): {long_pos_data.get('buy_blocked_by_macd', False)}")
+            if should_buy and not long_pos_data.get('buy_blocked_by_macd', False):
                 try:
-                    # 레버리지 설정
                     exchange.set_leverage(LEVERAGE, coin_ticker)
                     
-                    # 매수 금액 계산
                     base_amount = cash * BASE_BUY_RATE
                     next_entry_num = len(long_pos_data['entries']) + 1
                     buy_collateral = get_buy_amount(base_amount, prev_candle['rsi'], next_entry_num) if USE_ADDITIVE_BUYING else base_amount
@@ -368,11 +389,9 @@ def run_bot():
                     if cash < buy_collateral:
                         logger.warning(f"[{coin_ticker}] 롱 진입 시도 실패: 잔고 부족 (필요: {buy_collateral:.2f}, 보유: {cash:.2f})")
                     else:
-                        # 주문 수량 계산 및 실행
                         amount_to_buy = calculate_order_amount(coin_ticker, buy_collateral, current_price, LEVERAGE)
                         exchange.create_market_buy_order(coin_ticker, amount_to_buy)
 
-                        # 상태 저장
                         long_pos_data['entries'].append({
                             "price": current_price, "quantity": amount_to_buy,
                             "timestamp": datetime.datetime.now().isoformat(),
@@ -386,30 +405,44 @@ def run_bot():
 
                 except Exception as e:
                     logger.error(f"[{coin_ticker}] 롱 포지션 진입 주문 실패: {e}")
+            else:
+                logger.info(f"[{coin_ticker}] 롱 포지션 진입 조건을 충족하지 못했습니다.")
+        else:
+            logger.info(f"[{coin_ticker}] 최대 롱 포지션 진입 횟수({MAX_LONG_BUY_COUNT})에 도달하여 더 이상 진입하지 않습니다.")
+
 
         # 5-2. 숏 포지션 신규 진입 로직
+        logger.info(f"[숏 진입 조건] 확인 시작. 전략 사용: {USE_SHORT_STRATEGY}, 현재 진입 수: {len(short_pos_data['entries'])}, 최대 진입 수: {MAX_SHORT_BUY_COUNT}")
         if USE_SHORT_STRATEGY and len(short_pos_data['entries']) < MAX_SHORT_BUY_COUNT:
-            short_cond_tf = prev_candle.get('prev_tf_close_below_ma30', False) and \
-                              prev_candle.get('prev_tf_macd_hist_neg', False) and \
-                              not prev_candle.get('prev_tf_ma30_3day_rising', False)
-            short_cond_15m = prev_candle['rsi'] >= SHORT_ENTRY_RSI
+            # 일봉 조건
+            cond_tf_close = prev_candle.get('prev_tf_close_below_ma30', False)
+            cond_tf_macd = prev_candle.get('prev_tf_macd_hist_neg', False)
+            cond_tf_ma_rising = not prev_candle.get('prev_tf_ma30_3day_rising', False)
+            short_cond_tf = cond_tf_close and cond_tf_macd and cond_tf_ma_rising
+            
+            logger.info(f"[{coin_ticker}][숏 진입 조건] 일봉(큰 타임프레임) 조건 확인:")
+            logger.info(f"  - 종가 < MA30: {cond_tf_close}")
+            logger.info(f"  - MACD Hist < 0: {cond_tf_macd}")
+            logger.info(f"  - MA30 3일 연속 상승 아님: {cond_tf_ma_rising}")
+            logger.info(f"  => 최종 일봉 조건 충족 여부: {short_cond_tf}")
 
+            # 15분봉 조건
+            short_cond_15m = prev_candle['rsi'] >= SHORT_ENTRY_RSI
+            logger.info(f"[{coin_ticker}][숏 진입 조건] 15분봉 조건 확인 (RSI >= {SHORT_ENTRY_RSI}): {short_cond_15m} (현재 RSI: {prev_candle['rsi']:.2f})")
+
+            logger.info(f"[숏 진입 최종 결정] 일봉 조건: {short_cond_tf}, 15분봉 조건: {short_cond_15m}")
             if short_cond_tf and short_cond_15m:
                 try:
-                    # 레버리지 설정
                     exchange.set_leverage(LEVERAGE, coin_ticker)
-
-                    # 매도 금액(증거금) 계산 (균등 분할)
+                    
                     sell_collateral = cash * BASE_BUY_RATE
 
                     if cash < sell_collateral:
                         logger.warning(f"[{coin_ticker}] 숏 진입 시도 실패: 잔고 부족 (필요: {sell_collateral:.2f}, 보유: {cash:.2f})")
                     else:
-                        # 주문 수량 계산 및 실행
                         amount_to_sell = calculate_order_amount(coin_ticker, sell_collateral, current_price, LEVERAGE)
                         exchange.create_market_sell_order(coin_ticker, amount_to_sell)
 
-                        # 상태 저장
                         short_pos_data['entries'].append({
                             "price": current_price, "quantity": amount_to_sell,
                             "timestamp": datetime.datetime.now().isoformat(),
@@ -424,6 +457,11 @@ def run_bot():
 
                 except Exception as e:
                     logger.error(f"[{coin_ticker}] 숏 포지션 진입 주문 실패: {e}")
+            else:
+                 logger.info(f"[{coin_ticker}] 숏 포지션 진입 조건을 충족하지 못했습니다.")
+        elif USE_SHORT_STRATEGY:
+            logger.info(f"[{coin_ticker}] 최대 숏 포지션 진입 횟수({MAX_SHORT_BUY_COUNT})에 도달하여 더 이상 진입하지 않습니다.")
+
 
         logger.info(f"--- [{coin_ticker}] 처리 완료 ---")
         time.sleep(1) # API 요청 제한 방지
@@ -437,7 +475,7 @@ if __name__ == '__main__':
         telegram_alert.SendMessage(FIRST_STRING + "시작")
     
     # 이 스크립트를 cron이나 작업 스케줄러에 등록하여 '15분'마다 실행되도록 설정해야 합니다.
-    # 예: */15 * * * * python /path/to/GateIO_F_Grid_Danta_Operational.py
+    # 예: */15 * * * * python /path/to/GateIO_F_Grid_Danta_Operational_v2.py
     run_bot()
 
     if hour_n == 0 and min_n <= 2:
