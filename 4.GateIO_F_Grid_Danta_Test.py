@@ -15,8 +15,8 @@ import os
 # 1. 백테스트 환경 설정
 # ==============================================================================
 COIN_EXCHANGE = "gateio"  # 거래소 이름 (예: 'binance', 'gateio')
-TEST_START_DATE = datetime.datetime(2025, 5, 1)  # 시작일
-TEST_END_DATE = datetime.datetime(2025, 6, 25)   # 종료일 (현재)
+TEST_START_DATE = datetime.datetime(2021, 1, 1)  # 시작일
+TEST_END_DATE = datetime.datetime(2025, 6, 30)   # 종료일 (현재)
 INITIAL_CAPITAL = 100000      # 시작 자본 (USDT)
 TIMEFRAME = '15m'             # 15분봉 데이터 사용
 LEVERAGE = 10                # 레버리지
@@ -28,7 +28,7 @@ BASE_BUY_RATE = 0.02 # 할당 자본 대비 1회차 매수 금액 비율 (예: 0
 
 # <<< [수정] 설정 설명 명확화 >>>
 # True: '매 진입 시점'의 가용 현금 기준, False: 포지션 사이클 시작 시점의 '할당 자본' 기준
-USE_DYNAMIC_BASE_BUY_AMOUNT = True 
+USE_DYNAMIC_BASE_BUY_AMOUNT = True
 
 # 월별 수익 출금 비율 설정
 MONTHLY_WITHDRAWAL_RATE = 30 # 월별 수익 출금 비율 (%, 0이면 출금 안함)
@@ -118,18 +118,18 @@ def load_data(ticker, timeframe, start_date, end_date):
             except Exception as e:
                 print(f"API 데이터 다운로드 오류: {e}")
                 break
-        
+
         if all_ohlcv:
             api_df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             api_df['timestamp'] = pd.to_datetime(api_df['timestamp'], unit='ms')
             api_df.set_index('timestamp', inplace=True)
-            
+
             # 4. 기존 데이터와 새로 받은 데이터 병합 및 저장
             combined_df = pd.concat([csv_df, api_df])
             # 중복된 인덱스(날짜)가 있을 경우, 새로 받은 데이터(keep='last')를 유지
             combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
             combined_df.sort_index(inplace=True)
-            
+
             combined_df.to_csv(csv_file)
             print(f"업데이트된 데이터를 '{csv_file}' 파일로 저장했습니다.")
             df = combined_df
@@ -168,7 +168,7 @@ def calculate_adx(df, window=14):
     df['tr2'] = abs(df['high'] - df['close'].shift(1))
     df['tr3'] = abs(df['low'] - df['close'].shift(1))
     df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
-    
+
     df['pdm'] = (df['high'] - df['high'].shift(1))
     df['mdm'] = (df['low'].shift(1) - df['low'])
     df['pdm'] = df['pdm'].where((df['pdm'] > df['mdm']) & (df['pdm'] > 0), 0)
@@ -176,7 +176,7 @@ def calculate_adx(df, window=14):
 
     df['pdi'] = (df['pdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
     df['mdi'] = (df['mdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
-    
+
     with np.errstate(divide='ignore', invalid='ignore'):
         df['dx'] = (abs(df['pdi'] - df['mdi']) / (df['pdi'] + df['mdi'])) * 100
     df['dx'].fillna(0, inplace=True)
@@ -189,7 +189,7 @@ def add_secondary_timeframe_indicators(df_base, secondary_timeframe='1d'):
     이전 타임프레임 기준의 지표(MA, MACD, ADX)를 원본 데이터프레임에 병합합니다.
     """
     print(f"--- [{secondary_timeframe}] 기준 데이터 준비 및 병합 중 ---")
-    
+
     agg_rules = {'open':'first', 'high': 'max', 'low':'min', 'close': 'last'}
     df_secondary = df_base.resample(secondary_timeframe).agg(agg_rules)
     df_secondary = df_secondary.dropna()
@@ -204,7 +204,7 @@ def add_secondary_timeframe_indicators(df_base, secondary_timeframe='1d'):
     macd_sec = ema_fast_sec - ema_slow_sec
     df_secondary['macd_histogram'] = macd_sec - macd_sec.ewm(span=9, adjust=False).mean()
     df_secondary['ma30_3day_rising'] = (df_secondary['ma30'].diff(1) > 0) & (df_secondary['ma30'].diff(2) > 0) & (df_secondary['ma30'].diff(3) > 0)
-    
+
     df_secondary = calculate_adx(df_secondary, window=14)
 
     # 이전 봉 데이터 사용을 위해 shift
@@ -220,12 +220,12 @@ def add_secondary_timeframe_indicators(df_base, secondary_timeframe='1d'):
     df_secondary_shifted['prev_tf_macd_hist_neg'] = df_secondary_shifted['prev_tf_macd_hist'] < 0
 
     cols_to_join = ['prev_tf_close_below_ma30', 'prev_tf_macd_hist_neg', 'prev_tf_ma30_3day_rising', 'prev_tf_adx']
-    
+
     df_merged = pd.merge_asof(
-        df_base.sort_index(), 
-        df_secondary_shifted[cols_to_join], 
-        left_index=True, 
-        right_index=True, 
+        df_base.sort_index(),
+        df_secondary_shifted[cols_to_join],
+        left_index=True,
+        right_index=True,
         direction='backward'
     )
 
@@ -234,7 +234,7 @@ def add_secondary_timeframe_indicators(df_base, secondary_timeframe='1d'):
             df_merged[col] = df_merged[col].fillna(0)
         else:
             df_merged[col] = df_merged[col].fillna(False)
-    
+
     print(f"--- [{secondary_timeframe}] 기준 데이터 병합 완료 ---")
     return df_merged
 
@@ -265,7 +265,7 @@ def run_backtest(data_frames):
     else: print(">> 롱 균등 매수 모드가 활성화되었습니다.")
     if USE_MACD_BUY_LOCK: print(">> MACD 매수 잠금 기능이 활성화되었습니다.")
     else: print(">> MACD 매수 잠금 기능이 비활성화되었습니다.")
-    if USE_SHORT_STRATEGY: 
+    if USE_SHORT_STRATEGY:
         print(f">> 숏 포지션 전략이 활성화되었습니다. (조건 기준: {SHORT_CONDITION_TIMEFRAME})")
     else: print(">> 숏 포지션 전략이 비활성화되었습니다.")
     if USE_DYNAMIC_BASE_BUY_AMOUNT:
@@ -288,10 +288,10 @@ def run_backtest(data_frames):
 
     total_long_position_opened = 0
     total_long_position_closed = 0
-    total_long_trades = 0 
+    total_long_trades = 0
     total_short_position_opened = 0
     total_short_position_closed = 0
-    total_short_trades = 0 
+    total_short_trades = 0
 
     for ticker in coin_list:
         allocated_capital = INITIAL_CAPITAL / len(coin_list)
@@ -377,12 +377,14 @@ def run_backtest(data_frames):
                     entries_to_sell_indices = [i for i, e in enumerate(long_pos['entries']) if e['price'] < prev_candle['ma30']]
                     if entries_to_sell_indices: sell_reason = "30MA 상향 돌파"
                 elif prev_candle['close'] > prev_candle['bb_upper']:
-                    if mtm_price > long_pos['average_price']:
+                    # <<< [수정 시작] BB 상단 돌파 시, 수익성 판단 기준을 prev_candle['close']로 통일 >>>
+                    if prev_candle['close'] > long_pos['average_price']:
                         entries_to_sell_indices = list(range(len(long_pos['entries'])))
                         sell_reason = "BB 상단 돌파 (전체 익절)"
                     else:
-                        entries_to_sell_indices = [i for i, e in enumerate(long_pos['entries']) if mtm_price > e['price']]
+                        entries_to_sell_indices = [i for i, e in enumerate(long_pos['entries']) if prev_candle['close'] > e['price']]
                         if entries_to_sell_indices: sell_reason = "BB 상단 돌파 (부분 익절)"
+                    # <<< [수정 끝] >>>
 
                 if entries_to_sell_indices:
                     sold_entries = [long_pos['entries'][i] for i in entries_to_sell_indices]
@@ -391,25 +393,37 @@ def run_backtest(data_frames):
                     qty_sold = sum(e['quantity'] for e in sold_entries)
                     sell_fee = (qty_sold * execution_price) * FEE_RATE
                     net_pnl = gross_pnl - total_buy_fee - sell_fee
+
+                    # 상세 PNL 계산 로그 출력
+                    if len(sold_entries) == long_pos['current_entry_count']:
+                        print(f"[{current_time}] 💰 {ticker} [LONG] 포지션 전체 익절 (사유: {sell_reason}).")
+                        total_long_position_closed += 1
+                    else:
+                        print(f"[{current_time}] 💰 {ticker} [LONG] 부분 매도 (사유: {sell_reason}).")
+
+                    # print(f"    - PNL 계산 상세 내역:")
+                    # print(f"    - (1) 매도 실행 가격: {execution_price:,.5f}")
+                    # print(f"    - (2) 총 매매 손익 (Gross PNL): {gross_pnl:,.2f} USDT")
+                    # print(f"        └ (매도 실행 가격 - 각 진입 가격) * 수량 의 합계")
+                    # print(f"    - (3) 총 매수 수수료 (매도 대상): {total_buy_fee:,.2f} USDT")
+                    # print(f"    - (4) 매도 수수료: {sell_fee:,.2f} USDT")
+                    # print(f"        └ (총 매도 수량 {qty_sold:.4f} * 매도 실행 가격) * 수수료율 {FEE_RATE}")
+                    print(f"    - >> 최종 순손익 (Net PNL): {net_pnl:,.2f} USDT <<")
+                    # print(f"        └ (2)총 매매 손익 - (3)총 매수 수수료 - (4)매도 수수료")
+
                     daily_fees[current_date] = daily_fees.get(current_date, 0) + total_buy_fee + sell_fee
                     daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl
                     total_long_pnl += net_pnl
                     total_long_trades += len(entries_to_sell_indices)
 
-                    if len(sold_entries) == long_pos['current_entry_count']:
-                        print(f"[{current_time}] 💰 {ticker} [LONG] 포지션 전체 익절 (사유: {sell_reason}). Net PNL: {net_pnl:,.2f} USDT")
-                        total_long_position_closed += 1
-                    else:
-                        print(f"[{current_time}] 💰 {ticker} [LONG] 부분 매도 (사유: {sell_reason}). Net PNL: {net_pnl:,.2f} USDT")
-                    
                     removed_collateral = sum([(e['price'] * e['quantity'] / LEVERAGE) for e in sold_entries])
                     cash += removed_collateral + net_pnl
                     long_pos['total_collateral'] -= removed_collateral
-                    
+
                     for i in sorted(entries_to_sell_indices, reverse=True): del long_pos['entries'][i]
                     for new_idx, entry in enumerate(long_pos['entries']): entry['entry_num'] = new_idx + 1
                     long_pos['current_entry_count'] = len(long_pos['entries'])
-                    
+
                     if long_pos['current_entry_count'] == 0:
                         new_allocated_asset = cash / len(data_frames)
                         positions[ticker]['long'].update({
@@ -422,10 +436,10 @@ def run_backtest(data_frames):
                     else:
                         long_pos['total_quantity'] = sum(e['quantity'] for e in long_pos['entries'])
                         long_pos['average_price'] = sum(e['price'] * e['quantity'] for e in long_pos['entries']) / long_pos['total_quantity']
-                    
+
                     if (short_pos['current_entry_count'] - long_pos['current_entry_count']) >= 4 and short_pos['current_entry_count'] > 0:
                         print(f"[{current_time}] 밸런스 조정! ↔️ {ticker} [ACTION] 롱 포지션 정리로 숏/롱 격차 발생. 숏 1개 강제 정리.")
-                        
+
                         entry_to_close_s = short_pos['entries'].pop(-1)
                         gross_pnl_s = (entry_to_close_s['price'] - execution_price) * entry_to_close_s['quantity']
                         sell_fee_s = entry_to_close_s.get('sell_fee', 0)
@@ -435,14 +449,14 @@ def run_backtest(data_frames):
                         daily_fees[current_date] = daily_fees.get(current_date, 0) + sell_fee_s + buy_back_fee
                         daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl_s
                         total_short_pnl += net_pnl_s
-                        
+
                         removed_collateral_s = (entry_to_close_s['price'] * entry_to_close_s['quantity'] / LEVERAGE)
                         cash += removed_collateral_s + net_pnl_s
                         short_pos['total_collateral'] -= removed_collateral_s
-                        
+
                         total_short_trades += 1
                         short_pos['current_entry_count'] = len(short_pos['entries'])
-                        
+
                         if short_pos['current_entry_count'] == 0:
                             print(f"    - 조정으로 모든 숏 포지션이 정리되었습니다. Net PNL: {net_pnl_s:,.2f} USDT")
                             total_short_position_closed += 1
@@ -458,7 +472,7 @@ def run_backtest(data_frames):
                 base_buy_cond = prev_candle['rsi'] < 25 and prev_candle['close'] < prev_candle['bb_lower']
                 should_buy = False
                 if base_buy_cond:
-                    if long_pos['current_entry_count'] == 0: 
+                    if long_pos['current_entry_count'] == 0:
                         should_buy = True
                         total_long_position_opened += 1
                     else:
@@ -470,7 +484,7 @@ def run_backtest(data_frames):
                 if should_buy:
                     is_prev_day_close_below_ma = current_candle.get('prev_tf_close_below_ma30', False)
                     long_short_diff = long_pos['current_entry_count'] - short_pos['current_entry_count']
-                    
+
                     if is_prev_day_close_below_ma and long_short_diff >= LONG_ENTRY_LOCK_SHORT_COUNT_DIFF:
                         should_buy = False
 
@@ -505,7 +519,7 @@ def run_backtest(data_frames):
 
                 if should_buy and not long_pos['buy_blocked_by_macd']:
                     next_entry_num = long_pos['current_entry_count'] + 1
-                    
+
                     # <<< [수정] 매수 금액 계산 로직을 단순화 및 명확화 >>>
                     buy_collateral = 0
                     if USE_DYNAMIC_BASE_BUY_AMOUNT:
@@ -515,7 +529,7 @@ def run_backtest(data_frames):
                     else:
                         # 고정 모드: 사이클 시작 시점에 계산된 'base_buy_amount'를 사용
                         buy_collateral = get_buy_amount(pos['base_buy_amount'], get_rsi_level(prev_candle['rsi']), next_entry_num) if USE_ADDITIVE_BUYING else pos['base_buy_amount']
-                    
+
                     if cash >= buy_collateral:
                         buy_price = execution_price
                         quantity_to_buy = (buy_collateral * LEVERAGE) / buy_price
@@ -526,7 +540,7 @@ def run_backtest(data_frames):
                         cash -= buy_collateral
                         long_pos['total_collateral'] += buy_collateral
                         long_pos['entries'].append({
-                            "entry_num": next_entry_num, "price": buy_price, "quantity": quantity_to_buy, 
+                            "entry_num": next_entry_num, "price": buy_price, "quantity": quantity_to_buy,
                             "timestamp": current_time, "trigger_rsi": prev_candle['rsi'], "buy_fee": buy_fee
                         })
                         long_pos['current_entry_count'] += 1
@@ -539,22 +553,22 @@ def run_backtest(data_frames):
 
             # 일반 숏 포지션 진입 로직
             if USE_SHORT_STRATEGY and short_pos['current_entry_count'] < MAX_SHORT_BUY_COUNT:
-                
+
                 if (short_pos['current_entry_count'] - long_pos['current_entry_count']) >= 3:
-                    pass 
+                    pass
                 else:
                     short_cond_tf = current_candle.get('prev_tf_close_below_ma30', False) and \
                                       current_candle.get('prev_tf_macd_hist_neg', False) and \
                                       not current_candle.get('prev_tf_ma30_3day_rising', False)
 
                     current_short_entry_rsi = SHORT_ENTRY_RSI
-                    
+
                     prev_tf_adx_value = current_candle.get('prev_tf_adx', 0)
                     if long_pos['current_entry_count'] >= 4 and prev_tf_adx_value >= 30:
                         current_short_entry_rsi = SHORT_ENTRY_RSI - SHORT_RSI_ADJUSTMENT
-                    
+
                     short_cond_15m = prev_candle['rsi'] >= current_short_entry_rsi
-                    
+
                     should_short = False
                     if short_cond_tf and short_cond_15m:
                         if short_pos['current_entry_count'] == 0:
@@ -565,7 +579,7 @@ def run_backtest(data_frames):
                             reset_check_s = df.loc[(df.index > last_short_time) & (df.index <= prev_candle.name)]
                             if not reset_check_s.empty and (reset_check_s['rsi'] < current_short_entry_rsi).any():
                                 should_short = True
-                                
+
                     if should_short and not short_pos['sell_blocked_by_macd']:
                         next_entry_num = short_pos['current_entry_count'] + 1
 
@@ -577,7 +591,7 @@ def run_backtest(data_frames):
                         else:
                             # 고정 모드: 사이클 시작 시점에 계산된 'base_buy_amount'를 사용
                             sell_collateral = pos['base_buy_amount']
-                        
+
                         if cash >= sell_collateral:
                             sell_price = execution_price
                             quantity_to_sell = (sell_collateral * LEVERAGE) / sell_price
@@ -598,11 +612,11 @@ def run_backtest(data_frames):
                             total_short_trades += 1
                             if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] > 0:
                                 short_pos['sell_blocked_by_macd'] = True
-        
+
         previous_time = current_time
         total_long_entries = sum(p['long'].get('current_entry_count', 0) for p in positions.values())
         total_short_entries = sum(p['short'].get('current_entry_count', 0) for p in positions.values())
-        
+
         portfolio_history.append({
             'timestamp': current_time,
             'value': current_portfolio_value,
@@ -635,18 +649,18 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
         withdrawal_series.index = pd.to_datetime(withdrawal_series.index, format='%Y-%m').to_period('M').asfreq('M', 'end').to_timestamp() + pd.Timedelta(days=1)
         daily_cumulative_withdrawals = withdrawal_series.resample('D').sum().cumsum()
         portfolio_df = portfolio_df.join(daily_cumulative_withdrawals.rename('cumulative_withdrawal'))
-        
+
         # --- 수정된 부분 1: fillna(method=...) 경고 해결 및 연쇄 할당 경고 해결 ---
         # portfolio_df['cumulative_withdrawal'].fillna(method='ffill', inplace=True) -> 아래 코드로 변경
         portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].ffill()
-        
+
     else:
         portfolio_df['cumulative_withdrawal'] = 0
-    
+
     # --- 수정된 부분 2: 연쇄 할당 경고 해결 ---
     # portfolio_df['cumulative_withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
     portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].fillna(0)
-    
+
     portfolio_df['adjusted_value'] = portfolio_df['value'] + portfolio_df['cumulative_withdrawal']
 
     def get_top_mdds(balance_series, value_series):
@@ -655,7 +669,7 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
         # --- 수정된 부분 3: 연쇄 할당 경고 해결 ---
         # drawdown_series.fillna(0, inplace=True) -> 아래 코드로 변경
         drawdown_series = drawdown_series.fillna(0)
-        
+
         periods = []
         is_in_dd = False
         start_idx = 0
@@ -690,26 +704,26 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
 
     mdd_perf_str = format_mdd_string(mdd_performance, prefix="성과")
     mdd_equity_str = format_mdd_string(mdd_equity, prefix="실제잔고")
-    
+
     daily_summary = portfolio_df[['value', 'adjusted_value', 'long_entry_count', 'short_entry_count']].resample('D').last().ffill()
     realized_pnl_series = pd.Series(realized_pnl_data, name="Realized PNL")
-    
+
     if not realized_pnl_series.empty:
         realized_pnl_series.index = pd.to_datetime(realized_pnl_series.index)
         daily_summary = daily_summary.join(realized_pnl_series.resample('D').sum())
-    
+
     # --- 수정된 부분 4: 연쇄 할당 경고 해결 ---
     # daily_summary['Realized PNL'].fillna(0, inplace=True) -> 아래 코드로 변경
     daily_summary['Realized PNL'] = daily_summary['Realized PNL'].fillna(0)
-    
+
     total_realized_pnl = daily_summary['Realized PNL'].sum()
     daily_summary['Cumulative Realized PNL'] = daily_summary['Realized PNL'].cumsum()
     fees_series = pd.Series(daily_fees, name="fees")
-    
+
     if not fees_series.empty:
         fees_series.index = pd.to_datetime(fees_series.index)
         daily_summary = daily_summary.join(fees_series.resample('D').sum())
-        
+
     # --- 수정된 부분 5: 연쇄 할당 경고 해결 ---
     # daily_summary['fees'].fillna(0, inplace=True) -> 아래 코드로 변경
     daily_summary['fees'] = daily_summary['fees'].fillna(0)
@@ -717,13 +731,13 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     # --- 수정된 부분 6: resample('M') 경고 해결 ---
     # monthly_summary = daily_summary.resample('M').agg(...) -> 'ME'로 변경
     monthly_summary = daily_summary.resample('ME').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
-    
+
     monthly_summary['begin_value'] = monthly_summary['value'].shift(1).fillna(INITIAL_CAPITAL)
     monthly_summary['monthly_return'] = (monthly_summary['Realized PNL'] / monthly_summary['begin_value'].replace(0, np.nan)) * 100
     monthly_summary.index = monthly_summary.index.strftime('%Y-%m')
     monthly_withdrawal_series = pd.Series(monthly_withdrawals, name="Withdrawal")
     monthly_summary = monthly_summary.join(monthly_withdrawal_series)
-    
+
     # --- 수정된 부분 7: 연쇄 할당 경고 해결 ---
     # monthly_summary['Withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
     monthly_summary['Withdrawal'] = monthly_summary['Withdrawal'].fillna(0)
@@ -741,8 +755,8 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     for index, row in monthly_summary.iterrows():
         print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,   수익률: {row.get('monthly_return', 0):>+7.2f}%,   수수료: {row.get('fees', 0):>8,.2f} USDT,   출금액: {row['Withdrawal']:>10,.2f} USDT")
     print("="*125)
-    
-    total_return_if_no_withdrawal = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100 
+
+    total_return_if_no_withdrawal = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100
     print("\n" + "="*80 + "\n" + " " * 30 + "백테스트 최종 결과\n" + "="*80)
     print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT"); print(f"  - 최종 자산: {final_value:,.2f} USDT")
     print(f"  - 총 실현 손익: {total_realized_pnl:,.2f} USDT"); print(f"    - 롱 포지션 수익: {total_long_pnl:,.2f} USDT"); print(f"    - 숏 포지션 수익: {total_short_pnl:,.2f} USDT")
@@ -758,12 +772,12 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     try: plt.rc('font', family='Malgun Gothic')
     except: plt.rc('font', family='AppleGothic')
     plt.rcParams['axes.unicode_minus'] = False
-    
+
     ax1 = plt.subplot(2, 1, 1); portfolio_df['adjusted_value'].plot(ax=ax1, label='전략 성과 자산 (출금 보정)'); portfolio_df['value'].plot(ax=ax1, label='실제 계좌 자산', linestyle='--')
     ax1.set_title('자산 추이 비교'); ax1.set_ylabel('자산 가치 (USDT)'); ax1.grid(True); ax1.legend()
-    
+
     ax2 = plt.subplot(2, 1, 2)
-    mdd_perf_series = (portfolio_df['adjusted_value'].cummax() - portfolio_df['adjusted_value']) / portfolio_df['adjusted_value'].cummax()
+    mdd_perf_series = (portfolio_df['value'].cummax() - portfolio_df['value']) / portfolio_df['value'].cummax()
     (mdd_perf_series * 100).plot(ax=ax2, title='최대 낙폭 (MDD, 전략 성과 기준)', color='red')
     ax2.set_ylabel('낙폭 (%)'); ax2.grid(True)
     plt.xlabel('날짜'); plt.tight_layout(); plt.show()
@@ -774,7 +788,7 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
 # ==============================================================================
 if __name__ == '__main__':
     coin_list_to_process = INVEST_COIN_LIST if isinstance(INVEST_COIN_LIST, list) else [INVEST_COIN_LIST]
-    
+
     all_data_frames = {}
     for coin_ticker in coin_list_to_process:
         df = load_data(coin_ticker, TIMEFRAME, TEST_START_DATE, TEST_END_DATE)
@@ -789,7 +803,7 @@ if __name__ == '__main__':
         portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl, \
         total_long_position_opened, total_long_position_closed, total_long_trades, \
         total_short_position_opened, total_short_position_closed, total_short_trades = run_backtest(all_data_frames)
-        
+
         analyze_and_plot_results(portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl,
                                  total_long_position_opened, total_long_position_closed, total_long_trades,
                                  total_short_position_opened, total_short_position_closed, total_short_trades)
