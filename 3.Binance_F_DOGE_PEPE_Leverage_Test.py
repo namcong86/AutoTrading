@@ -59,14 +59,14 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000  # 초기 총 투자 금액
-leverage = 5  # 레버리지 5배 설정
+leverage = 1.5  # 레버리지 5배 설정
 fee = 0.001  # 수수료 0.1%
 allocation_percentage = 0.5  # 각 코인에 50%씩 할당
 
 # 투자 종목 설정
 InvestCoinList = [
-    {'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}}
+    #{'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 1, 'start_date': {'year': 2020, 'month': 1, 'day': 1}}
 ]
 
 # 데이터 가져오기 및 전처리
@@ -237,15 +237,17 @@ result_df['Drawdown'] = (result_df['Cum_Ror'] / result_df['Highwatermark']) - 1
 result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
 
 # 월별 통계
-# 'ME' 대신 'M'을 사용하여 월말 기준으로 집계 후, 인덱스 포맷을 조정합니다.
 monthly_stats = result_df.resample('M').agg({
-    'Total_Equity': ['first', 'last']
+    'Total_Equity': ['last']
 })
-monthly_stats.columns = ['Start_Equity', 'End_Equity']
-monthly_stats['Return'] = ((monthly_stats['End_Equity'] / monthly_stats['Start_Equity']) - 1) * 100
-monthly_stats['Trades'] = 0
+monthly_stats.columns = ['End_Equity']
+monthly_stats['Prev_End_Equity'] = monthly_stats['End_Equity'].shift(1)
+monthly_stats['수익률 (%)'] = ((monthly_stats['End_Equity'] / monthly_stats['Prev_End_Equity']) - 1) * 100
+monthly_stats['수익률 (%)'] = monthly_stats['수익률 (%)'].round(2)
+monthly_stats['잔액 (USDT)'] = monthly_stats['End_Equity'].round(2)
+monthly_stats['거래 횟수'] = 0
 
-# 월별 거래 횟수 집계 로직 수정
+# 월별 거래 횟수 집계
 monthly_trades = {}
 for month_key, count in MonthlyTryCnt.items():
     monthly_trades[month_key] = monthly_trades.get(month_key, 0) + count
@@ -253,12 +255,9 @@ for month_key, count in MonthlyTryCnt.items():
 for index, row in monthly_stats.iterrows():
     month_key = index.strftime('%Y-%m')
     if month_key in monthly_trades:
-        monthly_stats.loc[index, 'Trades'] = monthly_trades[month_key]
+        monthly_stats.loc[index, '거래 횟수'] = monthly_trades[month_key]
 
-monthly_stats = monthly_stats[['Return', 'End_Equity', 'Trades']]
-monthly_stats.columns = ['수익률 (%)', '잔액 (USDT)', '거래 횟수']
-monthly_stats['수익률 (%)'] = monthly_stats['수익률 (%)'].round(2)
-monthly_stats['잔액 (USDT)'] = monthly_stats['잔액 (USDT)'].round(2)
+monthly_stats = monthly_stats[['수익률 (%)', '잔액 (USDT)', '거래 횟수']]
 monthly_stats.index = monthly_stats.index.strftime('%Y-%m')
 
 
