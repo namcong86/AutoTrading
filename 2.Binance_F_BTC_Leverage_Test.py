@@ -47,8 +47,8 @@ def GetOhlcv2(binance, Ticker, period, year=2019, month=1, day=1, hour=0, minute
     return df
 
 # 바이낸스 객체 생성
-Binance_AccessKey = "Q5ues5EwMK0HBj6VmtF1K1buouyX3eAgmN5AJkq5IIMHFlkTNVEOypjtzCZu5sux"
-Binance_ScretKey = "LyPDtZUAA4inEno0iVeYROHaYGz63epsT5vOa1OpAdoGPHS0uEVJzP5SaEyNCazQ"
+Binance_AccessKey = "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J"
+Binance_ScretKey = "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL"
 binanceX = ccxt.binance(config={
     'apiKey': Binance_AccessKey, 
     'secret': Binance_ScretKey,
