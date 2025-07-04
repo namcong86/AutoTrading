@@ -14,7 +14,7 @@ $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 https://blog.naver.com/zacra/223180500307
 $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-관련 포스팅 
+관련 포스팅
 https://blog.naver.com/zacra/223449598379
 위 포스팅을 꼭 참고하세요!!!
 '''
@@ -50,7 +50,7 @@ def GetOhlcv2(binance, Ticker, period, year=2019, month=1, day=1, hour=0, minute
 Binance_AccessKey = "Q5ues5EwMK0HBj6VmtF1K1buouyX3eAgmN5AJkq5IIMHFlkTNVEOypjtzCZu5sux"
 Binance_ScretKey = "LyPDtZUAA4inEno0iVeYROHaYGz63epsT5vOa1OpAdoGPHS0uEVJzP5SaEyNCazQ"
 binanceX = ccxt.binance(config={
-    'apiKey': Binance_AccessKey, 
+    'apiKey': Binance_AccessKey,
     'secret': Binance_ScretKey,
     'enableRateLimit': True,
     'options': {
@@ -59,14 +59,15 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000  # 초기 총 투자 금액
-leverage = 1.5  # 레버리지 5배 설정
+leverage = 5  # 레버리지 5배 설정
 fee = 0.001  # 수수료 0.1%
 allocation_percentage = 0.5  # 각 코인에 50%씩 할당
 
 # 투자 종목 설정
 InvestCoinList = [
-    #{'ticker': '1000PEPE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 1, 'start_date': {'year': 2020, 'month': 1, 'day': 1}}
+    {'ticker': '1000PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
+    {'ticker': '1000BONK/USDT', 'rate': 0.2, 'start_date': {'year': 2020, 'month': 1, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2020, 'month': 1, 'day': 1}}
 ]
 
 # 데이터 가져오기 및 전처리
@@ -75,7 +76,7 @@ for coin_data in InvestCoinList:
     ticker = coin_data['ticker']
     start_date = coin_data['start_date']
     df = GetOhlcv2(binanceX, ticker, '1d', start_date['year'], start_date['month'], start_date['day'], 0, 0)
-    
+
     # RSI 지표 계산
     period = 14
     delta = df["close"].diff()
@@ -91,7 +92,7 @@ for coin_data in InvestCoinList:
     df['prev_close'] = df['close'].shift(1)
     df['change'] = (df['close'] - df['prev_close']) / df['prev_close']
     df['value'] = df['close'] * df['volume']
-    
+
     # 이동평균선 계산
     ma_dfs = []
     for ma in range(3, 81):
@@ -102,13 +103,13 @@ for coin_data in InvestCoinList:
     df['value_ma'] = df['value'].rolling(window=10).mean().shift(1)
     df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
     DiffValue = -2
-    
+
     # MACD 계산
     ema12 = df['close'].ewm(span=12, adjust=False).mean()
     ema26 = df['close'].ewm(span=26, adjust=False).mean()
     df['macd'] = ema12 - ema26
     df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-    
+
     df.dropna(inplace=True)
     dfs[ticker] = df
 
@@ -130,7 +131,7 @@ CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in [coin['ticker
 # 백테스팅 루프
 for date in common_dates:
     current_data = {ticker: dfs[ticker].loc[date] for ticker in [coin['ticker'] for coin in InvestCoinList]}
-    
+
     # 1. 보유 중인 코인의 매도 조건 확인
     for ticker in list(positions.keys()):
         position = positions[ticker]
@@ -138,14 +139,14 @@ for date in common_dates:
         entry_price = position['entry_price']
         leverage = position['leverage']
         current_price = current_data[ticker]['open']
-        
+
         # 매도 조건
         i = dfs[ticker].index.get_loc(date)
         if i >= 2:
             df = dfs[ticker]
             RevenueRate = ((current_price - entry_price) / entry_price * leverage - fee) * 100.0
-            if (((df['high'].iloc[i-2] > df['high'].iloc[i-1] and df['low'].iloc[i-2] > df['low'].iloc[i-1]) or 
-                (df['open'].iloc[i-1] > df['close'].iloc[i-1] and df['open'].iloc[i-2] > df['close'].iloc[i-2]) or 
+            if (((df['high'].iloc[i-2] > df['high'].iloc[i-1] and df['low'].iloc[i-2] > df['low'].iloc[i-1]) or
+                (df['open'].iloc[i-1] > df['close'].iloc[i-1] and df['open'].iloc[i-2] > df['close'].iloc[i-2]) or
                 RevenueRate < 0) and not (i >= 2 and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df['3ma'].iloc[i-2] < df['3ma'].iloc[i-1])):
                 # 매도 실행
                 price_change = (current_price - entry_price) / entry_price * leverage
@@ -160,11 +161,11 @@ for date in common_dates:
                 del positions[ticker]
                 month_key = date.strftime('%Y-%m')
                 MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
-    
+
     # [수정] 모든 포지션이 청산되면, 현재 총 자산을 새로운 투자 사이클의 기준 자본으로 설정
     if not positions:
         current_cycle_investment_base = cash_balance
-    
+
     # 2. 매수 신호 확인 및 실행
     for coin_data in InvestCoinList:
         ticker = coin_data['ticker']
@@ -180,7 +181,7 @@ for date in common_dates:
                 macd_3to2_down = macd_3ago > macd_2ago
                 macd_2to1_down = macd_2ago > macd_1ago
                 macd_condition = not (macd_3to2_down and macd_2to1_down)
-                
+
                 # 전일 캔들 조건
                 prev_high = df['high'].iloc[i-1]
                 prev_low = df['low'].iloc[i-1]
@@ -189,23 +190,38 @@ for date in common_dates:
                 upper_shadow = prev_high - max(prev_open, prev_close)
                 candle_length = prev_high - prev_low
                 upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
-                
-                if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and 
-                    df['open'].iloc[i-2] < df['close'].iloc[i-2] and 
-                    df['close'].iloc[i-2] < df['close'].iloc[i-1] and 
-                    df['high'].iloc[i-2] < df['high'].iloc[i-1] and 
-                    df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and 
-                    df['30ma_slope'].iloc[i-1] > -2 and 
-                    df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and 
-                    df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and 
-                    (macd_positive and macd_condition) and 
+
+                if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and
+                    df['open'].iloc[i-2] < df['close'].iloc[i-2] and
+                    df['close'].iloc[i-2] < df['close'].iloc[i-1] and
+                    df['high'].iloc[i-2] < df['high'].iloc[i-1] and
+                    df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and
+                    df['30ma_slope'].iloc[i-1] > -2 and
+                    df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and
+                    df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and
+                    (macd_positive and macd_condition) and
                     (upper_shadow_ratio <= 0.6)):
                     # 매수 실행
                     buy_price = current_data[ticker]['open']
-                    
-                    # [수정] 현재 잔고가 아닌 '사이클 기준금'을 기준으로 투자금을 계산합니다.
-                    margin = current_cycle_investment_base * coin_data['rate']
-                    
+
+                    # ==============================================================================
+                    # <<< 코드 수정 시작: 투자금 계산 로직 변경 >>>
+                    # ==============================================================================
+                    total_coin_count = len(InvestCoinList)
+                    num_open_positions = len(positions)
+
+                    # 새로운 규칙: N-1개 코인이 이미 포지션에 있고, 마지막 남은 1개 코인이 진입할 때
+                    if num_open_positions == (total_coin_count - 1):
+                        # 사용 가능한 현금 전부를 투자금으로 설정
+                        margin = cash_balance
+                        print(f"[{date}] >>> 마지막 코인({ticker}) 진입: 모든 가용 현금({margin:.2f})을 사용합니다.")
+                    else:
+                        # 기존 규칙: 사이클 기준 자본과 코인별 비율로 투자금 설정
+                        margin = current_cycle_investment_base * coin_data['rate']
+                    # ==============================================================================
+                    # <<< 코드 수정 끝 >>>
+                    # ==============================================================================
+
                     if margin > 0 and cash_balance >= margin: # 사용 가능한 현금이 있는지 추가 확인
                         quantity = (margin * leverage) / buy_price
                         positions[ticker] = {
@@ -216,7 +232,7 @@ for date in common_dates:
                         }
                         cash_balance -= margin
                         print(f"{ticker} {date} >>> 매수: 투자금 {round(margin, 2)}, 잔액 {round(cash_balance, 2)}")
-    
+
     # 3. 일일 총 자산 가치 계산
     total_equity = cash_balance
     for ticker, position in positions.items():
@@ -280,7 +296,7 @@ for index, row in yearly_stats.iterrows():
     year_key = index.strftime('%Y')
     if year_key in yearly_trades:
         yearly_stats.loc[index, 'Trades'] = yearly_trades[year_key]
-        
+
 yearly_stats = yearly_stats[['Return', 'End_Equity', 'Trades']]
 yearly_stats.columns = ['수익률 (%)', '잔액 (USDT)', '거래 횟수']
 yearly_stats['수익률 (%)'] = yearly_stats['수익률 (%)'].round(2)

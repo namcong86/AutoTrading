@@ -12,8 +12,8 @@ import myBinance
 import telegram_alert
 
 # 바이낸스 API 키 (실제 키는 보안상 환경변수 사용 권장)
-Binance_AccessKey = "Q5ues5EwMK0HBj6VmtF1K1buouyX3eAgmN5AJkq5IIMHFlkTNVEOypjtzCZu5sux"
-Binance_ScretKey = "LyPDtZUAA4inEno0iVeYROHaYGz63epsT5vOa1OpAdoGPHS0uEVJzP5SaEyNCazQ"
+Binance_AccessKey = "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J"
+Binance_ScretKey = "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL"
 
 binanceX = ccxt.binance({
     'apiKey': Binance_AccessKey,

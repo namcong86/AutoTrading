@@ -16,8 +16,8 @@ import telegram_alert
 ACCOUNT_LIST = [
     {
         "name": "Main",
-        "access_key": "Q5ues5EwMK0HBj6VmtF1K1buouyX3eAgmN5AJkq5IIMHFlkTNVEOypjtzCZu5sux",  # 메인 계정 Access Key
-        "secret_key": "LyPDtZUAA4inEno0iVeYROHaYGz63epsT5vOa1OpAdoGPHS0uEVJzP5SaEyNCazQ",  # 메인 계정 Secret Key
+        "access_key": "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J",  # 메인 계정 Access Key
+        "secret_key": "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL",  # 메인 계정 Secret Key
         "leverage": 3  # 메인 계정 레버리지
     },
     {
@@ -43,7 +43,8 @@ ACCOUNT_LIST = [
 # 투자 종목: DOGE, 1000PEPE - 50:50 비중
 INVEST_COIN_LIST = [
     {'ticker': 'DOGE/USDT', 'rate': 0.5},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.5}
+    {'ticker': '1000PEPE/USDT', 'rate': 0.3},
+    {'ticker': '1000BONK/USDT', 'rate': 0.2}
 ]
 
 INVEST_RATE = 1
@@ -113,6 +114,15 @@ def execute_trading_logic(account_info):
         telegram_alert.SendMessage(f"{first_String} 잔고 조회 실패, 봇 종료")
         return
 
+    # --- [수정] 현재 모든 포지션 정보를 한번에 가져오기 ---
+    all_positions = []
+    try:
+        balance_check = binanceX.fetch_balance(params={"type": "future"})
+        all_positions = [pos for pos in balance_check['info']['positions'] if float(pos['positionAmt']) != 0]
+    except Exception as e:
+        print(f"[{account_name}] 전체 포지션 정보 조회 오류: {e}")
+        return # 포지션 조회가 안되면 거래를 진행하기 어려우므로 종료
+
     # --- 메인 루프 시작 ---
     for coin_data in INVEST_COIN_LIST:
         coin_ticker = coin_data['ticker']
@@ -125,19 +135,15 @@ def execute_trading_logic(account_info):
         with open(botdata_file_path, 'w') as f:
             json.dump(BotDataDict, f, indent=4)
 
-        # 포지션 정보 (LONG)
+        # --- [수정] 미리 가져온 포지션 정보 사용 ---
         amt_b = 0
         unrealizedProfit = 0.0
-        try:
-            balance_check = binanceX.fetch_balance(params={"type": "future"})
-            for pos in balance_check['info']['positions']:
-                if pos['symbol'] == coin_ticker.replace("/", ""):
-                    amt_b = float(pos['positionAmt'])
-                    unrealizedProfit = float(pos['unrealizedProfit'])
-                    break
-        except Exception as e:
-            print(f"[{account_name}] 포지션 정보 조회 오류 for {coin_ticker}: {e}")
-            continue
+        coin_symbol_for_pos = coin_ticker.replace("/", "")
+        for pos in all_positions:
+            if pos['symbol'] == coin_symbol_for_pos:
+                amt_b = float(pos['positionAmt'])
+                unrealizedProfit = float(pos['unrealizedProfit'])
+                break
 
         # 지표용 일봉 데이터 조회 및 계산 (기존 코드와 동일)
         df = myBinance.GetOhlcv(binanceX, coin_ticker, '1d')
@@ -238,8 +244,28 @@ def execute_trading_logic(account_info):
             if buy:
                 if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                     
-                    InvestMoney = initial_usdt_balance * INVEST_RATE * coin_data['rate']
-                    print(f"[{account_name}] {coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {initial_usdt_balance:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
+                    # --- [수정] 투자금 계산 로직 변경 ---
+                    total_coin_count = len(INVEST_COIN_LIST)
+                    
+                    # 현재 포지션에 있는 코인 목록 (심볼 기준)
+                    position_symbols = [pos['symbol'] for pos in all_positions]
+                    
+                    # INVEST_COIN_LIST에 정의된 코인 중 현재 포지션이 있는 코인의 수
+                    num_open_positions = 0
+                    for c in INVEST_COIN_LIST:
+                        if c['ticker'].replace('/', '') in position_symbols:
+                            num_open_positions += 1
+
+                    # N-1개 코인이 포지션에 있고, 현재 코인은 포지션이 없을 때 (현재 코드는 amt_b == 0 인 분기)
+                    if num_open_positions == (total_coin_count - 1):
+                        # 사용 가능한 현금 전부를 투자금으로 설정
+                        InvestMoney = initial_usdt_balance
+                        print(f"[{account_name}] >>> 마지막 코인({coin_ticker}) 진입: 모든 가용 현금({InvestMoney:.2f})을 사용합니다.")
+                    else:
+                        # 기존 규칙: 사이클 기준 자본과 코인별 비율로 투자금 설정
+                        InvestMoney = initial_usdt_balance * INVEST_RATE * coin_data['rate']
+                        print(f"[{account_name}] {coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {initial_usdt_balance:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
+                    # --- [수정] 로직 종료 ---
 
                     BuyMoney = InvestMoney * (1.0 - FEE * set_leverage)
                     cap = df['value_ma'].iloc[-2] / 10
