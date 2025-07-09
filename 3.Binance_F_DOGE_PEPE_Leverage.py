@@ -230,17 +230,18 @@ def execute_trading_logic(account_info):
             cond_rsi_inc = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
             cond_MACD = (macd_positive and macd_condition)
             cond_doji = upper_shadow_ratio <= 0.6
+            cond_80rsi = (df['rsi'].iloc[-2] < 80)
 
             analysis_msg = (f"{first_String} 매수조건 분석 ({coin_ticker}): 연속양봉={cond_o1 and cond_o2}, "
                             f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
                             f"7이평증가={cond_7ma}, 50이평증가={cond_50ma}, 30이평기울기={cond_slope}, "
                             f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]:.2f}->{df['rsi_ma'].iloc[-2]:.2f}), "
-                            f"MACD={cond_MACD}, 도지캔들={cond_doji}")
+                            f"MACD={cond_MACD}, 도지캔들={cond_doji}, RSI80이하={cond_80rsi}")
             if account_name == "Main":
                 print(analysis_msg)
                 telegram_alert.SendMessage(analysis_msg)
 
-            buy = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD and cond_doji
+            buy = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD and cond_doji and cond_80rsi
             if buy:
                 if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                     

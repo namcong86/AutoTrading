@@ -121,9 +121,9 @@ leverage = 2
 fee = 0.001
 
 InvestCoinList = [
-    {'ticker': 'PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 9, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 9, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.4, 'start_date': {'year': 2023, 'month': 9, 'day': 1}}
+    {'ticker': 'PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2021, 'month': 1, 'day': 1}},
+    {'ticker': 'BONK/USDT', 'rate': 0.2, 'start_date': {'year': 2021, 'month': 1, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2020, 'month': 10, 'day': 1}}
 ]
 
 dfs = {}
@@ -273,12 +273,18 @@ for date in common_dates:
                     df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
                     df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1] and
                     df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and
+                    df_coin['rsi'].iloc[i-1] < 80 and 
                     df_coin['30ma_slope'].iloc[i-1] > -2 and
-                    df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and
-                    df_coin['50ma'].iloc[i-2] < df_coin['50ma'].iloc[i-1] and
+                    df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
+                    df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1] and
                     (macd_positive and macd_condition) and
+                    #df_coin['rsi'].iloc[i-1] >  df_coin['rsi_ma'].iloc[i-1] and
+                    #df_coin['50ma'].iloc[i-1] > df_coin['30ma'].iloc[i-1]
+                    #df_coin['30ma'].iloc[i-2] <= df_coin['30ma'].iloc[i-1] and
                     (upper_shadow_ratio <= 0.6)):
                     buy_condition_triggered = True
+
+
 
                 if buy_condition_triggered:
                     buy_signals_today_specs.append(coin_candidate_spec)
@@ -295,7 +301,7 @@ for date in common_dates:
 
             if num_open_positions == (total_coin_count - 1):
                 investment_for_this_coin = cash_balance
-                print(f"[{date}] >>> 마지막 코인({ticker}) 진입: 모든 가용 현금({investment_for_this_coin:.2f})을 사용합니다.")
+                #print(f"[{date}] >>> 마지막 코인({ticker}) 진입: 모든 가용 현금({investment_for_this_coin:.2f})을 사용합니다.")
             else:
                 investment_for_this_coin = current_cycle_investment_base * coin_spec_to_buy['rate']
 

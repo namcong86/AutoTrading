@@ -199,6 +199,7 @@ for date in common_dates:
                     df['30ma_slope'].iloc[i-1] > -2 and
                     df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and
                     df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and
+                    df['rsi'].iloc[i-1] < 80 and 
                     (macd_positive and macd_condition) and
                     (upper_shadow_ratio <= 0.6)):
                     # 매수 실행
