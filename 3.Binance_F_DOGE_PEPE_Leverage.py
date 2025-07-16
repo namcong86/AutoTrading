@@ -43,8 +43,8 @@ ACCOUNT_LIST = [
 # 투자 종목: DOGE, 1000PEPE - 50:50 비중
 INVEST_COIN_LIST = [
     {'ticker': 'DOGE/USDT', 'rate': 0.5},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.3},
-    {'ticker': '1000BONK/USDT', 'rate': 0.2}
+    {'ticker': '1000PEPE/USDT', 'rate': 0.5}
+    #{'ticker': '1000BONK/USDT', 'rate': 0.2}
 ]
 
 INVEST_RATE = 1
