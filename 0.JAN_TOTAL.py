@@ -17,9 +17,21 @@ Upbit_ScretKey = "BV0gy2txNyF9Brv594YXxcRYs3EQZe9TaWMtN14Z"
 # 업비트 객체를 만든다
 upbit = pyupbit.Upbit(Upbit_AccessKey, Upbit_ScretKey)
 
-# Binance API 인증 정보
-Binance_api_key = "Q5ues5EwMK0HBj6VmtF1K1buouyX3eAgmN5AJkq5IIMHFlkTNVEOypjtzCZu5sux"
-Binance_api_secret = "LyPDtZUAA4inEno0iVeYROHaYGz63epsT5vOa1OpAdoGPHS0uEVJzP5SaEyNCazQ"
+# Binance API 인증 정보 (기존 계정)
+Binance_api_key = "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J"
+Binance_api_secret = "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL"
+
+# Binance API 인증 정보 (서브 계정 1)
+Binance_api_key_sub1 = "qXIylTz7Qh2nrVh1kPJQTXX9Fm0G8Tot86Lgqzm652mTdnEj7DrbJO6KT261fQJk"
+Binance_api_secret_sub1 = "DarhAG7HjLW7OJBe814q42io5UOYB9dzhwQlbijuz5m5gN9mREA5wfbeGT7H0PwI"
+
+# Binance API 인증 정보 (서브 계정 2)
+Binance_api_key_sub2 = "HbC79j9E1f8fZUXe7YK5DcgOxG3rcgbd1lSt3r17BJmqga5EbHVbNwIux1Rm6K3q"
+Binance_api_secret_sub2 = "lM3RhPOesjwyLLpECpwUuijOZLUpVZEqdRKDmRSPE6WbadQltXRtNIrfY6rnRCMg"
+
+# Binance API 인증 정보 (서브 계정 3)
+Binance_api_key_sub3 = "EYNqzB1k2echWMLnmUSZWf1O03U8fiPUMQX9OHL83eeWGotYgoq1dJaDQYleh8Wa"
+Binance_api_secret_sub3 = "PW2cxdCPGSJXMhiEgT2aABt0NikxOntPVOzMxgAYkWe4DxSU1xIzPJgZfnujf28h"
 
 # OKX API 인증 정보
 OKX_api_key = "16de0caf-ae2c-46cb-9109-764687da4441"
@@ -39,10 +51,31 @@ Bitget_api_passphrase = 'namcong86'
 MEXC_api_key = "mx0vglCI5rwMRRjnJK"
 MEXC_api_secret = "0668415a7f3948a4ae39497a2ab6b39e"
 
-# Binance_ccxt 객체 생성
+# Binance_ccxt 객체 생성 (기존 계정)
 Binance_exchange = ccxt.binance({
     "apiKey": Binance_api_key,
     "secret": Binance_api_secret,
+    "enableRateLimit": True,
+})
+
+# Binance_ccxt 객체 생성 (서브 계정 1)
+Binance_exchange_sub1 = ccxt.binance({
+    "apiKey": Binance_api_key_sub1,
+    "secret": Binance_api_secret_sub1,
+    "enableRateLimit": True,
+})
+
+# Binance_ccxt 객체 생성 (서브 계정 2)
+Binance_exchange_sub2 = ccxt.binance({
+    "apiKey": Binance_api_key_sub2,
+    "secret": Binance_api_secret_sub2,
+    "enableRateLimit": True,
+})
+
+# Binance_ccxt 객체 생성 (서브 계정 3)
+Binance_exchange_sub3 = ccxt.binance({
+    "apiKey": Binance_api_key_sub3,
+    "secret": Binance_api_secret_sub3,
     "enableRateLimit": True,
 })
 
@@ -81,6 +114,9 @@ exchanges = {
     "Bybit":     Bybit_exchange,
     "Bitget":    Bitget_exchange,
     "MEXC":      MEXC_exchange,
+    "Binance_sub1": Binance_exchange_sub1,  # 서브 계정 1 추가
+    "Binance_sub2": Binance_exchange_sub2,  # 서브 계정 2 추가
+    "Binance_sub3": Binance_exchange_sub3,  # 서브 계정 3 추가
 }
 
 EXCLUDE_COINS = {
@@ -94,7 +130,7 @@ def get_spot_balance(exchange, name):
         print(f"Fetching {name} spot balance...")
         
         # 거래소별 특화된 현물 잔액 조회 방식
-        if name == "Binance":
+        if name in ["Binance", "Binance_sub1", "Binance_sub2", "Binance_sub3"]:
             balance = exchange.fetch_balance(params={"type": "spot"})
         elif name == "OKX":
             balance = exchange.fetch_balance(params={"type": "spot"})
@@ -169,7 +205,7 @@ def get_futures_balance(exchange, name):
             return 0
             
         # 거래소별 특화된 선물 잔액 조회 방식
-        if name == "Binance":
+        if name in ["Binance", "Binance_sub1", "Binance_sub2", "Binance_sub3"]:
             balance = exchange.fetch_balance(params={"type": "future"})
         elif name == "OKX":
             balance = exchange.fetch_balance(params={"type": "future"})
@@ -251,7 +287,7 @@ def get_exchange_rate():
         print(f"Error fetching exchange rate: {e}")
         return 1200  # 에러 발생 시 기본값 설정
 
-# --- 1) 개별 거래소 현물 코인 USDT 환산 잔액 조회 함수 ---
+# 개별 거래소 현물 코인 USDT 환산 잔액 조회 함수
 def get_spot_coin_balances(exchange, name):
     balances = {}
     try:
@@ -278,17 +314,7 @@ def get_spot_coin_balances(exchange, name):
                 continue
     return usdt_dict
 
-# ──────────────────────────────────────────────────────────
-# 3) 모든 거래소 Spot 잔액을 합산
-# ──────────────────────────────────────────────────────────
-def aggregate_spot_balances():
-    total = defaultdict(float)
-    for name, exchange in exchanges.items():
-        for coin, usdt_amt in get_spot_coin_balances(exchange, name).items():
-            total[coin] += usdt_amt
-    return total
-
-# --- 2) 모든 거래소에서 가져온 현물 잔액을 코인별로 합산 ---
+# 모든 거래소에서 가져온 현물 잔액을 코인별로 합산
 def aggregate_spot_balances():
     total = defaultdict(float)
     for name, exchange in exchanges.items():
@@ -316,6 +342,12 @@ if not Upbit_AccessKey or not Upbit_ScretKey:
 
 # 자산 조회
 binance_balance = get_exchange_total_balance(Binance_exchange, "Binance")
+time.sleep(2)
+binance_balance_sub1 = get_exchange_total_balance(Binance_exchange_sub1, "Binance_sub1")
+time.sleep(2)
+binance_balance_sub2 = get_exchange_total_balance(Binance_exchange_sub2, "Binance_sub2")
+time.sleep(2)
+binance_balance_sub3 = get_exchange_total_balance(Binance_exchange_sub3, "Binance_sub3")
 time.sleep(2)
 okx_balance = get_exchange_total_balance(OKX_exchange, "OKX")
 time.sleep(2)
@@ -345,12 +377,15 @@ print(f"Exchange Rate (USD to KRW): {exchange_rate}")
 # 총 자산 계산 (모든 거래소 현물 + 선물 + 업비트 현물)
 print("\n===== 최종 결과 =====")
 print(f"Binance Balance: {round(binance_balance)} USDT (≈ {round(binance_balance * exchange_rate):,} KRW)")
+print(f"Binance_sub1 Balance: {round(binance_balance_sub1)} USDT (≈ {round(binance_balance_sub1 * exchange_rate):,} KRW)")
+print(f"Binance_sub2 Balance: {round(binance_balance_sub2)} USDT (≈ {round(binance_balance_sub2 * exchange_rate):,} KRW)")
+print(f"Binance_sub3 Balance: {round(binance_balance_sub3)} USDT (≈ {round(binance_balance_sub3 * exchange_rate):,} KRW)")
 print(f"OKX Balance: {round(okx_balance)} USDT (≈ {round(okx_balance * exchange_rate):,} KRW)")
 print(f"Bybit Balance: {round(bybit_balance)} USDT (≈ {round(bybit_balance * exchange_rate):,} KRW)")
 print(f"Bitget Balance: {round(bitget_balance)} USDT (≈ {round(bitget_balance * exchange_rate):,} KRW)")
 print(f"MEXC Balance: {round(mexc_balance)} USDT (≈ {round(mexc_balance * exchange_rate):,} KRW)")
 
-exchange_total = binance_balance + okx_balance + bybit_balance + bitget_balance + mexc_balance
+exchange_total = binance_balance + binance_balance_sub1 + binance_balance_sub2 + binance_balance_sub3 + okx_balance + bybit_balance + bitget_balance + mexc_balance
 total_JAN = round(exchange_total * exchange_rate) + round(TotalRealMoney)
 
 # 현재 날짜와 시간 구하기
@@ -363,7 +398,7 @@ print(f"TOTAL잔액: {total_JAN:,} KRW")
 
 # 텔레그램 알림 보내기
 try:
-    telegram_alert.SendMessage(f"{now.strftime('%Y-%m-%d %H:%M')} \n 바이낸스: {round(binance_balance):,} USDT (≈ {round(binance_balance * exchange_rate):,} KRW) \n 바이비트: {round(bybit_balance):,} USDT (≈ {round(bybit_balance * exchange_rate):,} KRW), \n 비트겟: {round(bitget_balance):,} USDT (≈ {round(bitget_balance * exchange_rate):,} KRW), \n MEXC: {round(mexc_balance):,} USDT (≈ {round(mexc_balance * exchange_rate):,} KRW),  \n 총금액=> {total_JAN:,} 원")
+    telegram_alert.SendMessage(f"{now.strftime('%Y-%m-%d %H:%M')} \n 바이낸스: {round(binance_balance):,} USDT (≈ {round(binance_balance * exchange_rate):,} KRW) \n 바이낸스_sub1: {round(binance_balance_sub1):,} USDT (≈ {round(binance_balance_sub1 * exchange_rate):,} KRW) \n 바이낸스_sub2: {round(binance_balance_sub2):,} USDT (≈ {round(binance_balance_sub2 * exchange_rate):,} KRW) \n 바이낸스_sub3: {round(binance_balance_sub3):,} USDT (≈ {round(binance_balance_sub3 * exchange_rate):,} KRW) \n 바이비트: {round(bybit_balance):,} USDT (≈ {round(bybit_balance * exchange_rate):,} KRW), \n 비트겟: {round(bitget_balance):,} USDT (≈ {round(bitget_balance * exchange_rate):,} KRW), \n MEXC: {round(mexc_balance):,} USDT (≈ {round(mexc_balance * exchange_rate):,} KRW),  \n 총금액=> {total_JAN:,} 원")
     print("텔레그램 알림 전송 완료")
 except Exception as e:
     print(f"텔레그램 알림 전송 실패: {e}")
@@ -414,20 +449,23 @@ start_row = 24  # A24 부터 시작
 coin_names = [[coin] for coin, _ in sorted_balances]
 amounts = [[int(amount)] for _, amount in sorted_balances]
 
-# 스프레드시트에 업데이트하기 전에 기존 셀을 초기화합니다.
-# 최대 30개의 코인을 표시한다고 가정하고, 해당 범위를 초기화합니다.
-# 이 범위는 필요에 따라 조정할 수 있습니다.
-# 예를 들어, A24부터 A53, B24부터 B53까지 초기화합니다.
-clear_range_end_row = start_row + 30 - 1 # 예를 들어, 최대 30개 코인까지 표시한다고 가정
-sheet.update(f"A{start_row}:B{clear_range_end_row}", [['', ''] for _ in range(clear_range_end_row - start_row + 1)])
+# 1. 기존 데이터 초기화
+# 최대 30개 행을 지운다고 가정하고, 해당 범위의 값을 비워줍니다.
+clear_range_end_row = start_row + 29
+clear_values = [['', ''] for _ in range(30)]
+sheet.update(range_name=f"A{start_row}:B{clear_range_end_row}", values=clear_values)
 
 
-# 범위: A24부터, B24부터
-# 필터링된 sorted_balances의 길이에 맞춰 업데이트합니다.
-end_row = 24 + len(sorted_balances) - 1
-if len(sorted_balances) > 0: # 잔액이 100 초과하는 코인이 있을 경우에만 업데이트
-    sheet.update(f"A24:A{end_row}", coin_names)
-    sheet.update(f"B24:B{end_row}", amounts)
+# 2. 새로운 데이터 업데이트
+# 잔액이 100을 초과하는 코인이 있을 경우에만 업데이트를 진행합니다.
+if sorted_balances: # 리스트가 비어있지 않은 경우
+    # 코인 이름 업데이트 (A열)
+    end_row_a = start_row + len(coin_names) - 1
+    sheet.update(range_name=f"A{start_row}:A{end_row_a}", values=coin_names)
+
+    # 코인별 잔액 업데이트 (B열)
+    end_row_b = start_row + len(amounts) - 1
+    sheet.update(range_name=f"B{start_row}:B{end_row_b}", values=amounts)
 
 
 print("===== 자산 조회 완료 =====")

@@ -5,11 +5,12 @@ import os
 
 # 각 오토봇에 대한 토큰과 채팅 ID 설정 (수정 필요)
 BOT_CONFIGS = {
+    "0": {"token": "7256112961:AAEiErEbMWAlsSzjU_3sYkippfjId8gl71o", "chat_id": "785579073"},  # 0.JAN_TOTAL
     "1": {"token": "7884521715:AAGCgZ5qEmrGjgWmHfJAFDJBb5osxSWx4CA", "chat_id": "785579073"},  # 1.Upbit_Safe_BTC_Spot.py
     "2": {"token": "8171304113:AAEAHXACEXfmee026mRelw3r07vFiyqbQ5o", "chat_id": "785579073"},  # 2.Binance_F_BTC_Leverage
     "3": {"token": "8175142086:AAEGcKyOutXeM6b0RJVlrASznhsNGYrQRj4", "chat_id": "785579073"},  # 3.Binance_F_DOGE_PEPE_Leverage + 3.GateIO_F_DOGE_PEPE_Leverage
     "4": {"token": "8028505122:AAF0xB3J2aWFN8QSGRLzBsplJQ7ugaHaqbg", "chat_id": "785579073"},  # 4.GateIO_F_Grid_Danta
-    "5": {"token": "TOKEN5", "chat_id": "CHAT_ID5"}   # 5.Binance_F_Alt_dolpa
+    
 }
 
 async def send_telegram_alert(bot, chat_id, msg):
