@@ -47,7 +47,7 @@ INVEST_COIN_LIST = [
     #{'ticker': '1000BONK/USDT', 'rate': 0.2}
 ]
 
-INVEST_RATE = 1
+INVEST_RATE = 0.999
 FEE = 0.001
 
 # --- [추가] 핵심 거래 로직을 함수로 분리 ---
