@@ -59,13 +59,13 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000  # 초기 총 투자 금액
-leverage = 2  # 레버리지 5배 설정
+leverage = 3  # 레버리지 5배 설정
 fee = 0.001  # 수수료 0.1%
 allocation_percentage = 0.5  # 각 코인에 50%씩 할당
 
 # 투자 종목 설정
 InvestCoinList = [
-    {'ticker': '1000PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 7, 'day': 1}},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
     {'ticker': '1000BONK/USDT', 'rate': 0.2, 'start_date': {'year': 2020, 'month': 1, 'day': 1}},
     {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2020, 'month': 1, 'day': 1}}
 ]
@@ -100,6 +100,13 @@ for coin_data in InvestCoinList:
         ma_dfs.append(ma_df)
     ma_df_combined = pd.concat(ma_dfs, axis=1)
     df = pd.concat([df, ma_df_combined], axis=1)
+    
+    # ==============================================================================
+    # <<< 코드 수정: 200일 이동평균선 추가 >>>
+    # ==============================================================================
+    df['200ma'] = df['close'].rolling(200).mean()
+    # ==============================================================================
+
     df['value_ma'] = df['value'].rolling(window=10).mean().shift(1)
     df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
     DiffValue = -2
@@ -145,9 +152,27 @@ for date in common_dates:
         if i >= 2:
             df = dfs[ticker]
             RevenueRate = ((current_price - entry_price) / entry_price * leverage - fee) * 100.0
-            if (((df['high'].iloc[i-2] > df['high'].iloc[i-1] and df['low'].iloc[i-2] > df['low'].iloc[i-1]) or
+
+            # ==============================================================================
+            # <<< 코드 수정: 도지 캔들 매도 조건 추가 >>>
+            # ==============================================================================
+            def is_doji_candle(open_price, close_price, high_price, low_price):
+                candle_range = high_price - low_price
+                if candle_range == 0:
+                    return False
+                gap = abs(open_price - close_price)
+                return (gap / candle_range) <= 0.15
+
+            is_doji_1 = is_doji_candle(df['open'].iloc[i-1], df['close'].iloc[i-1], df['high'].iloc[i-1], df['low'].iloc[i-1])
+            is_doji_2 = is_doji_candle(df['open'].iloc[i-2], df['close'].iloc[i-2], df['high'].iloc[i-2], df['low'].iloc[i-2])
+            is_double_doji = is_doji_1 and is_doji_2
+            # ==============================================================================
+
+            original_sell_condition = (((df['high'].iloc[i-2] > df['high'].iloc[i-1] and df['low'].iloc[i-2] > df['low'].iloc[i-1]) or
                 (df['open'].iloc[i-1] > df['close'].iloc[i-1] and df['open'].iloc[i-2] > df['close'].iloc[i-2]) or
-                RevenueRate < 0) and not (i >= 2 and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df['3ma'].iloc[i-2] < df['3ma'].iloc[i-1])):
+                RevenueRate < 0) and not (i >= 2 and df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and df['3ma'].iloc[i-2] < df['3ma'].iloc[i-1]))
+            
+            if original_sell_condition or is_double_doji:
                 # 매도 실행
                 price_change = (current_price - entry_price) / entry_price * leverage
                 realized_value = margin * (1 + price_change)
@@ -190,6 +215,15 @@ for date in common_dates:
                 upper_shadow = prev_high - max(prev_open, prev_close)
                 candle_length = prev_high - prev_low
                 upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
+                
+                # ==============================================================================
+                # <<< 코드 수정: 200ma, 50ma, 30ma 관련 매수 조건 추가 >>>
+                # ==============================================================================
+                is_above_200ma = df['close'].iloc[i-1] > df['200ma'].iloc[i-1]
+                
+                ma_50_condition = True 
+                if is_above_200ma:
+                    ma_50_condition = df['50ma'].iloc[i-2] <= df['50ma'].iloc[i-1]
 
                 if (df['open'].iloc[i-1] < df['close'].iloc[i-1] and
                     df['open'].iloc[i-2] < df['close'].iloc[i-2] and
@@ -198,32 +232,25 @@ for date in common_dates:
                     df['7ma'].iloc[i-2] < df['7ma'].iloc[i-1] and
                     df['30ma_slope'].iloc[i-1] > -2 and
                     df['rsi_ma'].iloc[i-2] < df['rsi_ma'].iloc[i-1] and
-                    df['50ma'].iloc[i-2] < df['50ma'].iloc[i-1] and
+                    ma_50_condition and # 50ma 조건 수정 적용
+                    df['30ma'].iloc[i-2] <= df['30ma'].iloc[i-1] and # 30ma 상승 조건 추가
                     df['rsi'].iloc[i-1] < 80 and 
                     (macd_positive and macd_condition) and
                     (upper_shadow_ratio <= 0.6)):
+                # ==============================================================================
                     # 매수 실행
                     buy_price = current_data[ticker]['open']
 
-                    # ==============================================================================
-                    # <<< 코드 수정 시작: 투자금 계산 로직 변경 >>>
-                    # ==============================================================================
                     total_coin_count = len(InvestCoinList)
                     num_open_positions = len(positions)
 
-                    # 새로운 규칙: N-1개 코인이 이미 포지션에 있고, 마지막 남은 1개 코인이 진입할 때
                     if num_open_positions == (total_coin_count - 1):
-                        # 사용 가능한 현금 전부를 투자금으로 설정
                         margin = cash_balance
                         print(f"[{date}] >>> 마지막 코인({ticker}) 진입: 모든 가용 현금({margin:.2f})을 사용합니다.")
                     else:
-                        # 기존 규칙: 사이클 기준 자본과 코인별 비율로 투자금 설정
                         margin = current_cycle_investment_base * coin_data['rate']
-                    # ==============================================================================
-                    # <<< 코드 수정 끝 >>>
-                    # ==============================================================================
 
-                    if margin > 0 and cash_balance >= margin: # 사용 가능한 현금이 있는지 추가 확인
+                    if margin > 0 and cash_balance >= margin:
                         quantity = (margin * leverage) / buy_price
                         positions[ticker] = {
                             'margin': margin,
@@ -279,7 +306,6 @@ monthly_stats.index = monthly_stats.index.strftime('%Y-%m')
 
 
 # 연도별 통계
-# 'YE' 대신 'Y'를 사용하여 연말 기준으로 집계 후, 인덱스 포맷을 조정합니다.
 yearly_stats = result_df.resample('Y').agg({
     'Total_Equity': ['first', 'last']
 })
@@ -287,7 +313,6 @@ yearly_stats.columns = ['Start_Equity', 'End_Equity']
 yearly_stats['Return'] = ((yearly_stats['End_Equity'] / yearly_stats['Start_Equity']) - 1) * 100
 yearly_stats['Trades'] = 0
 
-# 연도별 거래 횟수 집계 로직 수정
 yearly_trades = {}
 for month_key, count in MonthlyTryCnt.items():
     year_key = month_key.split('-')[0]

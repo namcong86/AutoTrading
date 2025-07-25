@@ -117,13 +117,14 @@ exchange = ccxt.gateio({
 })
 
 InvestTotalMoney = 5000
-leverage = 2
+leverage = 3
 fee = 0.001
 
 InvestCoinList = [
-    {'ticker': 'PEPE/USDT', 'rate': 0.3, 'start_date': {'year': 2021, 'month': 1, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.2, 'start_date': {'year': 2021, 'month': 1, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2020, 'month': 10, 'day': 1}}
+    {'ticker': 'BONK/USDT', 'rate': 0.25, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    #{'ticker': 'ETH/USDT', 'rate': 1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'PEPE/USDT', 'rate': 0.25, 'start_date': {'year': 2021, 'month': 1, 'day': 1}}
 ]
 
 dfs = {}
@@ -158,6 +159,9 @@ for coin_data in InvestCoinList:
         ma_dfs.append(ma_df)
     ma_df_combined = pd.concat(ma_dfs, axis=1)
     df = pd.concat([df, ma_df_combined], axis=1)
+    
+    df['200ma'] = df['close'].rolling(200).mean()
+    
     df['value_ma'] = df['value'].rolling(window=10).mean().shift(1)
     df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
     ema12 = df['close'].ewm(span=12, adjust=False).mean()
@@ -197,6 +201,13 @@ total_equity_list = []
 MonthlyTryCnt = {}
 CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in valid_tickers}
 
+# ==============================================================================
+# <<< 코드 수정: 로그 저장을 위한 리스트 초기화 >>>
+# ==============================================================================
+balance_logs = []
+trade_logs = []
+# ==============================================================================
+
 
 # 백테스팅 루프
 for date in common_dates:
@@ -221,15 +232,37 @@ for date in common_dates:
             df_coin = dfs[ticker]
             RevenueRate = ((current_price - entry_price) / entry_price * pos_leverage - fee) * 100.0
 
+            # 도지 캔들 조건 추가
+            def is_doji_candle(open_price, close_price, high_price, low_price):
+                candle_range = high_price - low_price
+                if candle_range == 0:
+                    return False
+                gap = abs(open_price - close_price)
+                return (gap / candle_range) <= 0.1
+
+            is_doji_1 = is_doji_candle(df_coin['open'].iloc[i-1], df_coin['close'].iloc[i-1], df_coin['high'].iloc[i-1], df_coin['low'].iloc[i-1])
+            is_doji_2 = is_doji_candle(df_coin['open'].iloc[i-2], df_coin['close'].iloc[i-2], df_coin['high'].iloc[i-2], df_coin['low'].iloc[i-2])
+
             sell_condition_triggered = False
             if (((df_coin['high'].iloc[i-2] > df_coin['high'].iloc[i-1] and df_coin['low'].iloc[i-2] > df_coin['low'].iloc[i-1]) or
                 (df_coin['open'].iloc[i-1] > df_coin['close'].iloc[i-1] and df_coin['open'].iloc[i-2] > df_coin['close'].iloc[i-2]) or
                 RevenueRate < 0) and not (i >= 2 and df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and df_coin['3ma'].iloc[i-2] < df_coin['3ma'].iloc[i-1])):
                 sell_condition_triggered = True
 
+            #print(f"*********************************{ticker}{date}{is_doji_1},{is_doji_2}")
+            
+            if (is_doji_1 and is_doji_2):
+                sell_condition_triggered = True
+
             if sell_condition_triggered:
                 cash_balance += margin * (1 + RevenueRate / 100.0)
-                print(f"{ticker} {date} >>> 매도: Entry {entry_price:.8f}, Exit {current_price:.8f}, 수익률 {RevenueRate:.2f}%, 현재 총자산 {cash_balance:.2f}")
+                
+                # ==============================================================================
+                # <<< 코드 수정: 매도 로그를 리스트에 저장 >>>
+                # ==============================================================================
+                log_msg = f"{ticker} {date} >>> 매도: Entry {entry_price:.8f}, Exit {current_price:.8f}, 수익률 {RevenueRate:.2f}%, 현재 총자산 {cash_balance:.2f}"
+                trade_logs.append(log_msg)
+                # ==============================================================================
 
                 if RevenueRate > 0:
                     CoinStats[ticker]['SuccessCnt'] += 1
@@ -268,6 +301,13 @@ for date in common_dates:
                 upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
 
                 buy_condition_triggered = False
+
+                is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
+
+                ma_50_condition = True 
+                if is_above_200ma:
+                    ma_50_condition = df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1]
+
                 if (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and
                     df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2] and
                     df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
@@ -276,16 +316,12 @@ for date in common_dates:
                     df_coin['rsi'].iloc[i-1] < 80 and 
                     df_coin['30ma_slope'].iloc[i-1] > -2 and
                     df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
-                    df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1] and
+                    ma_50_condition and 
+                    df_coin['30ma'].iloc[i-2] <= df_coin['30ma'].iloc[i-1] and
                     (macd_positive and macd_condition) and
-                    #df_coin['rsi'].iloc[i-1] >  df_coin['rsi_ma'].iloc[i-1] and
-                    #df_coin['50ma'].iloc[i-1] > df_coin['30ma'].iloc[i-1]
-                    #df_coin['30ma'].iloc[i-2] <= df_coin['30ma'].iloc[i-1] and
                     (upper_shadow_ratio <= 0.6)):
                     buy_condition_triggered = True
-
-
-
+                
                 if buy_condition_triggered:
                     buy_signals_today_specs.append(coin_candidate_spec)
 
@@ -301,7 +337,6 @@ for date in common_dates:
 
             if num_open_positions == (total_coin_count - 1):
                 investment_for_this_coin = cash_balance
-                #print(f"[{date}] >>> 마지막 코인({ticker}) 진입: 모든 가용 현금({investment_for_this_coin:.2f})을 사용합니다.")
             else:
                 investment_for_this_coin = current_cycle_investment_base * coin_spec_to_buy['rate']
 
@@ -314,9 +349,21 @@ for date in common_dates:
                     'leverage': leverage
                 }
                 cash_balance -= investment_for_this_coin
-                print(f"{ticker} {date} >>> 매수: 가격 {buy_price:.8f}, 투자금 {investment_for_this_coin:.2f}, 현재 총자산 {cash_balance:.2f}")
+
+                # ==============================================================================
+                # <<< 코드 수정: 매수 로그를 리스트에 저장 >>>
+                # ==============================================================================
+                log_msg = f"{ticker} {date} >>> 매수: 가격 {buy_price:.8f}, 투자금 {investment_for_this_coin:.2f}, 현재 총자산 {cash_balance:.2f}"
+                trade_logs.append(log_msg)
+                # ==============================================================================
+
             else:
-                print(f"Warning: Not enough cash to open position for {ticker} on {date}. Required: {investment_for_this_coin:.2f}, Available: {cash_balance:.2f}")
+                # ==============================================================================
+                # <<< 코드 수정: 경고 로그를 리스트에 저장 >>>
+                # ==============================================================================
+                log_msg = f"Warning: Not enough cash to open position for {ticker} on {date}. Required: {investment_for_this_coin:.2f}, Available: {cash_balance:.2f}"
+                trade_logs.append(log_msg)
+                # ==============================================================================
 
     # 3. 일일 총 자산 가치 계산 (Mark-to-Market, 시가평가)
     daily_total_equity = cash_balance
@@ -334,6 +381,33 @@ for date in common_dates:
         daily_total_equity += position_current_value
 
     total_equity_list.append({'date': date, 'Total_Equity': daily_total_equity})
+
+    # ==============================================================================
+    # <<< 코드 수정: 잔액 로그를 리스트에 저장 >>>
+    # ==============================================================================
+    log_msg = f"--- {date.strftime('%Y-%m-%d')} | 일일 정산 --- 총자산: {daily_total_equity:,.0f} USDT"
+    balance_logs.append(log_msg)
+    # ==============================================================================
+
+# ==============================================================================
+# <<< 코드 수정: 저장된 로그를 순서대로 출력 >>>
+# ==============================================================================
+print("\n\n" + "="*50)
+print("--- 일일 잔액 로그 ---")
+print("="*50)
+for log in balance_logs:
+    print(log)
+
+print("\n\n" + "="*50)
+print("--- 매수/매도 로그 ---")
+print("="*50)
+if not trade_logs:
+    print("거래 내역이 없습니다.")
+else:
+    for log in trade_logs:
+        print(log)
+print("="*50)
+# ==============================================================================
 
 
 # 결과 분석
@@ -353,25 +427,13 @@ result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
 
 result_df.index = pd.to_datetime(result_df.index)
 
-# ==============================================================================
-# <<< 코드 수정 시작: 월별 수익률 계산 방식 변경 >>>
-# ==============================================================================
-# 1. 월말(Month-End) 기준 잔액만 집계합니다.
+# 월별 수익률 계산
 monthly_stats = result_df.resample('ME').agg({'Total_Equity': 'last'})
 monthly_stats.rename(columns={'Total_Equity': 'End_Equity'}, inplace=True)
-
-# 2. 전월 말일의 잔액을 새로운 컬럼으로 추가합니다.
 monthly_stats['Prev_Month_End_Equity'] = monthly_stats['End_Equity'].shift(1)
-
-# 3. 첫 달의 '전월 말일 잔액'은 전체 기간의 시작 자본으로 설정합니다.
 initial_equity = result_df['Total_Equity'].iloc[0]
-monthly_stats['Prev_Month_End_Equity'].fillna(initial_equity, inplace=True)
-
-# 4. (현월 말일 잔액 / 전월 말일 잔액) 기준으로 수익률을 계산합니다.
+monthly_stats['Prev_Month_End_Equity'] = monthly_stats['Prev_Month_End_Equity'].fillna(initial_equity)
 monthly_stats['Return'] = ((monthly_stats['End_Equity'] / monthly_stats['Prev_Month_End_Equity']) - 1) * 100
-# ==============================================================================
-# <<< 코드 수정 끝 >>>
-# ==============================================================================
 
 monthly_stats['Trades'] = 0
 for month_key_str, count in MonthlyTryCnt.items():
