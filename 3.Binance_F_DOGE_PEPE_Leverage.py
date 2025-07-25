@@ -192,7 +192,7 @@ def execute_trading_logic(account_info):
                 if candle_range == 0:
                     return False
                 gap = abs(open_price - close_price)
-                return (gap / candle_range) <= 0.1
+                return (gap / candle_range) <= 0.15
             
             is_doji_1 = is_doji_candle(df['open'].iloc[-2], df['close'].iloc[-2], df['high'].iloc[-2], df['low'].iloc[-2])
             is_doji_2 = is_doji_candle(df['open'].iloc[-3], df['close'].iloc[-3], df['high'].iloc[-3], df['low'].iloc[-3])
