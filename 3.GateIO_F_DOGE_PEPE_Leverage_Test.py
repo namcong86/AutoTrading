@@ -117,14 +117,16 @@ exchange = ccxt.gateio({
 })
 
 InvestTotalMoney = 5000
-leverage = 3
+leverage = 4
 fee = 0.001
 
 InvestCoinList = [
-    {'ticker': 'BONK/USDT', 'rate': 0.25, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'DOGE/USDT', 'rate': 0.5, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    #{'ticker': 'ETH/USDT', 'rate': 1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'PEPE/USDT', 'rate': 0.25, 'start_date': {'year': 2021, 'month': 1, 'day': 1}}
+    {'ticker': 'DOGE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date': {'year': 2023, 'month': 1, 'day': 1}}
 ]
 
 dfs = {}
@@ -238,7 +240,7 @@ for date in common_dates:
                 if candle_range == 0:
                     return False
                 gap = abs(open_price - close_price)
-                return (gap / candle_range) <= 0.1
+                return (gap / candle_range) <= 0.01
 
             is_doji_1 = is_doji_candle(df_coin['open'].iloc[i-1], df_coin['close'].iloc[i-1], df_coin['high'].iloc[i-1], df_coin['low'].iloc[i-1])
             is_doji_2 = is_doji_candle(df_coin['open'].iloc[i-2], df_coin['close'].iloc[i-2], df_coin['high'].iloc[i-2], df_coin['low'].iloc[i-2])
@@ -292,6 +294,8 @@ for date in common_dates:
                 macd_2to1_down = macd_2ago > macd_1ago
                 macd_condition = not (macd_3to2_down and macd_2to1_down)
 
+                macd_line_above_zero = df_coin['macd'].iloc[i-1] > 0
+
                 prev_high = df_coin['high'].iloc[i-1]
                 prev_low = df_coin['low'].iloc[i-1]
                 prev_open = df_coin['open'].iloc[i-1]
@@ -308,18 +312,30 @@ for date in common_dates:
                 if is_above_200ma:
                     ma_50_condition = df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1]
 
+                # rsi_ma_condition = True 
+                # if not is_above_200ma:
+                #     rsi_ma_condition = df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1]
+
+                # if is_above_200ma:
+                #     macd_positive = True
+                #     macd_condition = True
+
                 if (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and
                     df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2] and
                     df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
                     df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1] and
-                    df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and
-                    df_coin['rsi'].iloc[i-1] < 80 and 
+                    df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and                    
                     df_coin['30ma_slope'].iloc[i-1] > -2 and
                     df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
-                    ma_50_condition and 
-                    df_coin['30ma'].iloc[i-2] <= df_coin['30ma'].iloc[i-1] and
-                    (macd_positive and macd_condition) and
-                    (upper_shadow_ratio <= 0.6)):
+                    ma_50_condition and
+                    #df_coin['rsi'].iloc[i-1] < 80 and 
+                    #rsi_ma_condition and 
+                    #df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1] and 
+                    #macd_line_above_zero and
+                    #(upper_shadow_ratio <= 0.6) and
+                    #(macd_positive and macd_condition) 
+                    df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1]
+                    ):
                     buy_condition_triggered = True
                 
                 if buy_condition_triggered:
