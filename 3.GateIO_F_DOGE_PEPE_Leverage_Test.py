@@ -25,6 +25,9 @@ import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 
+plt.rcParams['font.family'] = 'Malgun Gothic'
+plt.rcParams['axes.unicode_minus'] = False
+
 # 시간 변환을 위한 헬퍼 함수 (선택 사항)
 def ms_to_utc_str(timestamp_ms):
     return datetime.datetime.utcfromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d %H:%M:%S')
@@ -290,26 +293,6 @@ for date in common_dates:
                 prev_day_change = df_coin['change'].iloc[i-1]
                 no_sudden_surge = prev_day_change < 0.5
 
-                macd_3ago = df_coin['macd'].iloc[i-3] - df_coin['macd_signal'].iloc[i-3]
-                macd_2ago = df_coin['macd'].iloc[i-2] - df_coin['macd_signal'].iloc[i-2]
-                macd_1ago = df_coin['macd'].iloc[i-1] - df_coin['macd_signal'].iloc[i-1]
-                macd_positive = macd_1ago > 0
-                macd_3to2_down = macd_3ago > macd_2ago
-                macd_2to1_down = macd_2ago > macd_1ago
-                macd_condition = not (macd_3to2_down and macd_2to1_down)
-
-                macd_line_above_zero = df_coin['macd'].iloc[i-1] > 0
-
-                prev_high = df_coin['high'].iloc[i-1]
-                prev_low = df_coin['low'].iloc[i-1]
-                prev_open = df_coin['open'].iloc[i-1]
-                prev_close = df_coin['close'].iloc[i-1]
-                upper_shadow = prev_high - max(prev_open, prev_close)
-                candle_length = prev_high - prev_low
-                upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
-
-                buy_condition_triggered = False
-
                 is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
 
                 ma_50_condition = True 
@@ -327,9 +310,6 @@ for date in common_dates:
                     df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1] and
                     no_sudden_surge
                     ):
-                    buy_condition_triggered = True
-                
-                if buy_condition_triggered:
                     buy_signals_today_specs.append(coin_candidate_spec)
 
     if buy_signals_today_specs:
@@ -339,16 +319,12 @@ for date in common_dates:
             ticker = coin_spec_to_buy['ticker']
             buy_price = current_data[ticker]['open']
             
-            # <<< 로직 수정: 마지막 코인 투자금 계산 버그 수정 >>>
-            # 1. 일단 정해진 비율에 따라 투자금을 계산합니다.
             allocated_investment = current_cycle_investment_base * coin_spec_to_buy['rate']
             investment_for_this_coin = allocated_investment
 
-            # 2. 마지막 코인인지 확인합니다.
             num_open_positions = len(positions)
             is_last_coin_to_fill_portfolio = (num_open_positions == (total_coin_count - 1))
 
-            # 3. 마지막 코인이고 & 할당된 투자금이 현재 현금보다 많을 때만 (자금 부족 시) 남은 현금을 모두 사용합니다.
             if is_last_coin_to_fill_portfolio and allocated_investment > cash_balance:
                 investment_for_this_coin = cash_balance
             
@@ -382,18 +358,15 @@ for date in common_dates:
         daily_total_equity += position_current_value
     total_equity_list.append({'date': date, 'Total_Equity': daily_total_equity})
 
-    # 방식 2: 포지션이 없을 때의 잔액 기준 자산 가치
     if not positions:
         last_cash_only_equity = cash_balance
     cash_only_equity_list.append({'date': date, 'Cash_Only_Equity': last_cash_only_equity})
 
-    # 방식 3: 포지션 원금 + 잔액 기준 자산 가치
     daily_modified_equity = cash_balance
     for ticker, position in positions.items():
         daily_modified_equity += position['margin']
     modified_equity_list.append({'date': date, 'Modified_Equity': daily_modified_equity})
 
-    # 일일 잔액 로그
     log_msg = f"--- {date.strftime('%Y-%m-%d')} | 일일 정산 --- 총자산: {daily_total_equity:,.0f} USDT"
     balance_logs.append(log_msg)
 
@@ -422,26 +395,22 @@ if not total_equity_list:
 result_df = pd.DataFrame(total_equity_list)
 result_df.set_index('date', inplace=True)
 
-# 3가지 MDD 계산을 위해 데이터프레임에 자산 데이터 추가
 cash_only_df = pd.DataFrame(cash_only_equity_list).set_index('date')
 modified_df = pd.DataFrame(modified_equity_list).set_index('date')
 result_df = result_df.join(cash_only_df).join(modified_df)
 
-# MDD 1: 기존 방식 (일일 시가 평가)
 result_df['Ror'] = result_df['Total_Equity'].pct_change().fillna(0) + 1
 result_df['Cum_Ror'] = result_df['Ror'].cumprod()
 result_df['Highwatermark'] = result_df['Cum_Ror'].cummax()
 result_df['Drawdown'] = (result_df['Cum_Ror'] / result_df['Highwatermark']) - 1
 result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
 
-# MDD 2: 포지션 없을 때 잔액 기준
 result_df['Cash_Only_Ror'] = result_df['Cash_Only_Equity'].pct_change().fillna(0) + 1
 result_df['Cash_Only_Cum_Ror'] = result_df['Cash_Only_Ror'].cumprod()
 result_df['Cash_Only_Highwatermark'] = result_df['Cash_Only_Cum_Ror'].cummax()
 result_df['Cash_Only_Drawdown'] = (result_df['Cash_Only_Cum_Ror'] / result_df['Cash_Only_Highwatermark']) - 1
 result_df['Cash_Only_MaxDrawdown'] = result_df['Cash_Only_Drawdown'].cummin()
 
-# MDD 3: 포지션 원금 + 잔액 기준
 result_df['Modified_Ror'] = result_df['Modified_Equity'].pct_change().fillna(0) + 1
 result_df['Modified_Cum_Ror'] = result_df['Modified_Ror'].cumprod()
 result_df['Modified_Highwatermark'] = result_df['Modified_Cum_Ror'].cummax()
@@ -520,25 +489,36 @@ for ticker_stat in valid_tickers:
     print(f"{ticker_stat} >>> 성공: {success} 실패: {fail} -> 승률: {round(win_rate, 2)}%")
 print("------------------------------")
 
-fig, axs = plt.subplots(2, 1, figsize=(10, 10), sharex=True)
+# ==============================================================================
+# <<< 코드 수정: 3가지 MDD를 모두 차트에 표시 >>>
+# ==============================================================================
+fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
 initial_equity_val = result_df['Total_Equity'].iloc[0]
-axs[0].plot(result_df.index, (result_df['Total_Equity'] / initial_equity_val) * 100, label=f'Strategy ({leverage}x Leverage)')
 
+# 상단 차트: 누적 수익률
+axs[0].plot(result_df.index, result_df['Cum_Ror'] * 100, label=f'Strategy ({leverage}x Leverage)')
 axs[0].set_ylabel('Cumulative Return (%)')
 axs[0].set_title('Return Comparison Chart')
 axs[0].legend()
 axs[0].grid(True)
 
-axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD')
-axs[1].plot(result_df.index, result_df['Drawdown'] * 100, label='Drawdown')
+# 하단 차트: 3가지 방식의 최대 낙폭(MDD) 비교
+axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD 1 (일일 시가평가)', alpha=0.9)
+axs[1].plot(result_df.index, result_df['Cash_Only_MaxDrawdown'] * 100, label='MDD 2 (포지션 없을 시 잔액)', alpha=0.7)
+axs[1].plot(result_df.index, result_df['Modified_MaxDrawdown'] * 100, label='MDD 3 (포지션 원금 + 잔액)', alpha=0.7)
+axs[1].fill_between(result_df.index, result_df['Drawdown'] * 100, 0, color='red', alpha=0.1, label='Drawdown (일일 시가평가)')
+
+
 axs[1].set_ylabel('Drawdown (%)')
-axs[1].set_title('Drawdown Comparison Chart')
+axs[1].set_title('3가지 방식 최대 낙폭(MDD) 비교')
 axs[1].legend()
 axs[1].grid(True)
 
 plt.xlabel('Date')
 plt.tight_layout()
 plt.show()
+# ==============================================================================
+
 
 # 최종 결과에 3가지 MDD 출력
 if not result_df.empty:
