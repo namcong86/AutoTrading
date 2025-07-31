@@ -103,31 +103,40 @@ def execute_trading_logic(account_info):
         start_msg = f"{first_String} 시작"
         telegram_alert.SendMessage(start_msg)
 
-    # --- 스크립트 실행 시점의 투자 기준금 설정 ---
-    try:
-        balance = binanceX.fetch_balance(params={"type": "future"})
-        time.sleep(0.1)
-        initial_usdt_balance = float(balance['USDT']['free'])
-        print(f"[{account_name}] 스크립트 시작. 투자 기준금: {initial_usdt_balance:.2f} USDT")
-    except Exception as e:
-        print(f"[{account_name}] 잔고 조회 실패, 이 계정의 거래를 건너뜁니다: {e}")
-        telegram_alert.SendMessage(f"{first_String} 잔고 조회 실패, 봇 종료")
-        return
-
-    # --- [수정] 현재 모든 포지션 정보를 한번에 가져오기 ---
-    all_positions = []
+    # --- 사이클 기반 투자 기준금 설정 로직 ---
+    cycle_investment_base = 0
     try:
         balance_check = binanceX.fetch_balance(params={"type": "future"})
+        time.sleep(0.1)
+        current_usdt_balance = float(balance_check['USDT']['free'])
         all_positions = [pos for pos in balance_check['info']['positions'] if float(pos['positionAmt']) != 0]
+
+        if len(all_positions) == 0:
+            print(f"[{account_name}] 현재 포지션 없음. 투자 기준금을 현재 잔고({current_usdt_balance:.2f} USDT)로 갱신합니다.")
+            BotDataDict['INVESTMENT_BASE_USDT'] = current_usdt_balance
+            with open(botdata_file_path, 'w') as f:
+                json.dump(BotDataDict, f, indent=4)
+        
+        cycle_investment_base = BotDataDict.get('INVESTMENT_BASE_USDT')
+
+        if cycle_investment_base is None:
+            print(f"[{account_name}] 최초 실행. 투자 기준금을 현재 잔고({current_usdt_balance:.2f} USDT)로 설정합니다.")
+            BotDataDict['INVESTMENT_BASE_USDT'] = current_usdt_balance
+            cycle_investment_base = current_usdt_balance
+            with open(botdata_file_path, 'w') as f:
+                json.dump(BotDataDict, f, indent=4)
+        
+        print(f"[{account_name}] 이번 사이클 투자 기준금: {cycle_investment_base:.2f} USDT")
+
     except Exception as e:
-        print(f"[{account_name}] 전체 포지션 정보 조회 오류: {e}")
-        return # 포지션 조회가 안되면 거래를 진행하기 어려우므로 종료
+        print(f"[{account_name}] 잔고 조회 또는 기준금 설정 실패, 이 계정의 거래를 건너뜁니다: {e}")
+        telegram_alert.SendMessage(f"{first_String} 잔고 조회 실패, 봇 종료")
+        return
 
     # --- 메인 루프 시작 ---
     for coin_data in INVEST_COIN_LIST:
         coin_ticker = coin_data['ticker']
         
-        # BotData 기본 키 초기화
         for key in ["_BUY_DATE", "_SELL_DATE", "_DATE_CHECK"]:
             full_key = coin_ticker + key
             if full_key not in BotDataDict:
@@ -135,7 +144,6 @@ def execute_trading_logic(account_info):
         with open(botdata_file_path, 'w') as f:
             json.dump(BotDataDict, f, indent=4)
 
-        # --- [수정] 미리 가져온 포지션 정보 사용 ---
         amt_b = 0
         unrealizedProfit = 0.0
         coin_symbol_for_pos = coin_ticker.replace("/", "")
@@ -145,7 +153,7 @@ def execute_trading_logic(account_info):
                 unrealizedProfit = float(pos['unrealizedProfit'])
                 break
 
-        # 지표용 일봉 데이터 조회 및 계산 (기존 코드와 동일)
+        # --- 지표 계산: 백테스팅 파일 기준 ---
         df = myBinance.GetOhlcv(binanceX, coin_ticker, '1d')
         df['value'] = df['close'] * df['volume']
         period = 14
@@ -157,57 +165,47 @@ def execute_trading_logic(account_info):
         RS = gain / loss.replace(0, 1e-9)
         df['rsi'] = 100 - (100 / (1 + RS))
         df['rsi_ma'] = df['rsi'].rolling(14).mean()
-        ema12 = df['close'].ewm(span=12, adjust=False).mean()
-        ema26 = df['close'].ewm(span=26, adjust=False).mean()
-        df['macd'] = ema12 - ema26
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
         
-        # ==============================================================================
-        # <<< 코드 수정: 200일 이동평균선 계산 추가 >>>
-        # ==============================================================================
-        for ma in [3, 7, 12, 24, 30, 50, 200]:
+        df['prev_close'] = df['close'].shift(1)
+        df['change'] = (df['close'] - df['prev_close']) / df['prev_close']
+        
+        for ma in [3, 7, 20, 30, 50, 200]:
             df[f'{ma}ma'] = df['close'].rolling(ma).mean()
-        # ==============================================================================
-
+        
         df['value_ma'] = df['value'].rolling(10).mean().shift(1)
         df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
         df.dropna(inplace=True)
 
         now_price = myBinance.GetCoinNowPrice(binanceX, coin_ticker)
-        DiffValue = -2
         params = {'positionSide': 'LONG'}
 
-        # --- 매도 로직 (기존 코드와 동일, 알림 메시지만 수정) ---
+        # --- 매도 조건 (백테스팅 파일 기준) ---
         if abs(amt_b) > 0:
-            cond_high_low = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
-            cond_open_close = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
-            cond_revenue = (unrealizedProfit < 0)
-            cond_cancel = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
+            RevenueRate = (unrealizedProfit / (cycle_investment_base * coin_data['rate'])) * 100.0 if (cycle_investment_base * coin_data['rate']) > 0 else 0
 
-            # ==============================================================================
-            # <<< 코드 수정: 도지 캔들 매도 조건 추가 >>>
-            # ==============================================================================
             def is_doji_candle(open_price, close_price, high_price, low_price):
                 candle_range = high_price - low_price
                 if candle_range == 0:
                     return False
                 gap = abs(open_price - close_price)
-                return (gap / candle_range) <= 0.15
-            
+                return (gap / candle_range) <= 0.01
+
             is_doji_1 = is_doji_candle(df['open'].iloc[-2], df['close'].iloc[-2], df['high'].iloc[-2], df['low'].iloc[-2])
             is_doji_2 = is_doji_candle(df['open'].iloc[-3], df['close'].iloc[-3], df['high'].iloc[-3], df['low'].iloc[-3])
-            is_double_doji = is_doji_1 and is_doji_2
-            
-            analysis_msg = (f"{first_String}  매도조건 분석 ({coin_ticker}): high_low={cond_high_low}, "
-                            f"open_close={cond_open_close}, revenue<0={cond_revenue}, "
-                            f"cancel_by_rsi_ma={cond_cancel}, 2연속도지={is_double_doji}")
-            if account_name == "Main":
-                print(analysis_msg)
-                telegram_alert.SendMessage(analysis_msg)
 
-            original_sell = (cond_high_low or cond_open_close or cond_revenue) and not cond_cancel
-            sell = original_sell or is_double_doji # 도지 조건 추가
-            # ==============================================================================
+            sell_condition_triggered = False
+            cond1 = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
+            cond2 = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
+            cond3 = (RevenueRate < 0)
+            not_cond = not (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
+
+            if (cond1 or cond2 or cond3) and not_cond:
+                sell_condition_triggered = True
+
+            if (is_doji_1 and is_doji_2):
+                sell_condition_triggered = True
+            
+            sell = sell_condition_triggered
             
             if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
                 sell = False
@@ -225,87 +223,46 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] 매도 주문 실패 for {coin_ticker}: {e}")
         
-        # --- 매수 로직 (기존 코드와 동일, 알림 메시지만 수정) ---
+        # ==============================================================================
+        # <<< 코드 수정: 백테스팅 파일의 매수 조건으로 완전 교체 (MACD 조건 없음) >>>
+        # ==============================================================================
         else:
-            macd_3ago = df['macd'].iloc[-4]-df['macd_signal'].iloc[-4]
-            macd_2ago = df['macd'].iloc[-3]-df['macd_signal'].iloc[-3]
-            macd_1ago = df['macd'].iloc[-2]-df['macd_signal'].iloc[-2]
-            macd_positive = macd_1ago > 0
-            macd_3to2_down = macd_3ago > macd_2ago
-            macd_2to1_down = macd_2ago > macd_1ago
-            macd_condition = not (macd_3to2_down and macd_2to1_down)
+            prev_day_change = df['change'].iloc[-2]
+            no_sudden_surge = prev_day_change < 0.5
             
-            prev_high = df['high'].iloc[-2]
-            prev_low = df['low'].iloc[-2]
-            prev_open = df['open'].iloc[-2]
-            prev_close = df['close'].iloc[-2]
-            upper_shadow = prev_high - max(prev_open, prev_close)
-            candle_length = prev_high - prev_low
-            upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
-
-            cond_o1 = (df['open'].iloc[-2] < df['close'].iloc[-2])
-            cond_o2 = (df['open'].iloc[-3] < df['close'].iloc[-3])
-            cond_close_inc = (df['close'].iloc[-3] < df['close'].iloc[-2])
-            cond_high_inc = (df['high'].iloc[-3] < df['high'].iloc[-2])
-            cond_7ma = (df['7ma'].iloc[-3] < df['7ma'].iloc[-2])
-            cond_slope = (df['30ma_slope'].iloc[-2] > DiffValue)
-            cond_rsi_inc = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
-            cond_MACD = (macd_positive and macd_condition)
-            cond_doji = upper_shadow_ratio <= 0.6
-            cond_80rsi = (df['rsi'].iloc[-2] < 80)
-
-            # ==============================================================================
-            # <<< 코드 수정: 200ma, 50ma, 30ma 관련 매수 조건 추가 >>>
-            # ==============================================================================
             is_above_200ma = df['close'].iloc[-2] > df['200ma'].iloc[-2]
             
-            cond_50ma_conditional = True # 기본값은 True (조건 무시)
+            ma_50_condition = True 
             if is_above_200ma:
-                # 200ma 위에 있을 때만 50ma 상승 조건을 실제로 확인
-                cond_50ma_conditional = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
-            
-            # 30ma 증가 조건
-            cond_30ma = (df['30ma'].iloc[-3] <= df['30ma'].iloc[-2])
-            
-            analysis_msg = (f"{first_String} 매수조건 분석 ({coin_ticker}): 연속양봉={cond_o1 and cond_o2}, "
-                            f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
-                            f"7이평증가={cond_7ma}, 50이평(조건부)={cond_50ma_conditional}, 30이평증가={cond_30ma}, 30이평기울기={cond_slope}, "
-                            f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]:.2f}->{df['rsi_ma'].iloc[-2]:.2f}), "
-                            f"MACD={cond_MACD}, 도지캔들={cond_doji}, RSI80이하={cond_80rsi}")
-            if account_name == "Main":
-                print(analysis_msg)
-                telegram_alert.SendMessage(analysis_msg)
+                ma_50_condition = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
 
-            buy = (cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and 
-                   cond_7ma and cond_50ma_conditional and cond_30ma and cond_slope and 
-                   cond_rsi_inc and cond_MACD and cond_doji and cond_80rsi)
-            # ==============================================================================
+            # 백테스팅 파일의 매수 조건을 그대로 적용
+            buy = (
+                df['open'].iloc[-2] < df['close'].iloc[-2] and
+                df['open'].iloc[-3] < df['close'].iloc[-3] and
+                df['close'].iloc[-3] < df['close'].iloc[-2] and
+                df['high'].iloc[-3] < df['high'].iloc[-2] and
+                df['7ma'].iloc[-3] < df['7ma'].iloc[-2] and
+                df['30ma_slope'].iloc[-2] > -2 and
+                df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and
+                ma_50_condition and
+                df['20ma'].iloc[-3] <= df['20ma'].iloc[-2] and
+                no_sudden_surge
+            )
             
             if buy:
                 if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                     
-                    # --- [수정] 투자금 계산 로직 변경 ---
+                    # 사이클 기반 투자금 계산 로직
                     total_coin_count = len(INVEST_COIN_LIST)
-                    
-                    # 현재 포지션에 있는 코인 목록 (심볼 기준)
-                    position_symbols = [pos['symbol'] for pos in all_positions]
-                    
-                    # INVEST_COIN_LIST에 정의된 코인 중 현재 포지션이 있는 코인의 수
-                    num_open_positions = 0
-                    for c in INVEST_COIN_LIST:
-                        if c['ticker'].replace('/', '') in position_symbols:
-                            num_open_positions += 1
+                    num_open_positions = len(all_positions)
 
-                    # N-1개 코인이 포지션에 있고, 현재 코인은 포지션이 없을 때 (현재 코드는 amt_b == 0 인 분기)
                     if num_open_positions == (total_coin_count - 1):
-                        # 사용 가능한 현금 전부를 투자금으로 설정
-                        InvestMoney = initial_usdt_balance
+                        InvestMoney = current_usdt_balance
                         print(f"[{account_name}] >>> 마지막 코인({coin_ticker}) 진입: 모든 가용 현금({InvestMoney:.2f})을 사용합니다.")
                     else:
-                        # 기존 규칙: 사이클 기준 자본과 코인별 비율로 투자금 설정
-                        InvestMoney = initial_usdt_balance * INVEST_RATE * coin_data['rate']
-                        print(f"[{account_name}] {coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {initial_usdt_balance:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
-                    # --- [수정] 로직 종료 ---
+                        InvestMoney = cycle_investment_base * INVEST_RATE * coin_data['rate']
+                        print(f"[{account_name}] {coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {cycle_investment_base:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
 
                     BuyMoney = InvestMoney * (1.0 - FEE * set_leverage)
                     cap = df['value_ma'].iloc[-2] / 10

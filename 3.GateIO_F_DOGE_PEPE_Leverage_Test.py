@@ -1,4 +1,4 @@
-#-*-coding:utf-8 -*-
+# -*-coding:utf-8 -*-
 '''
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 Gate.io ccxt 버전 (수정됨)
@@ -117,16 +117,24 @@ exchange = ccxt.gateio({
 })
 
 InvestTotalMoney = 5000
-leverage = 4
+leverage = 5
 fee = 0.001
 
 InvestCoinList = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.3, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date': {'year': 2023, 'month': 1, 'day': 1}}
+    # {'ticker': 'DOGE/USDT', 'rate': 0.3, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'HBAR/USDT', 'rate': 0.2, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+
+    {'ticker': 'DOGE/USDT', 'rate': 0.25, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    
 ]
 
 dfs = {}
@@ -200,16 +208,16 @@ cash_balance = InvestTotalMoney
 current_cycle_investment_base = InvestTotalMoney # 사이클 기준 자본
 positions = {}
 total_equity_list = []
+# MDD 계산을 위한 리스트 초기화
+cash_only_equity_list = []
+modified_equity_list = []
+last_cash_only_equity = InvestTotalMoney
 MonthlyTryCnt = {}
 CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in valid_tickers}
 
-# ==============================================================================
-# <<< 코드 수정: 로그 저장을 위한 리스트 초기화 >>>
-# ==============================================================================
+# 로그 저장을 위한 리스트 초기화
 balance_logs = []
 trade_logs = []
-# ==============================================================================
-
 
 # 백테스팅 루프
 for date in common_dates:
@@ -234,13 +242,12 @@ for date in common_dates:
             df_coin = dfs[ticker]
             RevenueRate = ((current_price - entry_price) / entry_price * pos_leverage - fee) * 100.0
 
-            # 도지 캔들 조건 추가
             def is_doji_candle(open_price, close_price, high_price, low_price):
                 candle_range = high_price - low_price
                 if candle_range == 0:
                     return False
                 gap = abs(open_price - close_price)
-                return (gap / candle_range) <= 0.01
+                return (gap / candle_range) <= 0.1
 
             is_doji_1 = is_doji_candle(df_coin['open'].iloc[i-1], df_coin['close'].iloc[i-1], df_coin['high'].iloc[i-1], df_coin['low'].iloc[i-1])
             is_doji_2 = is_doji_candle(df_coin['open'].iloc[i-2], df_coin['close'].iloc[i-2], df_coin['high'].iloc[i-2], df_coin['low'].iloc[i-2])
@@ -251,20 +258,14 @@ for date in common_dates:
                 RevenueRate < 0) and not (i >= 2 and df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and df_coin['3ma'].iloc[i-2] < df_coin['3ma'].iloc[i-1])):
                 sell_condition_triggered = True
 
-            #print(f"*********************************{ticker}{date}{is_doji_1},{is_doji_2}")
-            
             if (is_doji_1 and is_doji_2):
                 sell_condition_triggered = True
 
             if sell_condition_triggered:
                 cash_balance += margin * (1 + RevenueRate / 100.0)
                 
-                # ==============================================================================
-                # <<< 코드 수정: 매도 로그를 리스트에 저장 >>>
-                # ==============================================================================
                 log_msg = f"{ticker} {date} >>> 매도: Entry {entry_price:.8f}, Exit {current_price:.8f}, 수익률 {RevenueRate:.2f}%, 현재 총자산 {cash_balance:.2f}"
                 trade_logs.append(log_msg)
-                # ==============================================================================
 
                 if RevenueRate > 0:
                     CoinStats[ticker]['SuccessCnt'] += 1
@@ -286,6 +287,9 @@ for date in common_dates:
             i = df_coin.index.get_loc(date)
 
             if i > 2:
+                prev_day_change = df_coin['change'].iloc[i-1]
+                no_sudden_surge = prev_day_change < 0.5
+
                 macd_3ago = df_coin['macd'].iloc[i-3] - df_coin['macd_signal'].iloc[i-3]
                 macd_2ago = df_coin['macd'].iloc[i-2] - df_coin['macd_signal'].iloc[i-2]
                 macd_1ago = df_coin['macd'].iloc[i-1] - df_coin['macd_signal'].iloc[i-1]
@@ -312,14 +316,6 @@ for date in common_dates:
                 if is_above_200ma:
                     ma_50_condition = df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1]
 
-                # rsi_ma_condition = True 
-                # if not is_above_200ma:
-                #     rsi_ma_condition = df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1]
-
-                # if is_above_200ma:
-                #     macd_positive = True
-                #     macd_condition = True
-
                 if (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and
                     df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2] and
                     df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
@@ -328,13 +324,8 @@ for date in common_dates:
                     df_coin['30ma_slope'].iloc[i-1] > -2 and
                     df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
                     ma_50_condition and
-                    #df_coin['rsi'].iloc[i-1] < 80 and 
-                    #rsi_ma_condition and 
-                    #df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1] and 
-                    #macd_line_above_zero and
-                    #(upper_shadow_ratio <= 0.6) and
-                    #(macd_positive and macd_condition) 
-                    df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1]
+                    df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1] and
+                    no_sudden_surge
                     ):
                     buy_condition_triggered = True
                 
@@ -348,14 +339,19 @@ for date in common_dates:
             ticker = coin_spec_to_buy['ticker']
             buy_price = current_data[ticker]['open']
             
-            investment_for_this_coin = 0
+            # <<< 로직 수정: 마지막 코인 투자금 계산 버그 수정 >>>
+            # 1. 일단 정해진 비율에 따라 투자금을 계산합니다.
+            allocated_investment = current_cycle_investment_base * coin_spec_to_buy['rate']
+            investment_for_this_coin = allocated_investment
+
+            # 2. 마지막 코인인지 확인합니다.
             num_open_positions = len(positions)
+            is_last_coin_to_fill_portfolio = (num_open_positions == (total_coin_count - 1))
 
-            if num_open_positions == (total_coin_count - 1):
+            # 3. 마지막 코인이고 & 할당된 투자금이 현재 현금보다 많을 때만 (자금 부족 시) 남은 현금을 모두 사용합니다.
+            if is_last_coin_to_fill_portfolio and allocated_investment > cash_balance:
                 investment_for_this_coin = cash_balance
-            else:
-                investment_for_this_coin = current_cycle_investment_base * coin_spec_to_buy['rate']
-
+            
             if cash_balance >= investment_for_this_coin and investment_for_this_coin > 0:
                 quantity = (investment_for_this_coin * leverage) / buy_price
                 positions[ticker] = {
@@ -366,48 +362,42 @@ for date in common_dates:
                 }
                 cash_balance -= investment_for_this_coin
 
-                # ==============================================================================
-                # <<< 코드 수정: 매수 로그를 리스트에 저장 >>>
-                # ==============================================================================
                 log_msg = f"{ticker} {date} >>> 매수: 가격 {buy_price:.8f}, 투자금 {investment_for_this_coin:.2f}, 현재 총자산 {cash_balance:.2f}"
                 trade_logs.append(log_msg)
-                # ==============================================================================
 
             else:
-                # ==============================================================================
-                # <<< 코드 수정: 경고 로그를 리스트에 저장 >>>
-                # ==============================================================================
                 log_msg = f"Warning: Not enough cash to open position for {ticker} on {date}. Required: {investment_for_this_coin:.2f}, Available: {cash_balance:.2f}"
                 trade_logs.append(log_msg)
-                # ==============================================================================
 
-    # 3. 일일 총 자산 가치 계산 (Mark-to-Market, 시가평가)
+    # 3. 일일 자산 가치 계산 (3가지 방식)
     daily_total_equity = cash_balance
     for ticker, position in positions.items():
         if ticker not in current_data: continue
-
         margin = position['margin']
         entry_price = position['entry_price']
         current_close_price = current_data[ticker]['close']
-
         quantity = position['quantity']
         unrealized_pnl = (current_close_price - entry_price) * quantity
         position_current_value = margin + unrealized_pnl
-
         daily_total_equity += position_current_value
-
     total_equity_list.append({'date': date, 'Total_Equity': daily_total_equity})
 
-    # ==============================================================================
-    # <<< 코드 수정: 잔액 로그를 리스트에 저장 >>>
-    # ==============================================================================
+    # 방식 2: 포지션이 없을 때의 잔액 기준 자산 가치
+    if not positions:
+        last_cash_only_equity = cash_balance
+    cash_only_equity_list.append({'date': date, 'Cash_Only_Equity': last_cash_only_equity})
+
+    # 방식 3: 포지션 원금 + 잔액 기준 자산 가치
+    daily_modified_equity = cash_balance
+    for ticker, position in positions.items():
+        daily_modified_equity += position['margin']
+    modified_equity_list.append({'date': date, 'Modified_Equity': daily_modified_equity})
+
+    # 일일 잔액 로그
     log_msg = f"--- {date.strftime('%Y-%m-%d')} | 일일 정산 --- 총자산: {daily_total_equity:,.0f} USDT"
     balance_logs.append(log_msg)
-    # ==============================================================================
 
-# ==============================================================================
-# <<< 코드 수정: 저장된 로그를 순서대로 출력 >>>
-# ==============================================================================
+# 저장된 로그 출력
 print("\n\n" + "="*50)
 print("--- 일일 잔액 로그 ---")
 print("="*50)
@@ -423,8 +413,6 @@ else:
     for log in trade_logs:
         print(log)
 print("="*50)
-# ==============================================================================
-
 
 # 결과 분석
 if not total_equity_list:
@@ -434,12 +422,31 @@ if not total_equity_list:
 result_df = pd.DataFrame(total_equity_list)
 result_df.set_index('date', inplace=True)
 
+# 3가지 MDD 계산을 위해 데이터프레임에 자산 데이터 추가
+cash_only_df = pd.DataFrame(cash_only_equity_list).set_index('date')
+modified_df = pd.DataFrame(modified_equity_list).set_index('date')
+result_df = result_df.join(cash_only_df).join(modified_df)
+
+# MDD 1: 기존 방식 (일일 시가 평가)
 result_df['Ror'] = result_df['Total_Equity'].pct_change().fillna(0) + 1
 result_df['Cum_Ror'] = result_df['Ror'].cumprod()
 result_df['Highwatermark'] = result_df['Cum_Ror'].cummax()
 result_df['Drawdown'] = (result_df['Cum_Ror'] / result_df['Highwatermark']) - 1
 result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
 
+# MDD 2: 포지션 없을 때 잔액 기준
+result_df['Cash_Only_Ror'] = result_df['Cash_Only_Equity'].pct_change().fillna(0) + 1
+result_df['Cash_Only_Cum_Ror'] = result_df['Cash_Only_Ror'].cumprod()
+result_df['Cash_Only_Highwatermark'] = result_df['Cash_Only_Cum_Ror'].cummax()
+result_df['Cash_Only_Drawdown'] = (result_df['Cash_Only_Cum_Ror'] / result_df['Cash_Only_Highwatermark']) - 1
+result_df['Cash_Only_MaxDrawdown'] = result_df['Cash_Only_Drawdown'].cummin()
+
+# MDD 3: 포지션 원금 + 잔액 기준
+result_df['Modified_Ror'] = result_df['Modified_Equity'].pct_change().fillna(0) + 1
+result_df['Modified_Cum_Ror'] = result_df['Modified_Ror'].cumprod()
+result_df['Modified_Highwatermark'] = result_df['Modified_Cum_Ror'].cummax()
+result_df['Modified_Drawdown'] = (result_df['Modified_Cum_Ror'] / result_df['Modified_Highwatermark']) - 1
+result_df['Modified_MaxDrawdown'] = result_df['Modified_Drawdown'].cummin()
 
 result_df.index = pd.to_datetime(result_df.index)
 
@@ -533,14 +540,22 @@ plt.xlabel('Date')
 plt.tight_layout()
 plt.show()
 
+# 최종 결과에 3가지 MDD 출력
 if not result_df.empty:
     TotalOri = result_df['Total_Equity'].iloc[0]
     TotalFinal = result_df['Total_Equity'].iloc[-1]
+    
+    # 3가지 MDD 계산
     TotalMDD = result_df['MaxDrawdown'].min() * 100.0
+    CashOnlyMDD = result_df['Cash_Only_MaxDrawdown'].min() * 100.0
+    ModifiedMDD = result_df['Modified_MaxDrawdown'].min() * 100.0
+
     print("\n---------- 총 결과 ----------")
     print(f"최초 금액: {format(round(TotalOri), ',')} USDT, 최종 금액: {format(round(TotalFinal), ',')} USDT")
     print(f"총 수익률: {round(((TotalFinal - TotalOri) / TotalOri) * 100, 2)}%")
-    print(f"MDD (최대 손실폭): {round(TotalMDD, 2)}%")
+    print(f"MDD 1 (일일 시가평가 기준): {round(TotalMDD, 2)}%")
+    print(f"MDD 2 (포지션 없을 시 잔액 기준): {round(CashOnlyMDD, 2)}%")
+    print(f"MDD 3 (포지션 원금 + 잔액 기준): {round(ModifiedMDD, 2)}%")
     print("------------------------------")
     print("\n---------- 월별 통계 ----------")
     print(monthly_stats.to_string())
