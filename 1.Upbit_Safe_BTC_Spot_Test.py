@@ -48,6 +48,12 @@ InvestCoinList.append(InvestDataDict)
 ResultList = list()
 TotalResultDict = dict()
 
+# 전체 포트폴리오의 거래 기준 MDD를 위한 변수
+g_peak_equity_on_trade_close = InvestTotalMoney
+g_mdd_on_trade_close = 0.0
+g_trade_drawdown_history = []
+
+
 for coin_data in InvestCoinList:
     coin_ticker = coin_data['ticker']
     print("\n----coin_ticker: ", coin_ticker)
@@ -93,7 +99,6 @@ for coin_data in InvestCoinList:
     df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
     df = df[:len(df)]
     df.dropna(inplace=True)  # 데이터 없는건 날린다!
-    pprint.pprint(df)
 
     IsBuy = False  # 매수 했는지 여부
     fee = 0.002  # 수수료+세금+슬리피지를 매수매도마다 0.2%로 세팅!
@@ -109,6 +114,10 @@ for coin_data in InvestCoinList:
     ma3 = 24
     BUY_PRICE = 0
     IsDolpaDay = False
+    
+    # 개별 종목의 거래 기준 MDD를 위한 변수
+    peak_equity_on_trade_close = InvestMoney
+    mdd_on_trade_close = 0.0
 
     for i in range(len(df)):
         if FirstDateStr == "":
@@ -149,7 +158,22 @@ for coin_data in InvestCoinList:
 
             if IsSellGo:
                 SellAmt = TotalBuyAmt
-                InvestMoney = RemainInvestMoney + (RealInvestMoney * (1.0 - fee))
+                
+                # 거래 종료 시점 MDD 계산 로직 추가
+                final_equity_after_sell = RemainInvestMoney + (RealInvestMoney * (1.0 - fee))
+                
+                # 개별 종목 MDD 업데이트
+                peak_equity_on_trade_close = max(peak_equity_on_trade_close, final_equity_after_sell)
+                drawdown = (final_equity_after_sell - peak_equity_on_trade_close) / peak_equity_on_trade_close
+                mdd_on_trade_close = min(mdd_on_trade_close, drawdown)
+
+                # 전체 포트폴리오 MDD 업데이트
+                g_peak_equity_on_trade_close = max(g_peak_equity_on_trade_close, final_equity_after_sell)
+                g_drawdown = (final_equity_after_sell - g_peak_equity_on_trade_close) / g_peak_equity_on_trade_close
+                g_mdd_on_trade_close = min(g_mdd_on_trade_close, g_drawdown)
+                g_trade_drawdown_history.append((current_date, g_drawdown * 100.0))
+                
+                InvestMoney = final_equity_after_sell
                 TotalBuyAmt = 0
                 TotalPureMoney = 0
                 RealInvestMoney = 0
@@ -174,7 +198,6 @@ for coin_data in InvestCoinList:
             IsBuyGo = False
             InvestGoMoney = 0
             IsMaDone = False
-
 
             if coin_ticker == 'KRW-BTC':
                 DolPaSt = max(df[str(ma1) + 'ma'].iloc[i-1], df[str(ma2) + 'ma'].iloc[i-1], df[str(ma3) + 'ma'].iloc[i-1])
@@ -243,24 +266,19 @@ for coin_data in InvestCoinList:
         result_df['Highwatermark'] = result_df['Cum_Ror'].cummax()
         result_df['Drawdown'] = (result_df['Cum_Ror'] / result_df['Highwatermark']) - 1
         result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        pprint.pprint(result_df)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        # 디버깅: 최대 DD 시점 출력
-        max_dd_index = result_df['Drawdown'].idxmin()
-        print(f"Max DD at {max_dd_index}: Drawdown={result_df.loc[max_dd_index, 'Drawdown']*100:.2f}%, Total_Money={result_df.loc[max_dd_index, 'Total_Money']:.2f}")
+
         resultData['DateStr'] = str(FirstDateStr) + " ~ " + str(result_df.iloc[-1].name)
         resultData['OriMoney'] = result_df['Total_Money'].iloc[FirstDateIndex]
         resultData['FinalMoney'] = result_df['Total_Money'].iloc[-1]
         resultData['OriRevenueHold'] = (df['open'].iloc[-1] / df['open'].iloc[FirstDateIndex] - 1.0) * 100.0 
         resultData['RevenueRate'] = ((result_df['Cum_Ror'].iloc[-1] - 1.0) * 100.0)
         resultData['MDD'] = result_df['MaxDrawdown'].min() * 100.0
+        resultData['TradeMDD'] = mdd_on_trade_close * 100.0
         resultData['TryCnt'] = TryCnt
         resultData['SuccessCnt'] = SuccessCnt
         resultData['FailCnt'] = FailCnt
         ResultList.append(resultData)
-        for idx, row in result_df.iterrows():
-            print(idx, " ", row['Total_Money'], " ", row['Cum_Ror'])
+
 
 print("\n\n--------------------")
 TotalOri = 0
@@ -275,7 +293,8 @@ for result in ResultList:
     print("최초 금액: ", str(format(round(result['OriMoney']), ',')), " 최종 금액: ", str(format(round(result['FinalMoney']), ',')))
     print("수익률:", format(round(result['RevenueRate'], 2), ','), "%")
     print("단순 보유 수익률:", format(round(result['OriRevenueHold'], 2), ','), "%")
-    print("MDD:", round(result['MDD'], 2), "%")
+    print("MDD (일일 마감 기준):", round(result['MDD'], 2), "%")
+    print("MDD (거래 종료 기준):", round(result['TradeMDD'], 2), "%")
     if result['TryCnt'] > 0:
         print("성공:", result['SuccessCnt'], " 실패:", result['FailCnt'], " -> 승률: ", round(result['SuccessCnt'] / result['TryCnt'] * 100.0, 2), "%")
     TotalHoldRevenue += result['OriRevenueHold']
@@ -296,7 +315,10 @@ if len(ResultList) > 0:
     result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
     result_df.index = pd.to_datetime(result_df.index)
 
-    # 추가: 월별 통계 계산
+    trade_drawdown_df = pd.DataFrame(g_trade_drawdown_history, columns=['date', 'Trade_Drawdown']).set_index('date')
+    if not trade_drawdown_df.empty:
+        trade_drawdown_df['Trade_MDD'] = trade_drawdown_df['Trade_Drawdown'].cummin()
+
     monthly_stats = result_df.resample('ME').agg({
         'Total_Money': ['first', 'last']
     })
@@ -310,7 +332,6 @@ if len(ResultList) > 0:
     monthly_stats['수익률 (%)'] = monthly_stats['수익률 (%)'].round(2)
     monthly_stats['잔액 (KRW)'] = monthly_stats['잔액 (KRW)'].round(2)
 
-    # 추가: 년도별 통계 계산
     yearly_stats = result_df.resample('YE').agg({
         'Total_Money': ['first', 'last']
     })
@@ -324,32 +345,54 @@ if len(ResultList) > 0:
     yearly_stats.columns = ['수익률 (%)', '잔액 (KRW)', '거래 횟수']
     yearly_stats['수익률 (%)'] = yearly_stats['수익률 (%)'].round(2)
     yearly_stats['잔액 (KRW)'] = yearly_stats['잔액 (KRW)'].round(2)
-    yearly_stats.index = yearly_stats.index.strftime('%Y')  # 인덱스를 연도(YYYY)로 포맷
+    yearly_stats.index = yearly_stats.index.strftime('%Y')
 
-    fig, axs = plt.subplots(2, 1, figsize=(10, 10))
-    axs[0].plot(result_df['Cum_Ror'] * 100, label='Strategy (Daily)')
+    fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    axs[0].plot(result_df['Cum_Ror'] * 100, label='Strategy (Daily)', color='black')
     axs[0].set_ylabel('Cumulative Return (%)')
     axs[0].set_title('Return Comparison Chart')
-    axs[0].legend()
-    axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD')
-    axs[1].plot(result_df.index, result_df['Drawdown'] * 100, label='Drawdown')
+    axs[0].legend(loc='upper left')
+
+    axs[1].plot(result_df.index, result_df['Drawdown'] * 100, label='Drawdown (Daily Close)', color='lightblue', alpha=0.8)
+    axs[1].fill_between(result_df.index, result_df['Drawdown'] * 100, 0, color='lightblue', alpha=0.3)
+    axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD (Daily Close)', color='blue', linestyle='--')
+
+    if not trade_drawdown_df.empty:
+        axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_Drawdown'], label='Drawdown (Trade Close)', color='lightcoral', linestyle='-')
+        axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_MDD'], label='MDD (Trade Close)', color='red', linestyle='--')
+
     axs[1].set_ylabel('Drawdown (%)')
     axs[1].set_title('Drawdown Comparison Chart')
-    axs[1].legend()
+    axs[1].legend(loc='lower left')
     plt.tight_layout()
     plt.show()
-        
+    
     TotalOri = result_df['Total_Money'].iloc[1]
     TotalFinal = result_df['Total_Money'].iloc[-1]
-    TotalMDD = result_df['MaxDrawdown'].min() * 100.0
+    TotalMDD_daily = result_df['MaxDrawdown'].min() * 100.0
+    TotalMDD_trade = g_mdd_on_trade_close * 100.0
+    
     print("---------- 총 결과 ----------")
-    print("최초 금액:", str(format(round(TotalOri), ',')), " 최종 금액:", str(format(round(TotalFinal), ',')), "\n수익률:", round(((TotalFinal - TotalOri) / TotalOri) * 100, 2), "% (단순보유수익률:", round(TotalHoldRevenue / InvestCnt, 2), "%) 평균 MDD:", round(TotalMDD, 2), "%")
-    # CAGR 계산
+    summary_data = {
+        "최초 금액": f"{format(round(TotalOri), ',')} KRW",
+        "최종 금액": f"{format(round(TotalFinal), ',')} KRW",
+        "총 수익률": f"{round(((TotalFinal - TotalOri) / TotalOri) * 100, 2)}%",
+        "단순 보유 수익률": f"{round(TotalHoldRevenue / InvestCnt, 2)}%",
+        "MDD (일일 마감 기준)": f"{round(TotalMDD_daily, 2)}%",
+        "MDD (거래 종료 기준)": f"{round(TotalMDD_trade, 2)}%"
+    }
+    for key, value in summary_data.items():
+        print(f"{key}: {value}")
+        
     start_date = pd.to_datetime(FirstDateStr)
     end_date = result_df.index[-1]
     years = (end_date - start_date).days / 365.25
-    CAGR = (pow((TotalFinal / TotalOri), (1 / years)) - 1) * 100
-    print("CAGR(연복리수익률):", round(CAGR, 2), "%")
+    if years > 0:
+        CAGR = (pow((TotalFinal / TotalOri), (1 / years)) - 1) * 100
+        print("CAGR(연복리수익률):", round(CAGR, 2), "%")
+        
     print("\n---------- 월별 통계 ----------")
     print(monthly_stats.to_string())
     print("\n---------- 년도별 통계 ----------")

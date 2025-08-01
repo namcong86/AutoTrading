@@ -40,12 +40,20 @@ ACCOUNT_LIST = [
     }
 ]
 
-# 투자 종목: DOGE, 1000PEPE - 50:50 비중
+# ==============================================================================
+# <<< 코드 수정: 투자 종목을 테스트 파일과 동일하게 7종목으로 변경 >>>
+# ==============================================================================
 INVEST_COIN_LIST = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.5},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.25},
-    {'ticker': '1000BONK/USDT', 'rate': 0.25}
+    {'ticker': 'DOGE/USDT', 'rate': 0.25},
+    {'ticker': 'ADA/USDT',  'rate': 0.125},
+    {'ticker': 'XLM/USDT', 'rate': 0.125},
+    {'ticker': 'XRP/USDT', 'rate': 0.125},
+    {'ticker': 'HBAR/USDT', 'rate': 0.125},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.125}, # 바이낸스 티커 형식 유지
+    {'ticker': '1000BONK/USDT', 'rate': 0.125}  # 바이낸스 티커 형식 유지
 ]
+# ==============================================================================
+
 
 INVEST_RATE = 0.999
 FEE = 0.001
@@ -61,7 +69,7 @@ def execute_trading_logic(account_info):
     set_leverage = account_info['leverage']
 
     # 알림 첫문구 설정
-    first_String = f"[3.Binance {account_name}] DOGE+PEPE {set_leverage}배 "
+    first_String = f"[3.Binance {account_name}] 7종목 {set_leverage}배 "
 
     # 바이낸스 객체 생성
     try:
@@ -76,12 +84,11 @@ def execute_trading_logic(account_info):
         telegram_alert.SendMessage(f"[{account_name}] ccxt 객체 생성 실패. 이 계정을 건너뜁니다.")
         return
 
-    # --- [수정] 계정별 데이터 파일 경로 설정 ---
     pcServerGb = socket.gethostname()
     if pcServerGb == "AutoBotCong":
-        botdata_file_path = f"/var/AutoBot/json/BinanceF_DOGE_PEPE_Data_{account_name}.json"
+        botdata_file_path = f"/var/AutoBot/json/BinanceF_7COIN_Data_{account_name}.json"
     else:
-        botdata_file_path = f"./BinanceF_DOGE_PEPE_Data_{account_name}.json"
+        botdata_file_path = f"./BinanceF_7COIN_Data_{account_name}.json"
 
     try:
         with open(botdata_file_path, 'r') as f:
@@ -103,8 +110,8 @@ def execute_trading_logic(account_info):
         start_msg = f"{first_String} 시작"
         telegram_alert.SendMessage(start_msg)
 
-    # --- 사이클 기반 투자 기준금 설정 로직 ---
     cycle_investment_base = 0
+    all_positions = []
     try:
         balance_check = binanceX.fetch_balance(params={"type": "future"})
         time.sleep(0.1)
@@ -153,7 +160,6 @@ def execute_trading_logic(account_info):
                 unrealizedProfit = float(pos['unrealizedProfit'])
                 break
 
-        # --- 지표 계산: 백테스팅 파일 기준 ---
         df = myBinance.GetOhlcv(binanceX, coin_ticker, '1d')
         df['value'] = df['close'] * df['volume']
         period = 14
@@ -179,41 +185,60 @@ def execute_trading_logic(account_info):
         now_price = myBinance.GetCoinNowPrice(binanceX, coin_ticker)
         params = {'positionSide': 'LONG'}
 
-        # --- 매도 조건 (백테스팅 파일 기준) ---
         if abs(amt_b) > 0:
+            # --- 매도 조건 (백테스팅 파일 기준) ---
             RevenueRate = (unrealizedProfit / (cycle_investment_base * coin_data['rate'])) * 100.0 if (cycle_investment_base * coin_data['rate']) > 0 else 0
 
             def is_doji_candle(open_price, close_price, high_price, low_price):
                 candle_range = high_price - low_price
-                if candle_range == 0:
-                    return False
+                if candle_range == 0: return False
                 gap = abs(open_price - close_price)
-                return (gap / candle_range) <= 0.01
+                return (gap / candle_range) <= 0.1
 
+            # 개별 조건들 정의
             is_doji_1 = is_doji_candle(df['open'].iloc[-2], df['close'].iloc[-2], df['high'].iloc[-2], df['low'].iloc[-2])
             is_doji_2 = is_doji_candle(df['open'].iloc[-3], df['close'].iloc[-3], df['high'].iloc[-3], df['low'].iloc[-3])
+            cond_doji = is_doji_1 and is_doji_2
 
-            sell_condition_triggered = False
-            cond1 = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
-            cond2 = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
-            cond3 = (RevenueRate < 0)
-            not_cond = not (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
+            cond_fall_pattern = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
+            cond_2_neg_candle = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
+            cond_loss = (RevenueRate < 0)
+            cond_not_rising = not (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
 
-            if (cond1 or cond2 or cond3) and not_cond:
-                sell_condition_triggered = True
-
-            if (is_doji_1 and is_doji_2):
-                sell_condition_triggered = True
+            original_sell_cond = (cond_fall_pattern or cond_2_neg_candle or cond_loss) and cond_not_rising
             
-            sell = sell_condition_triggered
+            sell_condition_triggered = original_sell_cond or cond_doji
             
+            # ==============================================================================
+            # <<< 코드 수정: Main 계정에서만 조건별 True/False 알림 전송 >>>
+            # ==============================================================================
+            if account_name == "Main":
+                alert_msg = (
+                    f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
+                    f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
+                    f"▶ 최종 매도 결정: {sell_condition_triggered}\n"
+                    f"--------------------\n"
+                    f"[기본 매도 조건: {original_sell_cond}]\n"
+                    f" ㄴ하락패턴: {cond_fall_pattern}\n"
+                    f" ㄴ2연속음봉: {cond_2_neg_candle}\n"
+                    f" ㄴ손실중: {cond_loss}\n"
+                    f" ㄴ(AND)상승추세아님: {cond_not_rising}\n"
+                    f"[추가 매도 조건]\n"
+                    f" ㄴ2연속도지: {cond_doji}"
+                )
+                telegram_alert.SendMessage(alert_msg)
+            # ==============================================================================
+
             if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
-                sell = False
+                sell_condition_triggered = False
 
-            if sell:
+            if sell_condition_triggered:
                 try:
-                    binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
-                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT)"
+                    # ==============================================================================
+                    # <<< 코드 수정: 실제 매도 주문 주석 처리 >>>
+                    # binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
+                    # ==============================================================================
+                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT) ※ 테스트 모드: 주문 실행 안 됨"
                     print(exec_msg)
                     telegram_alert.SendMessage(exec_msg)
                     BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
@@ -223,46 +248,66 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] 매도 주문 실패 for {coin_ticker}: {e}")
         
-        # ==============================================================================
-        # <<< 코드 수정: 백테스팅 파일의 매수 조건으로 완전 교체 (MACD 조건 없음) >>>
-        # ==============================================================================
         else:
-            prev_day_change = df['change'].iloc[-2]
-            no_sudden_surge = prev_day_change < 0.5
+            # --- 매수 조건 (백테스팅 파일 기준) ---
+            
+            # 개별 조건들 정의
+            cond_no_surge = df['change'].iloc[-2] < 0.5
             
             is_above_200ma = df['close'].iloc[-2] > df['200ma'].iloc[-2]
-            
-            ma_50_condition = True 
+            cond_ma_50 = True 
             if is_above_200ma:
-                ma_50_condition = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
+                cond_ma_50 = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
 
-            # 백테스팅 파일의 매수 조건을 그대로 적용
+            cond_2_pos_candle = df['open'].iloc[-2] < df['close'].iloc[-2] and df['open'].iloc[-3] < df['close'].iloc[-3]
+            cond_price_up = df['close'].iloc[-3] < df['close'].iloc[-2] and df['high'].iloc[-3] < df['high'].iloc[-2]
+            cond_7ma_up = df['7ma'].iloc[-3] < df['7ma'].iloc[-2]
+            cond_30ma_slope = df['30ma_slope'].iloc[-2] > -2
+            cond_rsi_ma_up = df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2]
+            cond_20ma_up = df['20ma'].iloc[-3] <= df['20ma'].iloc[-2]
+            
             buy = (
-                df['open'].iloc[-2] < df['close'].iloc[-2] and
-                df['open'].iloc[-3] < df['close'].iloc[-3] and
-                df['close'].iloc[-3] < df['close'].iloc[-2] and
-                df['high'].iloc[-3] < df['high'].iloc[-2] and
-                df['7ma'].iloc[-3] < df['7ma'].iloc[-2] and
-                df['30ma_slope'].iloc[-2] > -2 and
-                df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and
-                ma_50_condition and
-                df['20ma'].iloc[-3] <= df['20ma'].iloc[-2] and
-                no_sudden_surge
+                cond_2_pos_candle and
+                cond_price_up and
+                cond_7ma_up and
+                cond_30ma_slope and
+                cond_rsi_ma_up and
+                cond_ma_50 and
+                cond_20ma_up and
+                cond_no_surge
             )
             
+            # ==============================================================================
+            # <<< 코드 수정: Main 계정에서만 조건별 True/False 알림 전송 >>>
+            # ==============================================================================
+            if account_name == "Main":
+                alert_msg = (
+                    f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
+                    f"- 포지션 없음\n\n"
+                    f"▶ 최종 매수 결정: {buy}\n"
+                    f"--------------------\n"
+                    f" 1. 2연속 양봉: {cond_2_pos_candle}\n"
+                    f" 2. 전일 종가/고가 상승: {cond_price_up}\n"
+                    f" 3. 7ma 상승: {cond_7ma_up}\n"
+                    f" 4. 30ma 기울기 > -2: {cond_30ma_slope}\n"
+                    f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
+                    f" 6. 50ma 조건 충족: {cond_ma_50}\n"
+                    f" 7. 20ma 상승: {cond_20ma_up}\n"
+                    f" 8. 급등 아님: {cond_no_surge}"
+                )
+                telegram_alert.SendMessage(alert_msg)
+            # ==============================================================================
+
             if buy:
                 if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                     
-                    # 사이클 기반 투자금 계산 로직
                     total_coin_count = len(INVEST_COIN_LIST)
                     num_open_positions = len(all_positions)
 
                     if num_open_positions == (total_coin_count - 1):
                         InvestMoney = current_usdt_balance
-                        print(f"[{account_name}] >>> 마지막 코인({coin_ticker}) 진입: 모든 가용 현금({InvestMoney:.2f})을 사용합니다.")
                     else:
                         InvestMoney = cycle_investment_base * INVEST_RATE * coin_data['rate']
-                        print(f"[{account_name}] {coin_ticker} 매수 조건 충족! 투자금 계산 -> 기준금: {cycle_investment_base:.2f}, 비율: {coin_data['rate']}, 최종 투자금: {InvestMoney:.2f} USDT")
 
                     BuyMoney = InvestMoney * (1.0 - FEE * set_leverage)
                     cap = df['value_ma'].iloc[-2] / 10
@@ -273,26 +318,31 @@ def execute_trading_logic(account_info):
                     try:
                         binanceX.set_margin_mode('cross', market_symbol)
                         binanceX.set_leverage(set_leverage, market_symbol)
-                        print(f"[{account_name}] {market_symbol} 마진모드: cross, 레버리지: {set_leverage} 설정 완료")
                     except Exception as e:
                         print(f"[{account_name}] 마진모드/레버리지 세팅 오류: {e}")
 
                     try:
-                        binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
+                        # ==============================================================================
+                        # <<< 코드 수정: 실제 매수 주문 주석 처리 >>>
+                        # binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
+                        # ==============================================================================
                         BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                         BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                         with open(botdata_file_path, 'w') as f:
                             json.dump(BotDataDict, f, indent=4)
-                        exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매수!!"
+                        exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매수!! ※ 테스트 모드: 주문 실행 안 됨"
                         print(exec_msg)
                         telegram_alert.SendMessage(exec_msg)
                     except Exception as e:
                         print(f"[{account_name}] 매수 주문 실패 for {coin_ticker}: {e}")
             else:
                 if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                    warn_msg = f"{first_String} {coin_ticker} : 조건 만족하지 않아 현금 보유 합니다!"
-                    print(warn_msg)
-                    telegram_alert.SendMessage(warn_msg)
+                    if account_name == "Main": # 조건 불만족 메시지는 Main 계정에서만 발송
+                        warn_msg = f"{first_String} {coin_ticker} : 조건 만족하지 않아 현금 보유 합니다!"
+                        print(warn_msg)
+                        telegram_alert.SendMessage(warn_msg)
+
+                    # 날짜 체크는 모든 계정에서 수행
                     BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                     with open(botdata_file_path, 'w') as f:
                         json.dump(BotDataDict, f, indent=4)

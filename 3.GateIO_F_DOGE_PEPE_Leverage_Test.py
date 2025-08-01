@@ -25,9 +25,6 @@ import pandas as pd
 import datetime
 import matplotlib.pyplot as plt
 
-plt.rcParams['font.family'] = 'Malgun Gothic'
-plt.rcParams['axes.unicode_minus'] = False
-
 # 시간 변환을 위한 헬퍼 함수 (선택 사항)
 def ms_to_utc_str(timestamp_ms):
     return datetime.datetime.utcfromtimestamp(timestamp_ms / 1000).strftime('%Y-%m-%d %H:%M:%S')
@@ -135,8 +132,8 @@ InvestCoinList = [
     {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 12, 'day': 1}},
+    {'ticker': 'BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 12, 'day': 1}},
     
 ]
 
@@ -227,6 +224,8 @@ for date in common_dates:
     current_data = {ticker: dfs[ticker].loc[date] for ticker in valid_tickers if date in dfs[ticker].index}
     if len(current_data) != len(valid_tickers):
         continue
+    
+    sold_today_tickers = set()
 
     # 1. 보유 중인 코인의 매도 조건 확인
     for ticker in list(positions.keys()):
@@ -274,7 +273,9 @@ for date in common_dates:
                     CoinStats[ticker]['SuccessCnt'] += 1
                 else:
                     CoinStats[ticker]['FailCnt'] += 1
+
                 del positions[ticker]
+                sold_today_tickers.add(ticker)
                 month_key = date.strftime('%Y-%m')
                 MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
     
@@ -285,7 +286,7 @@ for date in common_dates:
     buy_signals_today_specs = []
     for coin_candidate_spec in InvestCoinList:
         ticker = coin_candidate_spec['ticker']
-        if ticker not in positions and ticker in dfs and date in dfs[ticker].index:
+        if ticker not in positions and ticker not in sold_today_tickers and ticker in dfs and date in dfs[ticker].index:
             df_coin = dfs[ticker]
             i = df_coin.index.get_loc(date)
 
@@ -399,23 +400,21 @@ cash_only_df = pd.DataFrame(cash_only_equity_list).set_index('date')
 modified_df = pd.DataFrame(modified_equity_list).set_index('date')
 result_df = result_df.join(cash_only_df).join(modified_df)
 
-result_df['Ror'] = result_df['Total_Equity'].pct_change().fillna(0) + 1
-result_df['Cum_Ror'] = result_df['Ror'].cumprod()
-result_df['Highwatermark'] = result_df['Cum_Ror'].cummax()
-result_df['Drawdown'] = (result_df['Cum_Ror'] / result_df['Highwatermark']) - 1
-result_df['MaxDrawdown'] = result_df['Drawdown'].cummin()
+def calculate_mdd(df, column_name):
+    # 열 이름 충돌을 피하기 위해 접두사 사용
+    prefix = column_name.replace('_Equity', '')
+    ror_col, cum_ror_col, hw_col, dd_col, mdd_col = f'{prefix}_Ror', f'{prefix}_Cum_Ror', f'{prefix}_Highwatermark', f'{prefix}_Drawdown', f'{prefix}_MaxDrawdown'
+    
+    df[ror_col] = df[column_name].pct_change().fillna(0) + 1
+    df[cum_ror_col] = df[ror_col].cumprod()
+    df[hw_col] = df[cum_ror_col].cummax()
+    df[dd_col] = (df[cum_ror_col] / df[hw_col]) - 1
+    df[mdd_col] = df[dd_col].cummin()
+    return df
 
-result_df['Cash_Only_Ror'] = result_df['Cash_Only_Equity'].pct_change().fillna(0) + 1
-result_df['Cash_Only_Cum_Ror'] = result_df['Cash_Only_Ror'].cumprod()
-result_df['Cash_Only_Highwatermark'] = result_df['Cash_Only_Cum_Ror'].cummax()
-result_df['Cash_Only_Drawdown'] = (result_df['Cash_Only_Cum_Ror'] / result_df['Cash_Only_Highwatermark']) - 1
-result_df['Cash_Only_MaxDrawdown'] = result_df['Cash_Only_Drawdown'].cummin()
-
-result_df['Modified_Ror'] = result_df['Modified_Equity'].pct_change().fillna(0) + 1
-result_df['Modified_Cum_Ror'] = result_df['Modified_Ror'].cumprod()
-result_df['Modified_Highwatermark'] = result_df['Modified_Cum_Ror'].cummax()
-result_df['Modified_Drawdown'] = (result_df['Modified_Cum_Ror'] / result_df['Modified_Highwatermark']) - 1
-result_df['Modified_MaxDrawdown'] = result_df['Modified_Drawdown'].cummin()
+result_df = calculate_mdd(result_df, 'Total_Equity')
+result_df = calculate_mdd(result_df, 'Cash_Only_Equity')
+result_df = calculate_mdd(result_df, 'Modified_Equity')
 
 result_df.index = pd.to_datetime(result_df.index)
 
@@ -479,39 +478,62 @@ yearly_stats['수익률 (%)'] = yearly_stats['수익률 (%)'].round(2)
 yearly_stats['잔액 (USDT)'] = yearly_stats['잔액 (USDT)'].round(2)
 yearly_stats.index = yearly_stats.index.strftime('%Y')
 
+# ==============================================================================
+# <<< 코드 수정: 총 합계 라인 추가 >>>
+# ==============================================================================
 print("\n---------- 코인별 거래 통계 ----------")
+total_success_all = 0
+total_fail_all = 0
+
 for ticker_stat in valid_tickers:
     stats = CoinStats[ticker_stat]
     success = stats['SuccessCnt']
     fail = stats['FailCnt']
+    
+    total_success_all += success
+    total_fail_all += fail
+    
     total_trades = success + fail
     win_rate = (success / total_trades * 100) if total_trades > 0 else 0
     print(f"{ticker_stat} >>> 성공: {success} 실패: {fail} -> 승률: {round(win_rate, 2)}%")
+
+total_trades_all = total_success_all + total_fail_all
+overall_win_rate = (total_success_all / total_trades_all * 100) if total_trades_all > 0 else 0
+print(f"총 합계 >>> 성공: {total_success_all} 실패: {total_fail_all} -> 승률: {round(overall_win_rate, 2)}%")
 print("------------------------------")
+# ==============================================================================
+
 
 # ==============================================================================
-# <<< 코드 수정: 3가지 MDD를 모두 차트에 표시 >>>
+# 차트 제목과 범례를 영문으로 변경
 # ==============================================================================
 fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-initial_equity_val = result_df['Total_Equity'].iloc[0]
+plt.style.use('seaborn-v0_8-whitegrid')
 
-# 상단 차트: 누적 수익률
-axs[0].plot(result_df.index, result_df['Cum_Ror'] * 100, label=f'Strategy ({leverage}x Leverage)')
+# Upper Chart: Cumulative Return
+axs[0].plot(result_df.index, result_df['Total_Cum_Ror'] * 100, label=f'Strategy ({leverage}x Leverage)', color='black')
 axs[0].set_ylabel('Cumulative Return (%)')
-axs[0].set_title('Return Comparison Chart')
-axs[0].legend()
+axs[0].set_title('Return & Drawdown Comparison')
+axs[0].legend(loc='upper left')
 axs[0].grid(True)
 
-# 하단 차트: 3가지 방식의 최대 낙폭(MDD) 비교
-axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD 1 (일일 시가평가)', alpha=0.9)
-axs[1].plot(result_df.index, result_df['Cash_Only_MaxDrawdown'] * 100, label='MDD 2 (포지션 없을 시 잔액)', alpha=0.7)
-axs[1].plot(result_df.index, result_df['Modified_MaxDrawdown'] * 100, label='MDD 3 (포지션 원금 + 잔액)', alpha=0.7)
-axs[1].fill_between(result_df.index, result_df['Drawdown'] * 100, 0, color='red', alpha=0.1, label='Drawdown (일일 시가평가)')
+# Lower Chart: Drawdown & MDD Comparison (3 Methods)
+# MDD 1 (Blue)
+axs[1].fill_between(result_df.index, result_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='Drawdown 1 (Daily Mark-to-Market)')
+axs[1].plot(result_df.index, result_df['Total_MaxDrawdown'] * 100, label='MDD 1', color='blue', linestyle=':')
+
+# MDD 2 (Green)
+axs[1].plot(result_df.index, result_df['Cash_Only_Drawdown'] * 100, label='Drawdown 2 (Cash Balance When Flat)', color='mediumseagreen', linestyle='-')
+axs[1].plot(result_df.index, result_df['Cash_Only_MaxDrawdown'] * 100, label='MDD 2', color='darkgreen', linestyle=':')
+
+# MDD 3 (Orange)
+axs[1].plot(result_df.index, result_df['Modified_Drawdown'] * 100, label='Drawdown 3 (Principal + Cash)', color='orange', linestyle='-')
+axs[1].plot(result_df.index, result_df['Modified_MaxDrawdown'] * 100, label='MDD 3', color='darkorange', linestyle=':')
 
 
 axs[1].set_ylabel('Drawdown (%)')
-axs[1].set_title('3가지 방식 최대 낙폭(MDD) 비교')
-axs[1].legend()
+axs[1].set_title('Drawdown & MDD Comparison (3 Methods)')
+axs[1].legend(loc='lower left')
 axs[1].grid(True)
 
 plt.xlabel('Date')
@@ -526,7 +548,7 @@ if not result_df.empty:
     TotalFinal = result_df['Total_Equity'].iloc[-1]
     
     # 3가지 MDD 계산
-    TotalMDD = result_df['MaxDrawdown'].min() * 100.0
+    TotalMDD = result_df['Total_MaxDrawdown'].min() * 100.0
     CashOnlyMDD = result_df['Cash_Only_MaxDrawdown'].min() * 100.0
     ModifiedMDD = result_df['Modified_MaxDrawdown'].min() * 100.0
 
