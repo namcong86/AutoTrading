@@ -123,14 +123,25 @@ fee = 0.001
 
 # 투자 종목 설정 (Gate.io와 동일하게, 티커는 바이낸스에 맞게 수정)
 InvestCoinList = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.25, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    # 바이낸스 티커 형식에 맞게 PEPE와 BONK를 수정
-    {'ticker': '1000PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': '1000BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+
+    # {'ticker': 'DOGE/USDT', 'rate': 0.3, 'start_date': {'year': 2022, 'month': 6, 'day': 1}},
+    # {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2022, 'month': 6, 'day': 1}},
+    # {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date': {'year': 2022, 'month': 6, 'day': 1}},
+    # {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date': {'year': 2022, 'month': 6, 'day': 1}},
+    # {'ticker': 'HBAR/USDT', 'rate': 0.2, 'start_date': {'year': 2022, 'month': 6, 'day': 1}},
+    # {'ticker': '1000PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    # {'ticker': '1000BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+
+    {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000SHIB/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
 
 
@@ -402,20 +413,47 @@ cash_only_df = pd.DataFrame(cash_only_equity_list).set_index('date')
 modified_df = pd.DataFrame(modified_equity_list).set_index('date')
 result_df = result_df.join(cash_only_df).join(modified_df)
 
+# ==============================================================================
+# <<< 코드 수정: 안정성을 위해 calculate_mdd 함수 개선 >>>
+# ==============================================================================
 def calculate_mdd(df, column_name):
     prefix = column_name.replace('_Equity', '')
     ror_col, cum_ror_col, hw_col, dd_col, mdd_col = f'{prefix}_Ror', f'{prefix}_Cum_Ror', f'{prefix}_Highwatermark', f'{prefix}_Drawdown', f'{prefix}_MaxDrawdown'
     
+    # 데이터가 비어 있거나 행이 하나뿐인 경우 처리
+    if df.empty or len(df) < 2:
+        df[ror_col] = 1.0
+        df[cum_ror_col] = df[column_name] / df[column_name].iloc[0] if not df.empty else 1.0
+        df[hw_col] = df[cum_ror_col] if not df.empty else 1.0
+        df[dd_col] = 0.0
+        df[mdd_col] = 0.0
+        return df
+
     df[ror_col] = df[column_name].pct_change().fillna(0) + 1
     df[cum_ror_col] = df[ror_col].cumprod()
     df[hw_col] = df[cum_ror_col].cummax()
     df[dd_col] = (df[cum_ror_col] / df[hw_col]) - 1
     df[mdd_col] = df[dd_col].cummin()
     return df
+# ==============================================================================
+
 
 result_df = calculate_mdd(result_df, 'Total_Equity')
 result_df = calculate_mdd(result_df, 'Cash_Only_Equity')
 result_df = calculate_mdd(result_df, 'Modified_Equity')
+
+# ==============================================================================
+# <<< 코드 추가: 주간/월간 MDD 계산 >>>
+# ==============================================================================
+# 주간 잔액 (매주 일요일 종가 기준)
+weekly_equity_df = result_df['Total_Equity'].resample('W-SUN').last().to_frame()
+weekly_equity_df = calculate_mdd(weekly_equity_df, 'Total_Equity')
+
+# 월간 잔액 (매월 말일 종가 기준)
+monthly_equity_for_mdd_df = result_df['Total_Equity'].resample('ME').last().to_frame()
+monthly_equity_for_mdd_df = calculate_mdd(monthly_equity_for_mdd_df, 'Total_Equity')
+# ==============================================================================
+
 
 result_df.index = pd.to_datetime(result_df.index)
 
@@ -532,6 +570,12 @@ if not result_df.empty:
     TotalMDD = result_df['Total_MaxDrawdown'].min() * 100.0
     CashOnlyMDD = result_df['Cash_Only_MaxDrawdown'].min() * 100.0
     ModifiedMDD = result_df['Modified_MaxDrawdown'].min() * 100.0
+    
+    # ==============================================================================
+    # <<< 코드 추가: 주간/월간 MDD 값 추출 및 결과 출력 >>>
+    # ==============================================================================
+    WeeklyMDD = weekly_equity_df['Total_MaxDrawdown'].min() * 100.0 if not weekly_equity_df.empty else 0
+    MonthlyMDD = monthly_equity_for_mdd_df['Total_MaxDrawdown'].min() * 100.0 if not monthly_equity_for_mdd_df.empty else 0
 
     print("\n---------- 총 결과 ----------")
     print(f"최초 금액: {format(round(TotalOri), ',')} USDT, 최종 금액: {format(round(TotalFinal), ',')} USDT")
@@ -539,6 +583,10 @@ if not result_df.empty:
     print(f"MDD 1 (일일 시가평가 기준): {round(TotalMDD, 2)}%")
     print(f"MDD 2 (포지션 없을 시 잔액 기준): {round(CashOnlyMDD, 2)}%")
     print(f"MDD 3 (포지션 원금 + 잔액 기준): {round(ModifiedMDD, 2)}%")
+    print(f"MDD 4 (주간 잔액 기준): {round(WeeklyMDD, 2)}%")
+    print(f"MDD 5 (월간 잔액 기준): {round(MonthlyMDD, 2)}%")
+    # ==============================================================================
+    
     print("------------------------------")
     print("\n---------- 월별 통계 ----------")
     print(monthly_stats.to_string())
