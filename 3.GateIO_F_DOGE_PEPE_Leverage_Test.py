@@ -81,16 +81,17 @@ GateIO_AccessKey = "YOUR_GATEIO_API_KEY"
 GateIO_SecretKey = "YOUR_GATEIO_SECRET_KEY"
 exchange = ccxt.gateio({'apiKey': GateIO_AccessKey, 'secret': GateIO_SecretKey, 'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 InvestTotalMoney = 5000
-leverage = 7
+leverage = 3.8
 fee = 0.001
 InvestCoinList = [
 
-    # {'ticker': 'DOGE/USDT', 'rate': 0.25, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    # {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    # {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date':  {'year': 2021, 'month': 7, 'day': 1}},
-    # {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date':  {'year': 2021, 'month': 7, 'day': 1}},
-    # {'ticker': 'HBAR/USDT', 'rate': 0.15, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    # {'ticker': 'ETH/USDT',  'rate': 0.15, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.25, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date':  {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date':  {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'ETH/USDT',  'rate': 0.125, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'SOL/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 
     # {'ticker': 'DOGE/USDT', 'rate': 0.25, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     # {'ticker': 'ADA/USDT',  'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
@@ -100,17 +101,16 @@ InvestCoinList = [
     # {'ticker': 'PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     # {'ticker': 'BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
 
-    {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'SHIB/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': 'FLOKI/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-
+    # {'ticker': 'DOGE/USDT', 'rate': 0.18, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'ADA/USDT',  'rate': 0.16, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'XLM/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'XRP/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'HBAR/USDT', 'rate': 0.12, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    # {'ticker': 'PEPE/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'BONK/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    # {'ticker': 'SHIB/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    # {'ticker': 'FLOKI/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
 dfs = {}
 for coin_data in InvestCoinList:
@@ -167,7 +167,7 @@ for ticker in valid_tickers[1:]:
     common_dates = common_dates.intersection(set(dfs[ticker].index))
 common_dates = sorted(list(common_dates))
 cash_balance = InvestTotalMoney
-current_cycle_investment_base = InvestTotalMoney 
+current_cycle_investment_base = InvestTotalMoney
 positions = {}
 total_equity_list, cash_only_equity_list, modified_equity_list = [], [], []
 last_cash_only_equity = InvestTotalMoney
@@ -195,41 +195,41 @@ for date in common_dates:
         if i >= 2:
             df_coin = dfs[ticker]
             RevenueRate = ((current_price - entry_price) / entry_price * pos_leverage - fee) * 100.0
-            
+
             # 캔들 모양 정의
             def is_doji_candle(open_price, close_price, high_price, low_price):
                 candle_range = high_price - low_price
                 if candle_range == 0: return False
                 return (abs(open_price - close_price) / candle_range) <= 0.1
-            
+
             is_doji_1 = is_doji_candle(df_coin['open'].iloc[i-1], df_coin['close'].iloc[i-1], df_coin['high'].iloc[i-1], df_coin['low'].iloc[i-1])
             is_doji_2 = is_doji_candle(df_coin['open'].iloc[i-2], df_coin['close'].iloc[i-2], df_coin['high'].iloc[i-2], df_coin['low'].iloc[i-2])
-            
+
             # ==========================================================
             # ▼▼▼ 매도 조건 가독성 개선 ▼▼▼
             # ==========================================================
 
             # 조건 A-1: 하락 장악형 패턴 (전일봉이 전전일봉의 고점/저점 하회)
-            cond_sell_price_fall = (df_coin['high'].iloc[i-2] > df_coin['high'].iloc[i-1] and 
+            cond_sell_price_fall = (df_coin['high'].iloc[i-2] > df_coin['high'].iloc[i-1] and
                                     df_coin['low'].iloc[i-2] > df_coin['low'].iloc[i-1])
 
             # 조건 A-2: 이틀 연속 음봉
-            cond_sell_two_red = (df_coin['open'].iloc[i-1] > df_coin['close'].iloc[i-1] and 
+            cond_sell_two_red = (df_coin['open'].iloc[i-1] > df_coin['close'].iloc[i-1] and
                                  df_coin['open'].iloc[i-2] > df_coin['close'].iloc[i-2])
 
             # 조건 A-3: 현재 손실 중
             cond_sell_is_losing = (RevenueRate < 0)
 
             # 예외 조건: 강한 상승 추세일 경우 매도 보류 (RSI와 3일선 동시 상승)
-            except_sell_strong_up = (df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
+            except_sell_strong_up = (df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and
                                      df_coin['3ma'].iloc[i-2] < df_coin['3ma'].iloc[i-1])
 
             # 조건 B: 이틀 연속 도지 캔들 발생 (시장 방향성 불확실)
             cond_sell_dojis = (is_doji_1 and is_doji_2)
-            
+
             # 최종 매도 판단
             sell_main_condition = (cond_sell_price_fall or cond_sell_two_red or cond_sell_is_losing) and not except_sell_strong_up
-            
+
             if sell_main_condition or cond_sell_dojis:
                 cash_balance += margin * (1 + RevenueRate / 100.0)
                 log_msg = f"[사이클 {cycle_count}] {ticker} {date} >>> 매도: Exit {current_price:.8f}, 수익률 {RevenueRate:.2f}%, 현재 총자산 {cash_balance:.2f}"
@@ -240,9 +240,9 @@ for date in common_dates:
                 sold_today_tickers.add(ticker)
                 month_key = date.strftime('%Y-%m')
                 MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
-    
+
     if not positions: current_cycle_investment_base = cash_balance
-    
+
     # 2. 매수 신호 확인 및 실행
     buy_signals_today_specs = []
     for coin_candidate_spec in InvestCoinList:
@@ -256,10 +256,10 @@ for date in common_dates:
                 # ==========================================================
 
                 # 기본 조건 1: 이틀 연속 양봉이며, 가격과 고점이 상승하는 추세
-                cond_buy_two_green = (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and 
-                                      df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2])
+                cond_buy_two_green = (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and
+                                    df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2])
                 cond_buy_price_up = (df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
-                                     df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1])
+                                    df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1])
 
                 # 기본 조건 2: 단기 이평선(7, 20) 상승 추세
                 cond_buy_short_ma_up = (df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and
@@ -277,19 +277,48 @@ for date in common_dates:
                 # 필터링 조건 2: 200일선 위에 있을 경우, 추가 조건 확인
                 is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
                 filter_ma50_not_declining = True  # 기본값
+
+                cond_no_long_upper_shadow = True
+                cond_body_over_15_percent = True  # 기본값
+
                 
                 if is_above_200ma:
                     # 50일 이평선이 하락 추세가 아닐 것
                     filter_ma50_not_declining = (df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1])
+                    # ==========================================================
+                    # <<< 지난번에 추가한 윗꼬리 조건 >>>
+                    # ==========================================================
+                    prev_candle = df_coin.iloc[i-1]
+                    upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+                    body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+                    cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
+                    # ==========================================================
+
+                    # ==========================================================
+                    # <<< 이번에 요청하신 신규 매수 조건 추가 >>>
+                    # ==========================================================
+                    # 1. 캔들의 전체 범위(고가-저가) 계산
+                    candle_range = prev_candle['high'] - prev_candle['low']
+                    # 2. 캔들의 몸통(시가-종가 절대값) 계산
+                    candle_body = abs(prev_candle['open'] - prev_candle['close'])
+                    # 3. 최종 조건: 몸통이 범위의 15% 이상일 것 (0으로 나누기 방지)
+                    if candle_range > 0:
+                        cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
+                    # ==========================================================
+
+
 
                 # 최종 매수 판단
-                if (cond_buy_two_green and 
-                    cond_buy_price_up and 
-                    cond_buy_short_ma_up and 
-                    cond_buy_mid_ma_stable and 
+                if (cond_buy_two_green and
+                    cond_buy_price_up and
+                    cond_buy_short_ma_up and
+                    cond_buy_mid_ma_stable and
                     cond_buy_rsi_up and
-                    filter_no_sudden_surge and 
-                    filter_ma50_not_declining):
+                    filter_no_sudden_surge and
+                    filter_ma50_not_declining and
+                    cond_no_long_upper_shadow and
+                    cond_body_over_15_percent
+                    ): # <<< 신규 조건 반영 >>>
                     buy_signals_today_specs.append(coin_candidate_spec)
 
     if buy_signals_today_specs:
@@ -302,7 +331,7 @@ for date in common_dates:
                 cash_balance -= investment_for_this_coin
                 log_msg = f"[사이클 {cycle_count}] {ticker} {date} >>> 매수: Entry {buy_price:.8f}, 투자금 {investment_for_this_coin:.2f}, 현재 총자산 {cash_balance:.2f}"
                 trade_logs.append(log_msg)
-    
+
     # 3. 일일 자산 가치 계산 (이하 로직은 동일)
     daily_total_equity = cash_balance
     for ticker, position in positions.items():
@@ -375,7 +404,7 @@ class ChartApp(tk.Tk):
         # 필터 프레임
         filter_frame = ttk.LabelFrame(left_panel, text="로그 필터")
         filter_frame.pack(fill=tk.X, padx=5, pady=5)
-        
+
         ttk.Label(filter_frame, text="코인:").grid(row=0, column=0, padx=(5,2), pady=5, sticky='w')
         self.filter_ticker_var = tk.StringVar()
         self.filter_ticker_entry = ttk.Entry(filter_frame, textvariable=self.filter_ticker_var, width=15)
@@ -388,7 +417,7 @@ class ChartApp(tk.Tk):
 
         apply_button = ttk.Button(filter_frame, text="적용", command=self.apply_filters_and_sort)
         apply_button.grid(row=0, column=4, padx=5, pady=5)
-        
+
         clear_button = ttk.Button(filter_frame, text="초기화", command=self.clear_filters)
         clear_button.grid(row=0, column=5, padx=5, pady=5)
         self.filter_ticker_entry.bind('<Return>', lambda e: self.apply_filters_and_sort())
@@ -397,10 +426,10 @@ class ChartApp(tk.Tk):
         # 로그 트리뷰
         log_frame = ttk.Frame(left_panel)
         log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,5))
-        
+
         cols = ('Cycle', 'Ticker', 'DateTime', 'Type', 'Price', 'Detail')
         self.log_tree = ttk.Treeview(log_frame, columns=cols, show='headings')
-        
+
         # 컬럼 및 정렬 커맨드 설정
         for col in cols:
             self.log_tree.heading(col, text=col, command=lambda _col=col: self.sort_by_column(_col))
@@ -424,7 +453,7 @@ class ChartApp(tk.Tk):
         self.add_overall_tab()
         for ticker in valid_tickers:
             self.add_coin_tab(ticker)
-        
+
         # --- 이벤트 바인딩 및 초기화 ---
         self.tab_control.bind("<<NotebookTabChanged>>", self.on_tab_changed)
         self.log_tree.bind("<<TreeviewSelect>>", self.on_log_select)
@@ -434,28 +463,28 @@ class ChartApp(tk.Tk):
         # 1. 필터 적용
         ticker_filter = self.filter_ticker_var.get().upper()
         type_filter = self.filter_type_var.get()
-        
+
         current_tab_text = self.tab_control.tab(self.tab_control.select(), "text")
         tab_ticker_filter = None
         if current_tab_text != '📊 종합 결과':
             tab_ticker_filter = current_tab_text
 
         logs = self.all_trade_logs_parsed
-        
+
         if tab_ticker_filter:
             logs = [log for log in logs if log['ticker'] == tab_ticker_filter]
         if ticker_filter:
             logs = [log for log in logs if ticker_filter in log['ticker'].upper()]
         if type_filter:
             logs = [log for log in logs if log['type'] == type_filter]
-            
+
         self.currently_displayed_logs = logs
-        
+
         # 2. 현재 정렬 상태 유지
         if self.sort_info['col']:
             key_map = {'Cycle': 'cycle', 'Ticker': 'ticker', 'DateTime': 'datetime', 'Type': 'type', 'Price': 'price', 'Detail': 'detail'}
             sort_key = key_map.get(self.sort_info['col'])
-            
+
             # 데이터 타입에 맞는 정렬
             if sort_key in ['price', 'cycle']:
                  self.currently_displayed_logs.sort(key=lambda x: x[sort_key], reverse=self.sort_info['reverse'])
@@ -476,7 +505,7 @@ class ChartApp(tk.Tk):
         else:
             self.sort_info['col'] = col
             self.sort_info['reverse'] = False
-        
+
         self.apply_filters_and_sort() # 필터 상태를 유지하며 정렬
 
     def repopulate_log_tree(self):
@@ -519,14 +548,14 @@ class ChartApp(tk.Tk):
 
         current_tab_text = self.tab_control.tab(self.tab_control.select(), "text")
         ticker_key = 'overall' if current_tab_text == '📊 종합 결과' else current_tab_text
-        
+
         if ticker_key != 'overall' and ticker_key != log_ticker:
             for i, tab_id in enumerate(self.tab_control.tabs()):
                 if self.tab_control.tab(tab_id, "text") == log_ticker:
                     self.tab_control.select(i)
                     ticker_key = log_ticker
                     break
-        
+
         if ticker_key not in self.chart_artists: return
         artists = self.chart_artists[ticker_key]
         ax, canvas = artists['ax'], artists['canvas']
@@ -542,9 +571,9 @@ class ChartApp(tk.Tk):
                 print(f"차트 하이라이트 중 오류 발생: {e}")
                 return
 
-        self.highlight_plot = ax.plot(log_datetime, y_coord, 
-                                      marker='^' if log_type == '매수' else 'v', 
-                                      color='cyan', markersize=15, 
+        self.highlight_plot = ax.plot(log_datetime, y_coord,
+                                      marker='^' if log_type == '매수' else 'v',
+                                      color='cyan', markersize=15,
                                       markeredgecolor='black', zorder=10)[0]
         canvas.draw()
 
@@ -579,11 +608,11 @@ class ChartApp(tk.Tk):
         fig, canvas = self.create_chart_frame(overall_tab)
         axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
         fig.tight_layout(pad=3.0)
-        
+
         equity_line = result_df['Total_Cum_Ror'] * InvestTotalMoney
         axs[0].plot(equity_line.index, equity_line, label=f'Strategy ({leverage}x Leverage)', color='black')
         axs[0].set_yscale('log')
-        
+
         if not trade_df.empty:
             buy_trades = trade_df[trade_df['type'] == '매수']
             sell_trades = trade_df[trade_df['type'] == '매도']
@@ -594,16 +623,16 @@ class ChartApp(tk.Tk):
             buy_plot = axs[0].plot(buy_dates, buy_y, '^', color='green', markersize=6, label='Buy Signal')
             sell_plot = axs[0].plot(sell_dates, sell_y, 'v', color='red', markersize=6, label='Sell Signal')
             self.chart_artists['overall'] = {'fig': fig, 'canvas': canvas, 'ax': axs[0], 'buy_plot': buy_plot[0], 'sell_plot': sell_plot[0]}
-        
+
         axs[0].set_title('Overall Performance (Log Scale)', fontsize=12)
         axs[0].set_ylabel('Total Equity (USDT)')
         axs[0].grid(True, which='both', linestyle='--', linewidth=0.5)
         axs[0].legend()
         axs[0].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
-        
-        axs[1].fill_between(result_df.index, result_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='DD (Daily)')
-        axs[1].plot(result_df.index, result_df['Cash_Only_Drawdown'] * 100, label='DD (Cash When Flat)', color='mediumseagreen')
-        axs[1].plot(result_df.index, result_df['Modified_Drawdown'] * 100, label='DD (Principal + Cash)', color='orange')
+
+        axs[1].fill_between(result_df.index, result_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='DD (1)')
+        axs[1].plot(result_df.index, result_df['Cash_Only_Drawdown'] * 100, label='DD (2)', color='mediumseagreen')
+        axs[1].plot(result_df.index, result_df['Modified_Drawdown'] * 100, label='DD (3)', color='orange')
         axs[1].set_title('Drawdown (3 Methods)', fontsize=12)
         axs[1].set_ylabel('Drawdown (%)')
         axs[1].grid(True)
@@ -617,10 +646,10 @@ class ChartApp(tk.Tk):
         fig, canvas = self.create_chart_frame(coin_tab)
         axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
         fig.tight_layout(pad=3.0)
-        
+
         coin_df = dfs[ticker]
         coin_trades = trade_df[trade_df['ticker'] == ticker]
-        
+
         axs[0].plot(coin_df.index, coin_df['close'], label=f'{ticker} Price', color='black', alpha=0.8)
         if not coin_trades.empty:
             buy_trades = coin_trades[coin_trades['type'] == '매수']
@@ -644,10 +673,10 @@ class ChartApp(tk.Tk):
                 if trade_on_date['type'].iloc[0] == '매수': in_position = True
                 elif trade_on_date['type'].iloc[0] == '매도': in_position = False
             single_coin_equity.loc[date] = last_equity
-        
+
         single_coin_df = pd.DataFrame({'Total_Equity': single_coin_equity}).dropna()
         single_coin_df = calculate_mdd(single_coin_df, 'Total_Equity')
-        
+
         axs[1].fill_between(single_coin_df.index, single_coin_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='Drawdown')
         axs[1].plot(single_coin_df.index, single_coin_df['Total_MaxDrawdown'] * 100, label='MDD', color='blue', linestyle=':')
         axs[1].set_title('Individual Performance & MDD', fontsize=12)

@@ -18,25 +18,25 @@ ACCOUNT_LIST = [
         "name": "Main",
         "access_key": "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J",  # 메인 계정 Access Key
         "secret_key": "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL",  # 메인 계정 Secret Key
-        "leverage": 3  # 메인 계정 레버리지
+        "leverage": 2  # 메인 계정 레버리지
     },
     {
         "name": "Sub1",
         "access_key": "qXIylTz7Qh2nrVh1kPJQTXX9Fm0G8Tot86Lgqzm652mTdnEj7DrbJO6KT261fQJk",
         "secret_key": "DarhAG7HjLW7OJBe814q42io5UOYB9dzhwQlbijuz5m5gN9mREA5wfbeGT7H0PwI",
-        "leverage": 5  # 서브 계정 1 레버리지
+        "leverage": 3  # 서브 계정 1 레버리지
     },
     {
         "name": "Sub2",
         "access_key": "HbC79j9E1f8fZUXe7YK5DcgOxG3rcgbd1lSt3r17BJmqga5EbHVbNwIux1Rm6K3q",
         "secret_key": "lM3RhPOesjwyLLpECpwUuijOZLUpVZEqdRKDmRSPE6WbadQltXRtNIrfY6rnRCMg",
-        "leverage": 7  # 서브 계정 2 레버리지
+        "leverage": 5  # 서브 계정 2 레버리지
     },
     {
         "name": "Sub3",
         "access_key": "EYNqzB1k2echWMLnmUSZWf1O03U8fiPUMQX9OHL83eeWGotYgoq1dJaDQYleh8Wa",
         "secret_key": "PW2cxdCPGSJXMhiEgT2aABt0NikxOntPVOzMxgAYkWe4DxSU1xIzPJgZfnujf28h",
-        "leverage": 10  # 서브 계정 3 레버리지
+        "leverage": 7  # 서브 계정 3 레버리지
     }
 ]
 
@@ -44,21 +44,21 @@ ACCOUNT_LIST = [
 # <<< 코드 수정: 투자 종목을 테스트 파일과 동일하게 7종목으로 변경 >>>
 # ==============================================================================
 INVEST_COIN_LIST = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.2},
-    {'ticker': 'ADA/USDT',  'rate': 0.1},
-    {'ticker': 'XLM/USDT', 'rate': 0.1},
-    {'ticker': 'XRP/USDT', 'rate': 0.1},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1},
+    {'ticker': 'DOGE/USDT', 'rate': 0.18},
+    {'ticker': 'ADA/USDT',  'rate': 0.16},
+    {'ticker': 'XLM/USDT', 'rate': 0.08},
+    {'ticker': 'XRP/USDT', 'rate': 0.08},
+    {'ticker': 'HBAR/USDT', 'rate': 0.12},
     {'ticker': 'ETH/USDT', 'rate': 0.1},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.1}, # 바이낸스 티커 형식 유지
-    {'ticker': '1000BONK/USDT', 'rate': 0.1},  # 바이낸스 티커 형식 유지
+    {'ticker': '1000PEPE/USDT', 'rate': 0.9},
+    {'ticker': '1000BONK/USDT', 'rate': 0.9},
     {'ticker': '1000FLOKI/USDT', 'rate': 0.05},
     {'ticker': '1000SHIB/USDT', 'rate': 0.05},
 ]
 # ==============================================================================
 
 
-INVEST_RATE = 0.999
+INVEST_RATE = 0.99
 FEE = 0.001
 
 # --- [추가] 핵심 거래 로직을 함수로 분리 ---
@@ -239,9 +239,9 @@ def execute_trading_logic(account_info):
                 try:
                     # ==============================================================================
                     # <<< 코드 수정: 실제 매도 주문 주석 처리 >>>
-                    # binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
+                    binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
                     # ==============================================================================
-                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT) ※ 테스트 모드: 주문 실행 안 됨"
+                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT)"
                     print(exec_msg)
                     telegram_alert.SendMessage(exec_msg)
                     BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
@@ -256,11 +256,31 @@ def execute_trading_logic(account_info):
             
             # 개별 조건들 정의
             cond_no_surge = df['change'].iloc[-2] < 0.5
-            
             is_above_200ma = df['close'].iloc[-2] > df['200ma'].iloc[-2]
-            cond_ma_50 = True 
+            
+            # ==============================================================================
+            # <<< 신규 매수 조건 추가 >>>
+            # ==============================================================================
+            cond_ma_50 = True
+            cond_no_long_upper_shadow = True
+            cond_body_over_15_percent = True
+
             if is_above_200ma:
+                # 1. 50일 이평선 하락 아님
                 cond_ma_50 = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
+
+                # 2. 긴 윗꼬리 없음
+                prev_candle = df.iloc[-2] # 전일자 캔들
+                upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+                body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+                cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
+                
+                # 3. 캔들 몸통이 전체 길이의 15% 이상
+                candle_range = prev_candle['high'] - prev_candle['low']
+                candle_body = abs(prev_candle['open'] - prev_candle['close'])
+                if candle_range > 0:
+                    cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
+            # ==============================================================================
 
             cond_2_pos_candle = df['open'].iloc[-2] < df['close'].iloc[-2] and df['open'].iloc[-3] < df['close'].iloc[-3]
             cond_price_up = df['close'].iloc[-3] < df['close'].iloc[-2] and df['high'].iloc[-3] < df['high'].iloc[-2]
@@ -269,6 +289,9 @@ def execute_trading_logic(account_info):
             cond_rsi_ma_up = df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2]
             cond_20ma_up = df['20ma'].iloc[-3] <= df['20ma'].iloc[-2]
             
+            # ==============================================================================
+            # <<< 최종 매수 결정 로직에 신규 조건 반영 >>>
+            # ==============================================================================
             buy = (
                 cond_2_pos_candle and
                 cond_price_up and
@@ -277,11 +300,14 @@ def execute_trading_logic(account_info):
                 cond_rsi_ma_up and
                 cond_ma_50 and
                 cond_20ma_up and
-                cond_no_surge
+                cond_no_surge and
+                cond_no_long_upper_shadow and      #<-- 추가
+                cond_body_over_15_percent          #<-- 추가
             )
-            
             # ==============================================================================
-            # <<< 코드 수정: Main 계정에서만 조건별 True/False 알림 전송 >>>
+
+            # ==============================================================================
+            # <<< 코드 수정: Main 계정에서만 조건별 True/False 알림 전송 (신규 조건 추가) >>>
             # ==============================================================================
             if account_name == "Main":
                 alert_msg = (
@@ -296,7 +322,9 @@ def execute_trading_logic(account_info):
                     f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
                     f" 6. 50ma 조건 충족: {cond_ma_50}\n"
                     f" 7. 20ma 상승: {cond_20ma_up}\n"
-                    f" 8. 급등 아님: {cond_no_surge}"
+                    f" 8. 급등 아님: {cond_no_surge}\n"
+                    f" 9. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
+                    f" 10. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
                 )
                 telegram_alert.SendMessage(alert_msg)
             # ==============================================================================
@@ -327,13 +355,13 @@ def execute_trading_logic(account_info):
                     try:
                         # ==============================================================================
                         # <<< 코드 수정: 실제 매수 주문 주석 처리 >>>
-                        # binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
+                        binanceX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
                         # ==============================================================================
                         BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                         BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                         with open(botdata_file_path, 'w') as f:
                             json.dump(BotDataDict, f, indent=4)
-                        exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매수!! ※ 테스트 모드: 주문 실행 안 됨"
+                        exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매수!!"
                         print(exec_msg)
                         telegram_alert.SendMessage(exec_msg)
                     except Exception as e:

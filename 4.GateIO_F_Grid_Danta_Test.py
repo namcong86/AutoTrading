@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 '''
+
 파일이름: 9.GateIO_F_Grid_Danta_LongShort_Final_v9_adx_condition.py
 설명: 볼린저밴드, RSI, MACD, ADX를 이용한 롱/숏 그리드 매매 전략 (ADX 조건부 동적 RSI 적용)
 '''
@@ -15,10 +16,10 @@ import os
 # 1. 백테스트 환경 설정
 # ==============================================================================
 COIN_EXCHANGE = "gateio"  # 거래소 이름 (예: 'binance', 'gateio')
-TEST_START_DATE = datetime.datetime(2021, 1, 1)  # 시작일
-TEST_END_DATE = datetime.datetime(2025, 6, 30)   # 종료일 (현재)
-INITIAL_CAPITAL = 100000      # 시작 자본 (USDT)
-TIMEFRAME = '15m'             # 15분봉 데이터 사용
+TEST_START_DATE = datetime.datetime(2023, 1, 1)  # 시작일
+TEST_END_DATE = datetime.datetime.now()   # 종료일 (현재)
+INITIAL_CAPITAL = 200000      # 시작 자본 (USDT)
+TIMEFRAME ='15m'             # 15분봉 데이터 사용
 LEVERAGE = 10                # 레버리지
 STOP_LOSS_PNL_RATE = -1    # 할당 자본 대비 손절 PNL 비율 (-1 = 사용 안함)
 INVEST_COIN_LIST = "DOGE/USDT" # 백테스트할 코인 목록 (리스트 또는 단일 문자열)

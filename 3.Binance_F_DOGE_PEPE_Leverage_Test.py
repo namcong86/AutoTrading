@@ -132,14 +132,14 @@ InvestCoinList = [
     # {'ticker': '1000PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
     # {'ticker': '1000BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
 
-    {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.18, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.16, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.12, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': '1000BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000BONK/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
     {'ticker': '1000SHIB/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
     {'ticker': '1000FLOKI/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
@@ -305,13 +305,35 @@ for date in common_dates:
             if i > 2:
                 prev_day_change = df_coin['change'].iloc[i-1]
                 no_sudden_surge = prev_day_change < 0.5
-
                 is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
 
+                # ==============================================================================
+                # <<< 신규 매수 조건 추가 >>>
+                # ==============================================================================
                 ma_50_condition = True 
+                cond_no_long_upper_shadow = True
+                cond_body_over_15_percent = True
+                
                 if is_above_200ma:
+                    # 1. 50일 이평선 하락 아님
                     ma_50_condition = df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1]
 
+                    # 2. 긴 윗꼬리 없음
+                    prev_candle = df_coin.iloc[i-1] # 전일자 캔들
+                    upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+                    body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+                    cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
+                    
+                    # 3. 캔들 몸통이 전체 길이의 15% 이상
+                    candle_range = prev_candle['high'] - prev_candle['low']
+                    candle_body = abs(prev_candle['open'] - prev_candle['close'])
+                    if candle_range > 0:
+                        cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
+                # ==============================================================================
+
+                # ==============================================================================
+                # <<< 최종 매수 결정 로직에 신규 조건 반영 >>>
+                # ==============================================================================
                 if (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and
                     df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2] and
                     df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and
@@ -321,9 +343,12 @@ for date in common_dates:
                     df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1] and 
                     ma_50_condition and
                     df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1] and
-                    no_sudden_surge
+                    no_sudden_surge and
+                    cond_no_long_upper_shadow and      #<-- 추가
+                    cond_body_over_15_percent          #<-- 추가
                     ):
                     buy_signals_today_specs.append(coin_candidate_spec)
+                # ==============================================================================
 
     if buy_signals_today_specs:
         total_coin_count = len(InvestCoinList)
@@ -383,6 +408,11 @@ for date in common_dates:
 
     log_msg = f"--- {date.strftime('%Y-%m-%d')} | 일일 정산 --- 총자산: {daily_total_equity:,.0f} USDT"
     balance_logs.append(log_msg)
+
+# (이하 결과 분석, 통계, 그래프 출력 로직은 기존과 동일하므로 생략합니다)
+# ...
+# ...
+# ...
 
 # 저장된 로그 출력
 print("\n\n" + "="*50)
