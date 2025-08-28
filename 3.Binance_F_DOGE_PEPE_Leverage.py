@@ -24,14 +24,14 @@ ACCOUNT_LIST = [
         "name": "Sub1",
         "access_key": "qXIylTz7Qh2nrVh1kPJQTXX9Fm0G8Tot86Lgqzm652mTdnEj7DrbJO6KT261fQJk",
         "secret_key": "DarhAG7HjLW7OJBe814q42io5UOYB9dzhwQlbijuz5m5gN9mREA5wfbeGT7H0PwI",
-        "leverage": 3  # 서브 계정 1 레버리지
+        "leverage": 5  # 서브 계정 1 레버리지
     },
-    {
-        "name": "Sub2",
-        "access_key": "HbC79j9E1f8fZUXe7YK5DcgOxG3rcgbd1lSt3r17BJmqga5EbHVbNwIux1Rm6K3q",
-        "secret_key": "lM3RhPOesjwyLLpECpwUuijOZLUpVZEqdRKDmRSPE6WbadQltXRtNIrfY6rnRCMg",
-        "leverage": 5  # 서브 계정 2 레버리지
-    },
+    # {
+    #     "name": "Sub2",
+    #     "access_key": "HbC79j9E1f8fZUXe7YK5DcgOxG3rcgbd1lSt3r17BJmqga5EbHVbNwIux1Rm6K3q",
+    #     "secret_key": "lM3RhPOesjwyLLpECpwUuijOZLUpVZEqdRKDmRSPE6WbadQltXRtNIrfY6rnRCMg",
+    #     "leverage": 5  # 서브 계정 2 레버리지
+    # },
     {
         "name": "Sub3",
         "access_key": "EYNqzB1k2echWMLnmUSZWf1O03U8fiPUMQX9OHL83eeWGotYgoq1dJaDQYleh8Wa",
@@ -44,16 +44,16 @@ ACCOUNT_LIST = [
 # <<< 코드 수정: 투자 종목을 테스트 파일과 동일하게 7종목으로 변경 >>>
 # ==============================================================================
 INVEST_COIN_LIST = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.18},
-    {'ticker': 'ADA/USDT',  'rate': 0.16},
-    {'ticker': 'XLM/USDT', 'rate': 0.08},
-    {'ticker': 'XRP/USDT', 'rate': 0.08},
-    {'ticker': 'HBAR/USDT', 'rate': 0.12},
+    {'ticker': 'DOGE/USDT', 'rate': 0.12},
+    {'ticker': 'ADA/USDT',  'rate': 0.12},
+    {'ticker': 'XLM/USDT', 'rate': 0.1},
+    {'ticker': 'XRP/USDT', 'rate': 0.1},
+    {'ticker': 'HBAR/USDT', 'rate': 0.1},
     {'ticker': 'ETH/USDT', 'rate': 0.1},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.9},
-    {'ticker': '1000BONK/USDT', 'rate': 0.9},
-    {'ticker': '1000FLOKI/USDT', 'rate': 0.05},
-    {'ticker': '1000SHIB/USDT', 'rate': 0.05},
+    {'ticker': '1000PEPE/USDT', 'rate': 1},
+    {'ticker': '1000BONK/USDT', 'rate': 1},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.08},
+    {'ticker': '1000SHIB/USDT', 'rate': 0.08},
 ]
 # ==============================================================================
 

@@ -118,7 +118,7 @@ binanceX = ccxt.binance(config={
 })
 
 InvestTotalMoney = 5000
-leverage = 5 # 레버리지 5배 설정 (Gate.io와 동일하게)
+leverage = 2.5 # 레버리지 5배 설정 (Gate.io와 동일하게)
 fee = 0.001
 
 # 투자 종목 설정 (Gate.io와 동일하게, 티커는 바이낸스에 맞게 수정)
@@ -132,16 +132,16 @@ InvestCoinList = [
     # {'ticker': '1000PEPE/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
     # {'ticker': '1000BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
 
-    {'ticker': 'DOGE/USDT', 'rate': 0.18, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.16, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.08, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.12, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'DOGE/USDT', 'rate': 0.12, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.12, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
     {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': '1000BONK/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': '1000SHIB/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': '1000FLOKI/USDT', 'rate': 0.05, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000SHIB/USDT', 'rate': 0.08, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.08, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
 
 

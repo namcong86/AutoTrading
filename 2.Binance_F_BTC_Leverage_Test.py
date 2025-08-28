@@ -32,18 +32,43 @@ def GetOhlcv2(binance, Ticker, period, year=2019, month=1, day=1, hour=0, minute
     final_list = []
 
     while True:
-        ohlcv_data = binance.fetch_ohlcv(Ticker, period, since=date_start_ms)
-        if not ohlcv_data:
+        try:
+            ohlcv_data = binance.fetch_ohlcv(Ticker, period, since=date_start_ms, limit=1000)
+            if not ohlcv_data:
+                break
+            
+            final_list.extend(ohlcv_data)
+            
+            last_timestamp_ms = ohlcv_data[-1][0]
+            
+            # 다음 요청 시작 시간 설정 (마지막 캔들 시간 + 1 인터벌)
+            # 캔들 데이터가 1개만 반환된 경우를 대비하여 인터벌을 직접 계산
+            if len(ohlcv_data) > 1:
+                interval_ms = ohlcv_data[1][0] - ohlcv_data[0][0]
+            else: # 인터벌을 period 문자열로부터 추정
+                if period == '1d': interval_ms = 24 * 60 * 60 * 1000
+                elif period == '1h': interval_ms = 60 * 60 * 1000
+                else: interval_ms = 60 * 1000 # 기본 1분
+            
+            date_start_ms = last_timestamp_ms + interval_ms
+
+            print(f"Get Data for {Ticker}... Last: {datetime.datetime.utcfromtimestamp(last_timestamp_ms / 1000)}")
+            
+            # 현재 시간보다 미래의 데이터를 요청하지 않도록 방지
+            if date_start_ms > int(datetime.datetime.now().timestamp() * 1000):
+                break
+                
+            time.sleep(0.2)
+
+        except Exception as e:
+            print(f"Error fetching data for {Ticker}: {e}")
             break
-        final_list.extend(ohlcv_data)
-        date_start = datetime.datetime.utcfromtimestamp(ohlcv_data[-1][0] / 1000)
-        date_start_ms = ohlcv_data[-1][0] + (ohlcv_data[1][0] - ohlcv_data[0][0])
-        print("Get Data...", str(date_start_ms))
-        time.sleep(0.2)
+
 
     df = pd.DataFrame(final_list, columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])
     df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
     df.set_index('datetime', inplace=True)
+    df = df[~df.index.duplicated(keep='first')] # 중복 인덱스 제거
     return df
 
 # 바이낸스 객체 생성
@@ -225,41 +250,6 @@ if not trade_drawdown_df.empty:
     trade_drawdown_df['Trade_MDD'] = trade_drawdown_df['Trade_Drawdown'].cummin()
 
 
-# 월별/연도별 통계 생략 (이전과 동일)
-# ...
-
-# 코인별 익절/손절 통계 출력 (이전과 동일)
-# ...
-
-# <<< 수정된 부분: Drawdown(거래 종료)을 점이 아닌 선으로 표시 >>>
-fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
-plt.style.use('seaborn-v0_8-whitegrid')
-
-# 1. 누적 수익률 차트
-axs[0].plot(result_df.index, result_df['Cum_Ror'] * 100, label='Cumulative Return', color='black')
-axs[0].set_ylabel('Cumulative Return (%)')
-axs[0].set_title('Backtest Result: Cumulative Return & Drawdown', fontsize=16)
-axs[0].legend(loc='upper left')
-
-# 2. Drawdown 비교 차트
-# 일일 마감 기준
-axs[1].plot(result_df.index, result_df['Drawdown'] * 100, label='Drawdown (Daily Close)', color='lightblue', alpha=0.8)
-axs[1].fill_between(result_df.index, result_df['Drawdown'] * 100, 0, color='lightblue', alpha=0.3)
-axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD (Daily Close)', color='blue', linestyle='--')
-
-# 거래 종료 기준
-if not trade_drawdown_df.empty:
-    # 아래 라인의 옵션을 수정하여 점 대신 선으로 표시
-    axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_Drawdown'], label='Drawdown (Trade Close)', color='lightcoral', linestyle='-')
-    axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_MDD'], label='MDD (Trade Close)', color='red', linestyle='--')
-
-axs[1].set_ylabel('Drawdown (%)')
-axs[1].set_xlabel('Date')
-axs[1].legend(loc='lower left')
-plt.tight_layout()
-plt.show()
-
-
 # 최종 결과 요약표
 TotalOri = result_df['Total_Equity'].iloc[0]
 TotalFinal = result_df['Total_Equity'].iloc[-1]
@@ -267,6 +257,74 @@ TotalReturn = ((TotalFinal - TotalOri) / TotalOri) * 100.0
 TotalMDD_daily = result_df['MaxDrawdown'].min() * 100.0
 TotalMDD_trade = mdd_on_trade_close * 100.0
 
+# ==============================================================================
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 월별/년도별 통계 계산 (추가된 부분) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# ==============================================================================
+# --- 월별 통계 ---
+monthly_stats = result_df.resample('ME').agg({'Total_Equity': 'last'})
+monthly_stats.rename(columns={'Total_Equity': 'End_Equity'}, inplace=True)
+monthly_stats['Prev_Month_End_Equity'] = monthly_stats['End_Equity'].shift(1).fillna(TotalOri)
+monthly_stats['Return'] = ((monthly_stats['End_Equity'] / monthly_stats['Prev_Month_End_Equity']) - 1) * 100
+monthly_stats['Trades'] = 0
+for month_key_str, count in MonthlyTryCnt.items():
+    try:
+        target_idx = monthly_stats.index[monthly_stats.index.strftime('%Y-%m') == month_key_str]
+        if not target_idx.empty:
+            monthly_stats.loc[target_idx[0], 'Trades'] = count
+    except Exception as e:
+        print(f"월별 통계 거래 횟수 업데이트 중 오류: {e}")
+        continue
+monthly_stats = monthly_stats[['Return', 'End_Equity', 'Trades']]
+monthly_stats.columns = ['수익률 (%)', '잔액 (USDT)', '거래 횟수']
+monthly_stats.index = monthly_stats.index.strftime('%Y-%m')
+
+# --- 년도별 통계 ---
+yearly_stats = result_df.resample('YE').agg({'Total_Equity': ['first', 'last']})
+yearly_stats.columns = ['Start_Equity', 'End_Equity']
+yearly_stats['Return'] = ((yearly_stats['End_Equity'] / yearly_stats['Start_Equity']) - 1) * 100
+yearly_stats['Trades'] = 0
+for month_key_str, count in MonthlyTryCnt.items():
+    try:
+        year_str = month_key_str.split('-')[0]
+        target_idx = yearly_stats.index[yearly_stats.index.year == int(year_str)]
+        if not target_idx.empty:
+            yearly_stats.loc[target_idx[0], 'Trades'] += count
+    except Exception as e:
+        print(f"년도별 통계 거래 횟수 업데이트 중 오류: {e}")
+        continue
+yearly_stats = yearly_stats[['Return', 'End_Equity', 'Trades']]
+yearly_stats.columns = ['수익률 (%)', '잔액 (USDT)', '거래 횟수']
+yearly_stats.index = yearly_stats.index.strftime('%Y')
+# ==============================================================================
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+# ==============================================================================
+
+
+# 차트 생성
+fig, axs = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+plt.style.use('seaborn-v0_8-whitegrid')
+# 1. 누적 수익률 차트
+axs[0].plot(result_df.index, result_df['Cum_Ror'] * 100, label='Cumulative Return', color='black')
+axs[0].set_ylabel('Cumulative Return (%)')
+axs[0].set_title('Backtest Result: Cumulative Return & Drawdown', fontsize=16)
+axs[0].legend(loc='upper left')
+# 2. Drawdown 비교 차트
+axs[1].plot(result_df.index, result_df['Drawdown'] * 100, label='Drawdown (Daily Close)', color='lightblue', alpha=0.8)
+axs[1].fill_between(result_df.index, result_df['Drawdown'] * 100, 0, color='lightblue', alpha=0.3)
+axs[1].plot(result_df.index, result_df['MaxDrawdown'] * 100, label='MDD (Daily Close)', color='blue', linestyle='--')
+if not trade_drawdown_df.empty:
+    axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_Drawdown'], label='Drawdown (Trade Close)', color='lightcoral', linestyle='-')
+    axs[1].plot(trade_drawdown_df.index, trade_drawdown_df['Trade_MDD'], label='MDD (Trade Close)', color='red', linestyle='--')
+axs[1].set_ylabel('Drawdown (%)')
+axs[1].set_xlabel('Date')
+axs[1].legend(loc='lower left')
+plt.tight_layout()
+plt.show()
+
+
+# ==============================================================================
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 최종 결과 출력 (수정된 부분) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# ==============================================================================
 summary_data = [
     {'항목': '최초 금액', '값': f"{format(round(TotalOri), ',')} USDT"},
     {'항목': '최종 금액', '값': f"{format(round(TotalFinal), ',')} USDT"},
@@ -279,4 +337,12 @@ summary_df = pd.DataFrame(summary_data).set_index('항목')
 print("\n---------- 총 결과 ----------")
 print(summary_df.to_string(header=False))
 print("------------------------------")
-# ... (월별/연도별 통계 출력은 이전과 동일)
+
+print("\n---------- 월별 통계 ----------")
+print(monthly_stats.to_string())
+print("\n---------- 년도별 통계 ----------")
+print(yearly_stats.to_string())
+print("------------------------------")
+# ==============================================================================
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+# ==============================================================================

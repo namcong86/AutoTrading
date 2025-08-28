@@ -16,7 +16,7 @@ import os
 # 1. 백테스트 환경 설정
 # ==============================================================================
 COIN_EXCHANGE = "gateio"  # 거래소 이름 (예: 'binance', 'gateio')
-TEST_START_DATE = datetime.datetime(2023, 1, 1)  # 시작일
+TEST_START_DATE = datetime.datetime(2021, 1, 1)  # 시작일
 TEST_END_DATE = datetime.datetime.now()   # 종료일 (현재)
 INITIAL_CAPITAL = 200000      # 시작 자본 (USDT)
 TIMEFRAME ='15m'             # 15분봉 데이터 사용
