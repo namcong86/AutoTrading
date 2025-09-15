@@ -25,7 +25,8 @@ import pandas as pd
 import datetime
 import re
 import os
-import socket # <<< 코드 추가
+import socket
+import sys # <<< 코드 추가: 파라미터 처리를 위해 sys 모듈 임포트
 
 # GUI 및 차트 연동을 위한 라이브러리
 import tkinter as tk
@@ -220,7 +221,7 @@ def check_buy_conditions(df_coin, i):
         cond_buy_mid_ma_stable and
         cond_buy_rsi_up and
         filter_no_sudden_surge and
-        filter_ma50_not_declining and
+        #filter_ma50_not_declining and #일단보류
         cond_no_long_upper_shadow and
         cond_body_over_15_percent
     )
@@ -230,32 +231,83 @@ def check_buy_conditions(df_coin, i):
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 # ==============================================================================
 
+# ==============================================================================
+# ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 스크립트 실행 파라미터 설정 (신규 추가) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+# ==============================================================================
+# 연도별 투자 종목 리스트 정의
+COIN_LISTS_BY_YEAR = {
+    '2018': [
+        {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+    ],
+    '2020': [
+        {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.15, 'start_date': {'year': 2019, 'month': 1, 'day': 1}},
+    ],
+    '2022': [
+        {'ticker': 'DOGE/USDT', 'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'SHIB/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+    ],
+    '2023': [
+        {'ticker': 'DOGE/USDT', 'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'SHIB/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+    ]
+}
+
+# 1. 첫 번째 파라미터 (연도) 처리
+year_choice = '2023' # 기본값
+if len(sys.argv) > 1:
+    year_choice = sys.argv[1]
+
+# 선택된 연도에 맞는 종목 리스트를 가져오고, 없으면 기본값(2023년) 사용
+InvestCoinList = COIN_LISTS_BY_YEAR.get(year_choice, COIN_LISTS_BY_YEAR['2023'])
+if year_choice not in COIN_LISTS_BY_YEAR:
+    print(f"경고: 입력된 연도 '{year_choice}'에 대한 설정이 없습니다. 기본값 '2023' 설정을 사용합니다.")
+
+# 2. 두 번째 파라미터 (레버리지) 처리
+leverage = 3.7  # 기본값
+if len(sys.argv) > 2:
+    try:
+        leverage = float(sys.argv[2])
+    except ValueError:
+        print(f"경고: 입력된 레버리지 '{sys.argv[2]}'가 숫자가 아닙니다. 기본값 {leverage}를 사용합니다.")
+# ==============================================================================
+# ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+# ==============================================================================
+
+
 GateIO_AccessKey = "YOUR_GATEIO_API_KEY"
 GateIO_SecretKey = "YOUR_GATEIO_SECRET_KEY"
 exchange = ccxt.gateio({'apiKey': GateIO_AccessKey, 'secret': GateIO_SecretKey, 'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 InvestTotalMoney = 5000
-leverage = 2.5
 fee = 0.001
-InvestCoinList = [
-    # {'ticker': 'DOGE/USDT', 'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'XLM/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'XRP/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'HBAR/USDT', 'rate': 0.14, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'ETH/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    # {'ticker': 'SOL/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
 
-    {'ticker': 'DOGE/USDT', 'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'SHIB/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-    {'ticker': 'FLOKI/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-]
+print("="*50)
+print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x'")
+print("="*50)
+
+
 dfs = {}
 for coin_data in InvestCoinList:
     ticker = coin_data['ticker']

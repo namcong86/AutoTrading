@@ -45,8 +45,8 @@ Binance_api_key_sub1 = "qXIylTz7Qh2nrVh1kPJQTXX9Fm0G8Tot86Lgqzm652mTdnEj7DrbJO6K
 Binance_api_secret_sub1 = "DarhAG7HjLW7OJBe814q42io5UOYB9dzhwQlbijuz5m5gN9mREA5wfbeGT7H0PwI"
 
 # Binance API 인증 정보 (서브 계정 2)
-Binance_api_key_sub2 = "HbC79j9E1f8fZUXe7YK5DcgOxG3rcgbd1lSt3r17BJmqga5EbHVbNwIux1Rm6K3q"
-Binance_api_secret_sub2 = "lM3RhPOesjwyLLpECpwUuijOZLUpVZEqdRKDmRSPE6WbadQltXRtNIrfY6rnRCMg"
+Binance_api_key_sub2 = "lkDPjRCIHmp3olbPKYABO9yN3IXriiK1ikcyN8CyukNV6GDwqs3CfHfTuH1d0sOB"
+Binance_api_secret_sub2 = "TECfDyTTtYwCJbaC2k949ey08KsnB7X9dGOqteAaeIyZbT62bbj2uKKA4ygZCBTj"
 
 # Binance API 인증 정보 (서브 계정 3)
 Binance_api_key_sub3 = "EYNqzB1k2echWMLnmUSZWf1O03U8fiPUMQX9OHL83eeWGotYgoq1dJaDQYleh8Wa"
