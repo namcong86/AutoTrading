@@ -280,9 +280,11 @@ def run_bot():
             if long_pos_data['buy_blocked_by_macd'] and prev_candle['macd_histogram'] > 0:
                 long_pos_data['buy_blocked_by_macd'] = False
                 logger.info("[롱] MACD 히스토그램 양수 전환. 매수 잠금 해제.")
-            if USE_SHORT_STRATEGY and short_pos_data['sell_blocked_by_macd'] and prev_candle['macd_histogram'] < 0:
+                save_bot_data() # <<< 롱 잠금 해제 시 저장
+            if USE_SHORT_STRATEGY and short_pos_data['sell_blockde_by_macd'] and prev_candle['macd_histogram'] < 0:
                 short_pos_data['sell_blocked_by_macd'] = False
                 logger.info("[숏] MACD 히스토그램 음수 전환. 매도 잠금 해제.")
+                save_bot_data() # <<< 숏 잠금 해제 시 저장
 
         # 3. 롱 포지션 청산(Exit) 로직 (부분/전체 익절)
         if len(long_pos_data['entries']) > 0:
