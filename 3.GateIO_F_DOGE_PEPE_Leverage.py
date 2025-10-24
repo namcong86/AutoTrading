@@ -118,9 +118,19 @@ if hour_n == 0 and min_n <= 2:
     telegram_alert.SendMessage(start_msg)
     logger.info(start_msg)
 
+
+# 투자 코인 리스트 (Bitget과 동일 10종) - Gate.io 심볼 형식에 맞춰 기입
 InvestCoinList = [
-    {'ticker': 'DOGE/USDT:USDT', 'rate': 0.5},
-    {'ticker': 'PEPE/USDT:USDT', 'rate': 0.5}
+    {'ticker': 'DOGE_USDT', 'rate': 0.12},
+    {'ticker': 'ADA_USDT', 'rate': 0.12},
+    {'ticker': 'XLM_USDT', 'rate': 0.10},
+    {'ticker': 'XRP_USDT', 'rate': 0.10},
+    {'ticker': 'HBAR_USDT', 'rate': 0.10},
+    {'ticker': 'ETH_USDT', 'rate': 0.10},
+    {'ticker': 'PEPE_USDT', 'rate': 0.10},
+    {'ticker': 'BONK_USDT', 'rate': 0.10},
+    {'ticker': 'FLOKI_USDT', 'rate': 0.08},
+    {'ticker': 'SHIB_USDT', 'rate': 0.08},
 ]
 
 # --- Helper Functions (myBinance 대체) ---
@@ -194,7 +204,7 @@ is_any_bot_position_active = bool(all_current_positions)
 for coin_data in InvestCoinList:
     coin_ticker = coin_data['ticker']
     # market_id = exchange.market(coin_ticker)['id'] # 사용되지 않아 주석 처리
-    logger.info(f"\n---- Processing coin: {coin_ticker}")
+    #logger.info(f"\n---- Processing coin: {coin_ticker}")
 
     # BotData 기본 키 초기화
     for key_suffix in ["_BUY_DATE", "_SELL_DATE", "_DATE_CHECK"]:
@@ -212,7 +222,7 @@ for coin_data in InvestCoinList:
     for attempt in range(max_retries):
         try:
             account = gateio_api.get_futures_account(settle='usdt')
-            logger.info(f"Raw account data for {coin_ticker}: {account}")
+            #logger.info(f"Raw account data for {coin_ticker}: {account}")
             time.sleep(0.1)
 
             if account and 'available' in account:
@@ -256,41 +266,33 @@ for coin_data in InvestCoinList:
         telegram_alert.SendMessage(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
 
     # 지표용 일봉 데이터 조회
-    df = get_ohlcv_gateio(exchange, coin_ticker, '1d', limit=100)
-    if df.empty or len(df) < 50:
+    df = get_ohlcv_gateio(exchange, coin_ticker, '1d', limit=260)  # 200MA 계산 대비
+    if df.empty or len(df) < 60:
         logger.warning(f"{coin_ticker} 데이터 부족으로 건너뜜. (가져온 데이터 수: {len(df)})")
         continue
+    # 거래대금
     df['value'] = df['close'] * df['volume']
-
-    # RSI 계산
+    # RSI
     period = 14
     delta = df['close'].diff()
     up = delta.clip(lower=0)
     down = (-delta).clip(lower=0)
     gain = up.ewm(com=period-1, min_periods=period).mean()
     loss = down.ewm(com=period-1, min_periods=period).mean()
-    if loss.eq(0).any():
-        RS = pd.Series([float('inf') if l == 0 and g > 0 else 0 if l == 0 and g == 0 else g / l for g, l in zip(gain, loss)], index=gain.index)
-    else:
-        RS = gain / loss
+    RS = gain / loss.replace(0, 1e-9)
     df['rsi'] = 100 - (100 / (1 + RS))
-    df['rsi_ma'] = df['rsi'].rolling(14).mean()
-
-    # MACD 계산
-    ema12 = df['close'].ewm(span=12, adjust=False).mean()
-    ema26 = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = ema12 - ema26
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-
-    # 이동평균선
-    for ma_val in [3, 7, 12, 24, 30, 50]:
-        df[f'{ma_val}ma'] = df['close'].rolling(ma_val).mean()
-    df['value_ma'] = df['value'].rolling(10).mean().shift(1)
-    df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
-    
-    required_length_for_iloc = 5
+    df['rsi_ma'] = df['rsi'].rolling(14, min_periods=14).mean()
+    # 변화율
+    df['prev_close'] = df['close'].shift(1)
+    df['change'] = (df['close'] - df['prev_close']) / df['prev_close']
+    # 이동평균선 (Bitget과 동일)
+    for ma_val in [3, 7, 20, 30, 50, 200]:
+        df[f'{ma_val}ma'] = df['close'].rolling(ma_val, min_periods=ma_val).mean()
+    # 거래대금 평균 및 30MA 기울기
+    df['value_ma'] = df['value'].rolling(10, min_periods=10).mean().shift(1)
+    df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5).replace(0, 1e-9)) * 100
     df.dropna(inplace=True)
-    if len(df) < required_length_for_iloc:
+    if len(df) < 60:
         logger.warning(f"{coin_ticker} 지표 계산 후 데이터 부족으로 건너뜜. (남은 데이터 수: {len(df)})")
         continue
 
@@ -298,25 +300,53 @@ for coin_data in InvestCoinList:
     if now_price is None:
         logger.warning(f"{coin_ticker} 현재 가격 조회 실패로 건너뜜.")
         continue
-        
-    DiffValue = -2
+    
+    DiffValue = -2  # 30MA 기울기 기준
 
     # --- 매도 로직 (포지션 보유 시) ---
     if abs(amt_b) > 0:
         logger.info(f"{coin_ticker} 포지션이 있어 매도 조건 확인 중. 현재 포지션 수량: {amt_b}")
-        cond_high_low = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
-        cond_open_close = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
-        cond_revenue = (unrealizedProfit < 0)
-        cond_cancel = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
-        
-        analysis_msg = (f"{first_String}  매도조건 분석 ({coin_ticker}): high_low={cond_high_low}, "
-                         f"open_close={cond_open_close}, revenue<0={cond_revenue}, "
-                         f"cancel_by_rsi_ma={cond_cancel}")
-        logger.info(analysis_msg)
-        telegram_alert.SendMessage(analysis_msg)
 
-        sell_triggered = (cond_high_low or cond_open_close or cond_revenue) and not cond_cancel
-        
+        # Bitget과 동일한 매도 조건
+        def is_doji_candle(o, c, h, l):
+            rng = h - l
+            if rng == 0:
+                return False
+            return abs(o - c) / rng <= 0.1
+
+        is_doji_1 = is_doji_candle(df['open'].iloc[-2], df['close'].iloc[-2], df['high'].iloc[-2], df['low'].iloc[-2])
+        is_doji_2 = is_doji_candle(df['open'].iloc[-3], df['close'].iloc[-3], df['high'].iloc[-3], df['low'].iloc[-3])
+        cond_doji = is_doji_1 and is_doji_2
+        cond_fall_pattern = (df['high'].iloc[-3] > df['high'].iloc[-2] and df['low'].iloc[-3] > df['low'].iloc[-2])
+        cond_2_neg_candle = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
+        cond_loss = (unrealizedProfit < 0)
+        cond_not_rising = not (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
+        original_sell_cond = (cond_fall_pattern or cond_2_neg_candle or cond_loss) and cond_not_rising
+        sell_triggered = original_sell_cond or cond_doji
+
+        # 텔레그램 알림 (Bitget 형식)
+        # first_String, leverage, account_name은 파일 내 기존 컨텍스트에 맞춰 사용하세요.
+        # 예: first_String = f"[3.GateIO {account_name}] {leverage}배"
+        try:
+            RevenueRate = (unrealizedProfit / max(InvestMoney_for_this_coin, 1e-9)) * 100.0  # 변수 존재 시 사용
+        except Exception:
+            RevenueRate = 0.0
+
+        alert_msg = (
+            f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
+            f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
+            f"▶️ 최종 매도 결정: {sell_triggered}\n"
+            f"--------------------\n"
+            f"[기본 매도 조건: {original_sell_cond}]\n"
+            f" ㄴ하락패턴: {cond_fall_pattern}\n"
+            f" ㄴ2연속음봉: {cond_2_neg_candle}\n"
+            f" ㄴ손실중: {cond_loss}\n"
+            f" ㄴ(AND)상승추세아님: {cond_not_rising}\n"
+            f"[추가 매도 조건]\n"
+            f" ㄴ2연속도지: {cond_doji}"
+        )
+        telegram_alert.SendMessage(alert_msg)
+
         if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
             sell_triggered = False
             logger.info(f"{coin_ticker} 금일 이미 거래 발생하였습니다.")
@@ -341,44 +371,63 @@ for coin_data in InvestCoinList:
     # --- 매수 로직 (포지션 없음) ---
     else:
         logger.info(f"{coin_ticker} 포지션이 없어 매수 조건 확인 중.")
-        #MACD 조건
-        macd_3ago = df['macd'].iloc[-4]-df['macd_signal'].iloc[-4]
-        macd_2ago = df['macd'].iloc[-3]-df['macd_signal'].iloc[-3]
-        macd_1ago = df['macd'].iloc[-2]-df['macd_signal'].iloc[-2]
-        macd_positive = macd_1ago > 0
-        macd_3to2_down = macd_3ago > macd_2ago
-        macd_2to1_down = macd_2ago > macd_1ago
-        macd_condition = not (macd_3to2_down and macd_2to1_down)
 
-        # 전일캔들이 윗꼬리가 긴 도지형캔들이면 매수x
-        prev_high = df['high'].iloc[-2]
-        prev_low = df['low'].iloc[-2]
-        prev_open = df['open'].iloc[-2]
-        prev_close = df['close'].iloc[-2]
-        upper_shadow = prev_high - max(prev_open, prev_close)
-        candle_length = prev_high - prev_low
-        upper_shadow_ratio = (upper_shadow / candle_length) if candle_length > 0 else 0
+        # Bitget과 동일한 매수 조건
+        cond_no_surge = df['change'].iloc[-2] < 0.5
+        is_above_200ma = df['close'].iloc[-2] > df['200ma'].iloc[-2]
+        cond_ma_50 = True
+        # 추가 조건 2개
+        cond_no_long_upper_shadow = True
+        cond_body_over_15_percent = True
+        if is_above_200ma:
+            cond_ma_50 = (df['50ma'].iloc[-3] <= df['50ma'].iloc[-2])
+            prev_candle = df.iloc[-2]
+            upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+            body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+            cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
+            candle_range = prev_candle['high'] - prev_candle['low']
+            candle_body = abs(prev_candle['open'] - prev_candle['close'])
+            if candle_range > 0:
+                cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
 
-        cond_o1 = (df['open'].iloc[-2] < df['close'].iloc[-2])
-        cond_o2 = (df['open'].iloc[-3] < df['close'].iloc[-3])
-        cond_close_inc = (df['close'].iloc[-3] < df['close'].iloc[-2])
-        cond_high_inc = (df['high'].iloc[-3] < df['high'].iloc[-2])
-        cond_7ma = (df['7ma'].iloc[-3] < df['7ma'].iloc[-2])
-        cond_50ma = (df['50ma'].iloc[-3] < df['50ma'].iloc[-2])
-        cond_slope = (df['30ma_slope'].iloc[-2] > DiffValue)
-        cond_rsi_inc = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
-        cond_MACD = (macd_positive and macd_condition)
-        cond_doji = upper_shadow_ratio <= 0.6
+        cond_2_pos_candle = (df['open'].iloc[-2] < df['close'].iloc[-2]) and (df['open'].iloc[-3] < df['close'].iloc[-3])
+        cond_price_up = (df['close'].iloc[-3] < df['close'].iloc[-2]) and (df['high'].iloc[-3] < df['high'].iloc[-2])
+        cond_7ma_up = (df['7ma'].iloc[-3] < df['7ma'].iloc[-2])
+        cond_30ma_slope = (df['30ma_slope'].iloc[-2] > -2)
+        cond_rsi_ma_up = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
+        cond_20ma_up = (df['20ma'].iloc[-3] <= df['20ma'].iloc[-2])
 
-        analysis_msg = (f"{first_String} 매수조건 분석 ({coin_ticker}): 연속양봉={cond_o1 and cond_o2}, "
-                        f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
-                        f"7이평증가={cond_7ma}, 50이평증가={cond_50ma}, 30이평기울기={cond_slope}, "
-                        f"RSI증가={cond_rsi_inc} ({df['rsi_ma'].iloc[-3]:.2f}->{df['rsi_ma'].iloc[-2]:.2f}), "
-                        f"MACD={cond_MACD}, 도지캔들={cond_doji}")
-        logger.info(analysis_msg)
-        telegram_alert.SendMessage(analysis_msg)
-        
-        buy_triggered = cond_o1 and cond_o2 and cond_close_inc and cond_high_inc and cond_7ma and cond_50ma and cond_slope and cond_rsi_inc and cond_MACD and cond_doji
+        buy_triggered = (
+            cond_2_pos_candle and
+            cond_price_up and
+            cond_7ma_up and
+            cond_30ma_slope and
+            cond_rsi_ma_up and
+            cond_ma_50 and
+            cond_20ma_up and
+            cond_no_surge and
+            cond_no_long_upper_shadow and
+            cond_body_over_15_percent
+        )
+
+        # 텔레그램 알림 (Bitget 형식)
+        alert_msg = (
+            f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
+            f"- 포지션 없음\n\n"
+            f"▶️ 최종 매수 결정: {buy_triggered}\n"
+            f"--------------------\n"
+            f" 1. 2연속 양봉: {cond_2_pos_candle}\n"
+            f" 2. 전일 종가/고가 상승: {cond_price_up}\n"
+            f" 3. 7ma 상승: {cond_7ma_up}\n"
+            f" 4. 30ma 기울기 > -2: {cond_30ma_slope}\n"
+            f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
+            f" 6. 50ma 조건 충족: {cond_ma_50}\n"
+            f" 7. 20ma 상승: {cond_20ma_up}\n"
+            f" 8. 급등 아님: {cond_no_surge}\n"
+            f" 9. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
+            f" 10. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
+        )
+        telegram_alert.SendMessage(alert_msg)
         
         if buy_triggered: 
             if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n :
