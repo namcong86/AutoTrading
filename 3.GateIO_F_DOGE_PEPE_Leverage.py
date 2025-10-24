@@ -251,6 +251,7 @@ for coin_data in InvestCoinList:
     # 포지션 정보 (LONG)
     amt_b = 0.0
     unrealizedProfit = 0.0
+    position_info = None
 
     try:
         current_position_list = exchange.fetch_positions(symbols=[coin_ticker], params={'type': 'swap'})
@@ -259,6 +260,7 @@ for coin_data in InvestCoinList:
                 if pos_info['symbol'] == coin_ticker and pos_info['side'] == 'long':
                     amt_b = float(pos_info['contracts'])
                     unrealizedProfit = float(pos_info['unrealizedPnl'])
+                    position_info = pos_info
                     break
 
     except Exception as e:
@@ -324,13 +326,25 @@ for coin_data in InvestCoinList:
         original_sell_cond = (cond_fall_pattern or cond_2_neg_candle or cond_loss) and cond_not_rising
         sell_triggered = original_sell_cond or cond_doji
 
-        # 텔레그램 알림 (Bitget 형식)
-        # first_String, leverage, account_name은 파일 내 기존 컨텍스트에 맞춰 사용하세요.
-        # 예: first_String = f"[3.GateIO {account_name}] {leverage}배"
+        # 텔레그램 알림 (Bitget 형식) - 수익률 계산: 저장된 증거금 또는 포지션 정보로 추정
         try:
-            RevenueRate = (unrealizedProfit / max(InvestMoney_for_this_coin, 1e-9)) * 100.0  # 변수 존재 시 사용
+            invest_base = float(BotDataDict.get(coin_ticker + '_LAST_MARGIN_USDT', 0.0))
         except Exception:
-            RevenueRate = 0.0
+            invest_base = 0.0
+        if invest_base <= 0:
+            try:
+                market_info = exchange.market(coin_ticker)
+                contract_size = float(market_info.get('contractSize', '1'))
+                entry_price = None
+                if position_info:
+                    entry_price = position_info.get('entryPrice') or position_info.get('entry_price')
+                if entry_price is None:
+                    entry_price = now_price
+                notional = abs(amt_b) * contract_size * float(entry_price)
+                invest_base = notional / max(int(set_leverage), 1)
+            except Exception:
+                invest_base = 1.0
+        RevenueRate = (unrealizedProfit / max(invest_base, 1e-9)) * 100.0
 
         alert_msg = (
             f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
@@ -466,6 +480,7 @@ for coin_data in InvestCoinList:
 
                         BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                         BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
+                        BotDataDict[coin_ticker + '_LAST_MARGIN_USDT'] = float(BuyMargin)
                         with open(botdata_file_path, 'w') as f:
                             json.dump(BotDataDict, f)
 
