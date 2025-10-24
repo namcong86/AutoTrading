@@ -23,14 +23,12 @@ def GetOhlcv(exchange, ticker, timeframe='1d', target_rows=260):
         end_ms = None
         attempts = 0
 
-        print(f"Get Data for {ticker} (target={target_rows} rows)...")
         while len(all_ohlcv) < target_rows and attempts < 12:
             params = {'limit': limit}
             if end_ms is not None:
                 params['endTime'] = end_ms
 
             log_point = datetime.datetime.fromtimestamp(end_ms / 1000).isoformat() if end_ms else "latest"
-            print(f"Fetching {ticker} up to {log_point} (attempt {attempts+1})...")
 
             batch = exchange.fetch_ohlcv(ticker, timeframe, limit=limit, params=params)
             if not batch:
@@ -40,7 +38,6 @@ def GetOhlcv(exchange, ticker, timeframe='1d', target_rows=260):
             all_ohlcv = batch + all_ohlcv
             end_ms = batch[0][0] - 1  # next batch ends before the oldest candle
             attempts += 1
-            print(f"  -> 이번 배치 {len(batch)}개, 누적 {len(all_ohlcv)}개")
 
             if len(batch) < limit:
                 break
@@ -260,11 +257,6 @@ def execute_trading_logic(account_info):
         df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5).replace(0, 1e-9)) * 100
         df['30ma_slope'] = df['30ma_slope'].fillna(0)  # 초기 NaN을 0으로 채움
         
-        # NaN 값 디버깅
-        if df[['rsi', 'rsi_ma', 'value_ma', '30ma_slope']].isna().any().any():
-            print(f"[{account_name}] {coin_ticker} 기술적 지표 계산 후 NaN 값 발생")
-            print(f"NaN counts: {df[['rsi', 'rsi_ma', 'value_ma', '30ma_slope']].isna().sum()}")
-            telegram_alert.SendMessage(f"{first_String} {coin_ticker} 기술적 지표 계산 중 NaN 발생")
         
         df.dropna(inplace=True)
 
@@ -456,40 +448,7 @@ def execute_trading_logic(account_info):
 
 # --- 메인 실행부 ---
 if __name__ == '__main__':
-    # 비트겟 마켓 확인
-    test_bitget = ccxt.bitget({
-        'apiKey': ACCOUNT_LIST[0]['access_key'],
-        'secret': ACCOUNT_LIST[0]['secret_key'],
-        'password': ACCOUNT_LIST[0]['passphrase'],
-        'enableRateLimit': True,
-        'options': {'defaultType': 'swap'}
-    })
-    
-    print("=== 비트겟 시장 정보 확인 ===")
-    try:
-        markets = test_bitget.load_markets()
-        
-        # 우리가 사용하려는 티커 확인
-        test_tickers = ['DOGE/USDT:USDT', 'DOGE/USDT', 'DOGEUSDT', 'DOGEUSDT_UMCBL']
-        for ticker in test_tickers:
-            if ticker in markets:
-                print(f"✓ {ticker} - 존재함")
-                print(f"  실제 심볼: {markets[ticker]['id']}")
-            else:
-                print(f"✗ {ticker} - 존재하지 않음")
-        
-        # DOGE가 포함된 모든 심볼 찾기
-        print("\n=== DOGE 관련 심볼 ===")
-        doge_symbols = [s for s in markets.keys() if 'DOGE' in s and 'USDT' in s]
-        for symbol in doge_symbols[:5]:  # 처음 5개만
-            print(f"  {symbol}")
-            
-    except Exception as e:
-        print(f"마켓 로드 오류: {e}")
-        import traceback
-        traceback.print_exc()
-    
-    print("\n===== Bitget 다계정 자동매매 봇 시작 =====")
+    print("===== Bitget 다계정 자동매매 봇 시작 =====")
     for account in ACCOUNT_LIST:
         print(f"\n--- {account['name']} 거래 시작 (레버리지: {account['leverage']}배) ---")
         execute_trading_logic(account)
