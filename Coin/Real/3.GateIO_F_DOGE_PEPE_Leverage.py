@@ -520,7 +520,7 @@ for coin_data in InvestCoinList:
                         
                         exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
-                                    f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, "
+                                    f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, " 
                                     f"매수 계약 수: {amount_to_buy:.6f}, "
                                     f"실제 매수 코인 수: {actual_bought_coin_quantity:.2f})")
                         logger.info(exec_msg)

@@ -859,7 +859,7 @@ if __name__ == "__main__":
         total_success_all, total_fail_all = 0, 0
         for ticker_stat in valid_tickers:
             stats = CoinStats[ticker_stat]
-            success, fail = stats['SuccessCnt'], stats['FailCnt']
+            success, fail = stats['SuccessCnt'], stats['FailCnt'] 
             total_success_all += success; total_fail_all += fail; total_trades = success + fail
             win_rate = (success / total_trades * 100) if total_trades > 0 else 0
             print(f"{ticker_stat} >>> 성공: {success} 실패: {fail} -> 승률: {round(win_rate, 2)}%")
