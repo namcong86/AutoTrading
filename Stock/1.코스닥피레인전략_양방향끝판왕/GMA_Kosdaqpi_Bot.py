@@ -21,7 +21,7 @@ https://blog.naver.com/zacra/223177598281
 
 OBV 활용 추가!
 https://blog.naver.com/zacra/223986975517
-
+ 
 
 이미 잘 아시겠지만 레버리지 ETF를 매매하려면 사전 조건등이 있는데 아래 포스팅에 정리되어 있습니다.
 https://blog.naver.com/zacra/223180937351
