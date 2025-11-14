@@ -517,7 +517,7 @@ for coin_data in InvestCoinList:
 
                         # 로그 메시지에 실제 매수될 '코인 수량' (계약 수 * contractSize)을 표시합니다.
                         actual_bought_coin_quantity = amount_to_buy * contractSize
-                        
+                         
                         exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
                                     f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, " 

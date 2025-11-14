@@ -876,7 +876,7 @@ if __name__ == "__main__":
         print(f"MDD 4 (주간 잔액 기준): {round(WeeklyMDD, 2)}%")
         print(f"MDD 5 (월간 잔액 기준): {round(MonthlyMDD, 2)}%")
         print("------------------------------")
-        print("\n---------- 월별 통계 ----------")
+        print("\n---------- 월별 통계 ----------") 
         print(monthly_stats.to_string())
         print("\n---------- 년도별 통계 ----------")
         print(yearly_stats.to_string())
