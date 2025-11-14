@@ -176,6 +176,11 @@ def execute_trading_logic(account_info):
         
         df['value_ma'] = df['value'].rolling(10).mean().shift(1)
         df['30ma_slope'] = ((df['30ma'] - df['30ma'].shift(5)) / df['30ma'].shift(5)) * 100
+        
+        # Disparity Index 계산 (종가 / 15일 이동평균 * 100)
+        df['Disparity_Index_ma'] = df['close'].rolling(window=15).mean()
+        df['disparity_index'] = (df['close'] / df['Disparity_Index_ma']) * 100
+        
         df.dropna(inplace=True)
 
         now_price = myBinance.GetCoinNowPrice(binanceX, coin_ticker)
@@ -282,6 +287,30 @@ def execute_trading_logic(account_info):
             cond_rsi_ma_up = df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2]
             cond_20ma_up = df['20ma'].iloc[-3] <= df['20ma'].iloc[-2]
             
+            # Disparity Index 조건 (30일 기준)
+            disparity_period = 30
+            filter_disparity = False
+            
+            if len(df) >= disparity_period:
+                recent_disparity = df['disparity_index'].iloc[-disparity_period:]
+                yesterday_disparity = df['disparity_index'].iloc[-2]
+                max_disparity = recent_disparity.max()
+                
+                if yesterday_disparity == max_disparity:
+                    filter_disparity = True
+                else:
+                    try:
+                        max_idx = recent_disparity.idxmax()
+                        yesterday_idx = df.index[-2]
+                        if max_idx < yesterday_idx:
+                            range_disparity = df.loc[max_idx:yesterday_idx, 'disparity_index']
+                            if (range_disparity >= 100).all():
+                                filter_disparity = True
+                    except Exception:
+                        filter_disparity = False
+            else:
+                filter_disparity = True
+            
             # ==============================================================================
             # <<< 최종 매수 결정 로직에 신규 조건 반영 >>>
             # ==============================================================================
@@ -294,6 +323,7 @@ def execute_trading_logic(account_info):
                 cond_ma_50 and
                 cond_20ma_up and
                 cond_no_surge and
+                filter_disparity and
                 cond_no_long_upper_shadow and      #<-- 추가
                 cond_body_over_15_percent          #<-- 추가
             )
@@ -316,8 +346,9 @@ def execute_trading_logic(account_info):
                     f" 6. 50ma 조건 충족: {cond_ma_50}\n"
                     f" 7. 20ma 상승: {cond_20ma_up}\n"
                     f" 8. 급등 아님: {cond_no_surge}\n"
-                    f" 9. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
-                    f" 10. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
+                    f" 9. Disparity Index 조건: {filter_disparity}\n"
+                    f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
+                    f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
                 )
                 telegram_alert.SendMessage(alert_msg)
             # ==============================================================================

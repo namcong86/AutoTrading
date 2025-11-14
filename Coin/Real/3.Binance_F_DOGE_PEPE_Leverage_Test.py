@@ -187,6 +187,10 @@ for coin_data in InvestCoinList:
     ema26 = df['close'].ewm(span=26, adjust=False).mean()
     df['macd'] = ema12 - ema26
     df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    
+    # Disparity Index 계산 (종가 / 15일 이동평균 * 100)
+    df['Disparity_Index_ma'] = df['close'].rolling(window=15).mean()
+    df['disparity_index'] = (df['close'] / df['Disparity_Index_ma']) * 100
 
     df.dropna(inplace=True)
     if not df.empty:
@@ -330,6 +334,30 @@ for date in common_dates:
                     if candle_range > 0:
                         cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
                 # ==============================================================================
+                
+                # Disparity Index 조건 (30일 기준)
+                disparity_period = 30
+                filter_disparity = False
+                
+                if i >= disparity_period:
+                    recent_disparity = df_coin['disparity_index'].iloc[i-disparity_period:i]
+                    yesterday_disparity = df_coin['disparity_index'].iloc[i-1]
+                    max_disparity = recent_disparity.max()
+                    
+                    if yesterday_disparity == max_disparity:
+                        filter_disparity = True
+                    else:
+                        try:
+                            max_idx = recent_disparity.idxmax()
+                            yesterday_idx = df_coin.index[i-1]
+                            if max_idx < yesterday_idx:
+                                range_disparity = df_coin.loc[max_idx:yesterday_idx, 'disparity_index']
+                                if (range_disparity >= 100).all():
+                                    filter_disparity = True
+                        except Exception:
+                            filter_disparity = False
+                else:
+                    filter_disparity = True
 
                 # ==============================================================================
                 # <<< 최종 매수 결정 로직에 신규 조건 반영 >>>
@@ -344,6 +372,7 @@ for date in common_dates:
                     ma_50_condition and
                     df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1] and
                     no_sudden_surge and
+                    filter_disparity and
                     cond_no_long_upper_shadow and      #<-- 추가
                     cond_body_over_15_percent          #<-- 추가
                     ):
