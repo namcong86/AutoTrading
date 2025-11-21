@@ -7,11 +7,11 @@
 # - 만료 시 자동으로 새 토큰을 발급받습니다
 # 
 # ===== 실계좌 설정 =====
-REAL_APP_KEY: "여기에_실계좌_APP_KEY를_입력하세요"
-REAL_APP_SECRET: "여기에_실계좌_APP_SECRET을_입력하세요"
-REAL_CANO: "여기에_실계좌_계좌번호를_입력하세요"
+REAL_APP_KEY: "PSPqj8rRNAcgPQjJyrnJY5WCd16kd5JxB7Pi"
+REAL_APP_SECRET: "VDx63g7tnJkF+ueWELauPmF5Hl6Ayfv3aRaLYlTConjQ371VNHGOSEhk7NC19M9IKLrOi9H+N4gOiRlrs2gq+IShyWA6ipsV0hOuCG/7G9XQWq0Ohl9cqaKO+C6oNX56IbkQe/gN8CS8EXq5sowRswVssLKGzGfJDDsoWG22X89XOn75/ic="
+REAL_CANO: "63878976"
 REAL_ACNT_PRDT_CD: "01"  # 보통 01 (종합계좌)
-REAL_TOKEN_PATH: "c:/AutoTrading/KIStoken_real.json"
+REAL_TOKEN_PATH: "/var/AutoBot/KIStoken_real.json"
 REAL_URL: "https://openapi.koreainvestment.com:9443"
 
 # ===== 모의계좌 설정 =====
@@ -19,5 +19,5 @@ VIRTUAL_APP_KEY: "PSSwRv0NsLE19rsrLF1FVRbEfAVovKTZ03k2"
 VIRTUAL_APP_SECRET: "ljo14R9kQvU8wQAcisAL9IhTQxwR4M14Za5PyLos6s+GPW34sRgyg/HMd3YV0ESh+N0vRrG/b3CevRsMDEa33pK9KFrBcO2gFLDeRPyKyRBcs+mifED8EYzYlNPSJH6jwvsSY7YK6wVxtc29N6doEIVZCi6wCXdTXioK3NfxyHQblBONklE="
 VIRTUAL_CANO: "50090117"
 VIRTUAL_ACNT_PRDT_CD: "01"  # 보통 01
-VIRTUAL_TOKEN_PATH: "c:/AutoTrading/KIStoken_virtual.json"
+VIRTUAL_TOKEN_PATH: "/var/AutoBot/KIStoken_virtual.json"
 VIRTUAL_URL: "https://openapivts.koreainvestment.com:29443"

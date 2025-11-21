@@ -1,0 +1,46 @@
+[
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\layout_fragment_home.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\layout\\fragment_home.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\mipmap-anydpi-v26\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\menu_bottom_nav_menu.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\menu\\bottom_nav_menu.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\layout_activity_main.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\layout\\activity_main.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\drawable_app_icon.png.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\drawable\\app_icon.png"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\drawable\\ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\mipmap-anydpi-v26\\ic_launcher.xml"
+    },
+    {
+        "merged": "com.example.tradingmonitor.app-debug-4:/layout_fragment_home.xml.flat",
+        "source": "com.example.tradingmonitor.app-main-6:/layout/fragment_home.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\layout_fragment_history.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\layout\\fragment_history.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\xml\\data_extraction_rules.xml"
+    },
+    {
+        "merged": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-debug-4:\\xml_backup_rules.xml.flat",
+        "source": "C:\\Users\\namco\\.gradle\\daemon\\9.0-milestone-1\\com.example.tradingmonitor.app-main-6:\\xml\\backup_rules.xml"
+    }
+]

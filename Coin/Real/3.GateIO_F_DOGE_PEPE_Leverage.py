@@ -24,7 +24,7 @@ class GateioFuturesAPI:
     def __init__(self, api_key, api_secret, url='https://api.gateio.ws'):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.url = url
+        self.url = url 
         
     def _generate_signature(self, method, url, query_string='', body=''):
         t = time.time()

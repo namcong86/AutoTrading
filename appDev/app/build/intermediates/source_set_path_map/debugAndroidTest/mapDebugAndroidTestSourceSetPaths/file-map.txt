@@ -1,0 +1,7 @@
+com.example.tradingmonitor.test.app-androidTest-0 C:\AutoTrading\appDev\app\build\generated\res\resValues\androidTest\debug
+com.example.tradingmonitor.test.app-updated_navigation_xml-1 C:\AutoTrading\appDev\app\build\generated\updated_navigation_xml\debugAndroidTest
+com.example.tradingmonitor.test.app-mergeDebugAndroidTestResources-2 C:\AutoTrading\appDev\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+com.example.tradingmonitor.test.app-mergeDebugAndroidTestResources-3 C:\AutoTrading\appDev\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+com.example.tradingmonitor.test.app-debugAndroidTest-4 C:\AutoTrading\appDev\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
+com.example.tradingmonitor.test.app-annotation-experimental-1.3.0-5 C:\Users\namco\.gradle\caches\9.0-milestone-1\transforms\425cf505e16b4f0a98069bd0590cbd01\transformed\annotation-experimental-1.3.0\res
+com.example.tradingmonitor.test.app-core-1.5.0-6 C:\Users\namco\.gradle\caches\9.0-milestone-1\transforms\ada1008588f27836d93a143fcc1e2411\transformed\core-1.5.0\res

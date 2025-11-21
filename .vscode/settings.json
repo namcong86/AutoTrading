@@ -1,0 +1,13 @@
+{
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/.vscode": true,
+        "**/*.pyc": true
+    },
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/Stock/Common"
+    ],
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/Stock/Common"
+    ]
+}
