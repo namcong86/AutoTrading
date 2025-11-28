@@ -1,6 +1,5 @@
 # Git 무시할 폴더 목록
 log/
-unUsed/
 # API Keys and sensitive data
 autobot.json
 my_key.py
