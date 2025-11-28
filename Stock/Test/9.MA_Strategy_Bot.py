@@ -21,6 +21,7 @@ $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
 
+
 관련 포스팅
 https://blog.naver.com/zacra/223559959653
 
@@ -41,7 +42,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Common'))
 
 import KIS_Common as Common
-import KIS_API_Helper_KR as KisKR
+import KIS_API_Helper_US as KisUS
 
 import pprint
 
@@ -53,27 +54,21 @@ Common.SetChangeMode("VIRTUAL") #REAL or VIRTUAL
 
 
 #포트폴리오 이름
-PortfolioName = "이동평균자산배분전략_KR"
+PortfolioName = "이동평균자산배분전략_US"
 
 InvestStockList = list()
 
-InvestStockList.append({"stock_code":"133690", "small_ma":5 , "big_ma":34, "invest_rate":0.4}) #TIGER 미국나스닥100
-InvestStockList.append({"stock_code":"069500", "small_ma":3 , "big_ma":103, "invest_rate":0.2}) #KODEX 200
-InvestStockList.append({"stock_code":"148070", "small_ma":8 , "big_ma":71, "invest_rate":0.1}) #KOSEF 국고채10년
-InvestStockList.append({"stock_code":"305080", "small_ma":20 , "big_ma":61, "invest_rate":0.1}) #TIGER 미국채10년선물
-InvestStockList.append({"stock_code":"132030", "small_ma":15 , "big_ma":89, "invest_rate":0.2}) #KODEX 골드선물(H)
-
-
-
-    
+InvestStockList.append({"stock_code":"QQQ", "small_ma":3 , "big_ma":132, "invest_rate":0.5}) 
+InvestStockList.append({"stock_code":"TLT", "small_ma":13 , "big_ma":53, "invest_rate":0.25}) 
+InvestStockList.append({"stock_code":"GLD", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
 
 
 #마켓이 열렸는지 여부~!
-IsMarketOpen = KisKR.IsMarketOpen()
+IsMarketOpen = KisUS.IsMarketOpen()
 
 
 #계좌 잔고를 가지고 온다!
-Balance = KisKR.GetBalance()
+Balance = KisUS.GetBalance()
 
 
 print("--------------내 보유 잔고---------------------")
@@ -95,15 +90,16 @@ print("총 포트폴리오에 할당된 투자 가능 금액 : ", TotalMoney)
 
 
 
-
 ##########################################################
 
 print("--------------내 보유 주식---------------------")
 #그리고 현재 이 계좌에서 보유한 주식 리스트를 가지고 옵니다!
-MyStockList = KisKR.GetMyStockList()
+MyStockList = KisUS.GetMyStockList()
 #pprint.pprint(MyStockList)
 print("--------------------------------------------")
 ##########################################################
+
+
 
 
 for stock_info in InvestStockList:
@@ -117,7 +113,7 @@ for stock_info in InvestStockList:
     
 
 
-    stock_name = KisKR.GetStockName(stock_code)
+    stock_name = ""
     stock_amt = 0 #수량
     stock_avg_price = 0 #평단
     stock_eval_totalmoney = 0 #총평가금액!
@@ -140,7 +136,7 @@ for stock_info in InvestStockList:
 
     
     
-    df = Common.GetOhlcv("KR", stock_code,250)
+    df = Common.GetOhlcv("US", stock_code,250)
 
     df['prevOpen'] = df['open'].shift(1)
     df['prevClose'] = df['close'].shift(1)
@@ -174,14 +170,12 @@ for stock_info in InvestStockList:
                                     
                 BuyMoney = TotalMoney * stock_target_rate
 
-                CurrentPrice = KisKR.GetCurrentPrice(stock_code)
-                
+                CurrentPrice = KisUS.GetCurrentPrice(stock_code)
                 #매수할 수량을 계산한다!
                 BuyAmt = int(BuyMoney / CurrentPrice)
                 
-                
                 CurrentPrice *= 1.01 #현재가의 1%위의 가격으로 지정가 매수.. (그럼 1% 위 가격보다 작은 가격의 호가들은 모두 체결되기에 제한있는 시장가 매수 효과)
-                pprint.pprint(KisKR.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice))
+                pprint.pprint(KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice))
                 
                 
                 
@@ -202,7 +196,7 @@ for stock_info in InvestStockList:
                 line_alert.SendMessage(msg)
 
 
-                CurrentPrice = KisKR.GetCurrentPrice(stock_code)
+                CurrentPrice = KisUS.GetCurrentPrice(stock_code)
                 CurrentPrice *= 0.99 #현재가의 1%아래의 가격으로 지정가 매도.. (그럼 1%아래 가격보다 큰 가격의 호가들은 모두 체결되기에 제한있는 시장가 매도 효과)
-                pprint.pprint(KisKR.MakeSellLimitOrder(stock_code,abs(stock_amt),CurrentPrice))
+                pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,abs(stock_amt),CurrentPrice))
                 

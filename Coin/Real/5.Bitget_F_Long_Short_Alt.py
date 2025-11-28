@@ -1,285 +1,471 @@
 # -*- coding:utf-8 -*-
-"""
-파일이름: 5.Bitget_F_Long_Short_Alt.py
-설명: Bitget 선물 롱/숏 양방향 알트코인 전략 (운영용)
-      대상 코인: ETH, XRP, BNB, SOL, TRX, DOGE, ADA, HYPE
-"""
+'''
+골든크로스/데드크로스 롱숏 전략 - Bitget 운영 봇
+- 1시간봉 기준 20이평, 120이평 크로스 매매
+- 골든크로스: 롱 진입 (숏 청산)
+- 데드크로스: 숏 진입 (롱 청산)
+- 5분할 진입, 청산은 일괄
+'''
 import ccxt
 import time
 import pandas as pd
-import numpy as np
-import datetime
 import json
-import logging
-import sys
-import os
 import socket
 import telegram_alert
 
 # ==============================================================================
-# 1. 기본 설정 및 API 키
+# 설정
 # ==============================================================================
-# Bitget API 키 (실제 키로 교체 필요)
-BITGET_ACCESS_KEY = "your_bitget_access_key"
-BITGET_SECRET_KEY = "your_bitget_secret_key"
-BITGET_PASSPHRASE = "your_bitget_passphrase"
-
-# 알림 첫 문구
-FIRST_STRING = "5.Bitget 롱숏 알트"
-
-# 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('bitget_long_short_alt.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
-
-# ==============================================================================
-# 2. 전략 및 거래 설정
-# ==============================================================================
-TIMEFRAME = '15m'             # 15분봉 데이터 사용
-LEVERAGE = 8                  # 레버리지
-INVEST_COIN_LIST = [
-    "ETH/USDT:USDT",
-    "XRP/USDT:USDT",
-    "BNB/USDT:USDT",
-    "SOL/USDT:USDT",
-    "TRX/USDT:USDT",
-    "DOGE/USDT:USDT",
-    "ADA/USDT:USDT",
-    "HYPE/USDT:USDT"
+# 비트겟 계정 정보
+ACCOUNT_LIST = [
+    {
+        "name": "BitgetMain",
+        "access_key": "bg_b191c3cc69263a9993453a08acbde6f5",
+        "secret_key": "c2690dc2dadee98fd976d1c78f52e223dd6b98dfe6a45f24899d68a332481fd6",
+        "passphrase": "namcongMain",
+        "leverage": 1  # 레버리지 (1~10 설정 가능)
+    },
 ]
-FEE_RATE = 0.0006             # 거래 수수료
 
-# 기본 진입 금액 비율
-BASE_BUY_RATE = 0.02
+# 투자 종목 리스트
+INVEST_COIN_LIST = [
+    {'ticker': 'ADA/USDT:USDT', 'rate': 1.0},  # rate는 전체 자금 중 이 코인에 할당할 비율
+    # 추가 코인은 여기에 추가
+    # {'ticker': 'DOGE/USDT:USDT', 'rate': 0.5},
+]
 
-# 전략 스위치
-USE_ADDITIVE_BUYING = False
-USE_MACD_BUY_LOCK = True
-USE_SHORT_STRATEGY = True
-SHORT_CONDITION_TIMEFRAME = '1d'
-MAX_LONG_BUY_COUNT = 10
-MAX_SHORT_BUY_COUNT = 5
-SHORT_ENTRY_RSI = 75
-LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 6
+# 전략 설정
+SHORT_MA = 20            # 단기 이동평균
+LONG_MA = 120            # 장기 이동평균
+SPLIT_COUNT = 1          # 분할 진입 횟수 (1=일괄진입, 2~5=분할진입)
+INVEST_RATE = 0.99       # 전체 자금 중 투자 비율
+FEE = 0.0006             # 수수료율 (0.06%)
 
-pcServerGb = socket.gethostname()
-if pcServerGb == "AutoBotCong":
-    BOT_DATA_FILE_PATH = "/var/AutoBot/json/Bitget_F_Long_Short_Alt_Data.json"
-else:
-    BOT_DATA_FILE_PATH = "./Bitget_F_Long_Short_Alt_Data.json"
+# 익절 레벨 설정 (전 캔들 종가 기준)
+# profit_pct: 수익률 도달 시, sell_pct: 해당 시점 물량의 몇 %를 익절
+TAKE_PROFIT_LEVELS = [
+    {'level': 1, 'profit_pct': 3, 'sell_pct': 10},   # TP1: 3% 수익 시 10% 익절
+    {'level': 2, 'profit_pct': 5, 'sell_pct': 20},   # TP2: 5% 수익 시 20% 익절
+    {'level': 3, 'profit_pct': 10, 'sell_pct': 30},  # TP3: 10% 수익 시 30% 익절
+]
+
 
 # ==============================================================================
-# 3. CCXT 초기화
+# 헬퍼 함수
 # ==============================================================================
-try:
-    exchange = ccxt.bitget({
-        'apiKey': BITGET_ACCESS_KEY,
-        'secret': BITGET_SECRET_KEY,
-        'password': BITGET_PASSPHRASE,
-        'enableRateLimit': True,
-        'options': {
-            'defaultType': 'swap',
-            'defaultSettle': 'usdt'
-        }
-    })
-    logger.info("Bitget 거래소 연결 성공")
-except Exception as e:
-    logger.error(f"Bitget 거래소 연결 실패: {e}")
-    sys.exit(1)
-
-# 상태 데이터 딕셔너리
-BotDataDict = {}
-
-def load_bot_data():
-    """JSON 파일에서 봇 상태 데이터를 로드합니다."""
-    global BotDataDict
+def GetOhlcv(exchange, ticker, timeframe='1h', target_rows=150):
+    """Bitget: OHLCV 데이터 가져오기"""
     try:
-        if os.path.exists(BOT_DATA_FILE_PATH):
-            with open(BOT_DATA_FILE_PATH, 'r') as f:
-                BotDataDict = json.load(f)
-            logger.info(f"봇 상태 데이터 로드 완료: {BOT_DATA_FILE_PATH}")
-        else:
-            BotDataDict = {}
-            logger.info("기존 상태 데이터 파일이 없어 새로 시작합니다.")
-    except Exception as e:
-        logger.error(f"봇 상태 데이터 로드 오류: {e}")
-        BotDataDict = {}
+        limit = 100
+        all_ohlcv = []
+        end_ms = None
+        attempts = 0
 
-def save_bot_data():
-    """현재 봇 상태 데이터를 JSON 파일로 저장합니다."""
-    try:
-        with open(BOT_DATA_FILE_PATH, 'w') as f:
-            json.dump(BotDataDict, f, indent=2)
-        logger.info("봇 상태 데이터 저장 완료")
-    except Exception as e:
-        logger.error(f"봇 상태 데이터 저장 오류: {e}")
+        while len(all_ohlcv) < target_rows and attempts < 5:
+            params = {'limit': limit}
+            if end_ms is not None:
+                params['endTime'] = end_ms
 
-load_bot_data()
+            batch = exchange.fetch_ohlcv(ticker, timeframe, limit=limit, params=params)
+            if not batch:
+                break
 
-# ==============================================================================
-# 4. 데이터 및 지표 계산 함수
-# ==============================================================================
-def fetch_ohlcv(ticker, timeframe, limit=500):
-    """지정된 티커와 타임프레임의 OHLCV 데이터를 가져옵니다."""
-    try:
-        ohlcv = exchange.fetch_ohlcv(ticker, timeframe=timeframe, limit=limit)
-        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-        df.set_index('timestamp', inplace=True)
+            all_ohlcv = batch + all_ohlcv
+            end_ms = batch[0][0] - 1
+            attempts += 1
+
+            if len(batch) < limit:
+                break
+
+            time.sleep(0.2)
+
+        if not all_ohlcv:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(all_ohlcv, columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])
+        df.drop_duplicates(subset='datetime', keep='first', inplace=True)
+        df.sort_values('datetime', inplace=True)
+        df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
+        df.set_index('datetime', inplace=True)
         return df
     except Exception as e:
-        logger.error(f"[{ticker}] OHLCV 데이터 가져오기 오류: {e}")
+        print(f"GetOhlcv 오류 ({ticker}): {e}")
         return pd.DataFrame()
 
-def calculate_indicators(df, window=14):
-    """RSI, 볼린저밴드, MACD, 이동평균선을 계산합니다."""
-    # RSI
-    delta = df['close'].diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
-    rs = gain / loss
-    df['rsi'] = 100 - (100 / (1 + rs))
 
-    # 볼린저밴드
-    df['bb_middle'] = df['close'].rolling(window=20).mean()
-    std = df['close'].rolling(window=20).std()
-    df['bb_upper'] = df['bb_middle'] + (std * 2)
-    df['bb_lower'] = df['bb_middle'] - (std * 2)
-
-    # MACD
-    ema_fast = df['close'].ewm(span=12, adjust=False).mean()
-    ema_slow = df['close'].ewm(span=26, adjust=False).mean()
-    df['macd'] = ema_fast - ema_slow
-    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-    df['macd_histogram'] = df['macd'] - df['macd_signal']
-
-    # 이동평균선
-    df['ma30'] = df['close'].rolling(window=30).mean()
-
-    return df
-
-def calculate_adx(df, window=14):
-    """ADX 지표를 계산합니다."""
-    df['h-l'] = df['high'] - df['low']
-    df['h-pc'] = abs(df['high'] - df['close'].shift(1))
-    df['l-pc'] = abs(df['low'] - df['close'].shift(1))
-    df['tr'] = df[['h-l', 'h-pc', 'l-pc']].max(axis=1)
-
-    df['pdm'] = df['high'].diff()
-    df['mdm'] = -df['low'].diff()
-    df['pdm'] = df['pdm'].where((df['pdm'] > df['mdm']) & (df['pdm'] > 0), 0)
-    df['mdm'] = df['mdm'].where((df['mdm'] > df['pdm']) & (df['mdm'] > 0), 0)
-
-    df['pdi'] = (df['pdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
-    df['mdi'] = (df['mdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
-    
-    with np.errstate(divide='ignore', invalid='ignore'):
-        df['dx'] = (abs(df['pdi'] - df['mdi']) / (df['pdi'] + df['mdi'])) * 100
-    df['dx'] = df['dx'].fillna(0)
-    df['adx'] = df['dx'].ewm(alpha=1/window, adjust=False).mean()
-    return df
-
-def add_secondary_timeframe_indicators(df_base, ticker, secondary_timeframe='1d'):
-    """상위 타임프레임 지표를 추가합니다."""
-    df_secondary = fetch_ohlcv(ticker, secondary_timeframe, limit=100)
-    if df_secondary.empty:
-        return df_base.assign(prev_tf_close_below_ma30=False, prev_tf_macd_hist_neg=False, prev_tf_ma30_3day_rising=False, prev_tf_adx=0)
-
-    df_secondary['ma30'] = df_secondary['close'].rolling(window=30).mean()
-    ema_fast_sec = df_secondary['close'].ewm(span=12, adjust=False).mean()
-    ema_slow_sec = df_secondary['close'].ewm(span=26, adjust=False).mean()
-    macd_sec = ema_fast_sec - ema_slow_sec
-    df_secondary['macd_histogram'] = macd_sec - macd_sec.ewm(span=9, adjust=False).mean()
-    df_secondary['ma30_3day_rising'] = (df_secondary['ma30'].diff(1) > 0) & (df_secondary['ma30'].diff(2) > 0) & (df_secondary['ma30'].diff(3) > 0)
-    df_secondary = calculate_adx(df_secondary, window=14)
-
-    latest_secondary_candle = df_secondary.iloc[-2]
-
-    df_base['prev_tf_close_below_ma30'] = latest_secondary_candle['close'] < latest_secondary_candle['ma30']
-    df_base['prev_tf_macd_hist_neg'] = latest_secondary_candle['macd_histogram'] < 0
-    df_base['prev_tf_ma30_3day_rising'] = latest_secondary_candle['ma30_3day_rising']
-    df_base['prev_tf_adx'] = latest_secondary_candle['adx']
-    
-    return df_base
-
-# ==============================================================================
-# 5. 거래 실행 함수
-# ==============================================================================
-def get_available_balance(settle_currency='USDT'):
-    """선물 계좌의 가용 잔고를 조회합니다."""
+def GetCoinNowPrice(exchange, ticker):
+    """현재 가격 조회"""
     try:
-        balance = exchange.fetch_balance(params={'type': 'swap', 'settle': settle_currency.lower()})
-        return balance.get('free', {}).get(settle_currency, 0)
+        return exchange.fetch_ticker(ticker)['last']
     except Exception as e:
-        logger.error(f"잔고 조회 오류: {e}")
-        return 0
+        print(f"GetCoinNowPrice 오류 ({ticker}): {e}")
+        return 0.0
 
-def get_average_price(entries):
-    """진입 목록의 평균 가격을 계산합니다."""
-    if not entries:
-        return 0
-    total_quantity = sum(e['quantity'] for e in entries)
-    if total_quantity == 0:
-        return 0
-    total_value = sum(e['price'] * e['quantity'] for e in entries)
-    return total_value / total_quantity
 
-def calculate_order_amount(ticker, usdt_amount, price, leverage):
-    """주문할 계약 수량을 계산합니다."""
-    market = exchange.market(ticker)
-    contract_size = float(market.get('contractSize', 1))
-    position_value_usdt = usdt_amount * leverage
-    coin_amount = position_value_usdt / price
-    contract_amount = coin_amount / contract_size
-    return contract_amount
+def check_golden_cross(df, short_ma, long_ma):
+    """골든크로스 확인"""
+    if len(df) < 2:
+        return False
+    prev_short = df[f'ma_{short_ma}'].iloc[-2]
+    prev_long = df[f'ma_{long_ma}'].iloc[-2]
+    curr_short = df[f'ma_{short_ma}'].iloc[-1]
+    curr_long = df[f'ma_{long_ma}'].iloc[-1]
+    
+    return prev_short <= prev_long and curr_short > curr_long
 
-def set_margin_mode_cross(ticker):
-    """마진 모드를 CROSS로 설정합니다."""
+
+def check_dead_cross(df, short_ma, long_ma):
+    """데드크로스 확인"""
+    if len(df) < 2:
+        return False
+    prev_short = df[f'ma_{short_ma}'].iloc[-2]
+    prev_long = df[f'ma_{long_ma}'].iloc[-2]
+    curr_short = df[f'ma_{short_ma}'].iloc[-1]
+    curr_long = df[f'ma_{long_ma}'].iloc[-1]
+    
+    return prev_short >= prev_long and curr_short < curr_long
+
+
+# ==============================================================================
+# 메인 트레이딩 로직
+# ==============================================================================
+def execute_trading_logic(account_info):
+    """하나의 계정에 대한 트레이딩 로직 실행"""
+    account_name = account_info['name']
+    access_key = account_info['access_key']
+    secret_key = account_info['secret_key']
+    passphrase = account_info['passphrase']
+    set_leverage = account_info['leverage']
+
+    first_String = f"[5.Bitget 롱숏 {account_name}] {set_leverage}배 "
+
+    # 비트겟 객체 생성
     try:
-        exchange.set_margin_mode('cross', ticker, params={'settle': 'usdt'})
-        logger.info(f"[{ticker}] 마진 모드 CROSS 설정 완료")
-    except Exception as e:
-        logger.warning(f"[{ticker}] 마진 모드 설정 오류: {e}")
-
-# ==============================================================================
-# 6. 메인 실행 로직 (로직은 추후 구현)
-# ==============================================================================
-def run_bot():
-    """봇의 메인 실행 로직입니다."""
-    logger.info("===== Bitget 롱숏 알트 봇 실행 시작 =====")
-
-    for coin_ticker in INVEST_COIN_LIST:
-        logger.info(f"\n--- [{coin_ticker}] 처리 시작 ---")
-        
-        # 상태 데이터 초기화
-        if coin_ticker not in BotDataDict:
-            BotDataDict[coin_ticker] = {
-                "long": {"entries": [], "buy_blocked_by_macd": False, "last_buy_timestamp": None},
-                "short": {"entries": [], "sell_blocked_by_macd": False, "last_buy_timestamp": None}
+        bitgetX = ccxt.bitget({
+            'apiKey': access_key,
+            'secret': secret_key,
+            'password': passphrase,
+            'enableRateLimit': True,
+            'options': {
+                'defaultType': 'swap',
+                'defaultMarginMode': 'cross'
             }
-        
-        long_pos_data = BotDataDict[coin_ticker]['long']
-        short_pos_data = BotDataDict[coin_ticker]['short']
+        })
+    except Exception as e:
+        print(f"[{account_name}] ccxt 객체 생성 실패: {e}")
+        telegram_alert.SendMessage(f"[{account_name}] ccxt 객체 생성 실패")
+        return
 
-        # TODO: 전략 로직 구현
-        # 1. 데이터 및 지표 계산
-        # 2. 롱 포지션 청산 로직
-        # 3. 롱 포지션 진입 로직
-        # 4. 숏 포지션 청산 로직
-        # 5. 숏 포지션 진입 로직
+    # 데이터 파일 경로
+    pcServerGb = socket.gethostname()
+    if pcServerGb == "AutoBotCong":
+        botdata_file_path = f"/var/AutoBot/json/BitgetF_LongShort_Data_{account_name}.json"
+    else:
+        botdata_file_path = f"./BitgetF_LongShort_Data_{account_name}.json"
 
-        logger.info(f"[{coin_ticker}] 로직 구현 대기중...")
-        
-        logger.info(f"--- [{coin_ticker}] 처리 완료 ---")
-        time.sleep(1)
+    # 봇 데이터 로드
+    try:
+        with open(botdata_file_path, 'r') as f:
+            BotDataDict = json.load(f)
+    except FileNotFoundError:
+        BotDataDict = {}
+    except Exception as e:
+        print(f"[{account_name}] 데이터 파일 로드 오류: {e}")
+        BotDataDict = {}
 
-    logger.info("===== 봇 실행 종료 =====")
+    t = time.gmtime()
+    hour_n = t.tm_hour
+    min_n = t.tm_min
 
+    if min_n <= 2:
+        start_msg = f"{first_String} 시작"
+        telegram_alert.SendMessage(start_msg)
+
+    # 잔고 조회
+    try:
+        balance_check = bitgetX.fetch_balance(params={"type": "swap"})
+        time.sleep(0.1)
+        current_usdt_balance = float(balance_check['USDT']['free'])
+
+        if current_usdt_balance < 10:
+            print(f"[{account_name}] 잔고 부족 ({current_usdt_balance:.2f} USDT)")
+            return
+
+        print(f"[{account_name}] 현재 잔고: {current_usdt_balance:.2f} USDT")
+
+    except Exception as e:
+        print(f"[{account_name}] 잔고 조회 실패: {e}")
+        return
+
+    # 메인 루프
+    for coin_data in INVEST_COIN_LIST:
+        coin_ticker = coin_data['ticker']
+        coin_rate = coin_data['rate']
+
+        # 키 초기화
+        for key in ["_POSITION", "_ENTRY_COUNT", "_ENTRY_PRICE", "_POSITION_SIZE", "_TP_TRIGGERED"]:
+            full_key = coin_ticker + key
+            if full_key not in BotDataDict:
+                if key == "_POSITION":
+                    BotDataDict[full_key] = 0  # 0: 없음, 1: 롱, -1: 숏
+                elif key == "_ENTRY_COUNT":
+                    BotDataDict[full_key] = 0
+                elif key == "_TP_TRIGGERED":
+                    BotDataDict[full_key] = []  # 이미 실행된 TP 레벨 리스트
+                else:
+                    BotDataDict[full_key] = 0.0
+
+        # 1시간봉 데이터 가져오기
+        df = GetOhlcv(bitgetX, coin_ticker, '1h', target_rows=150)
+        if df.empty or len(df) < LONG_MA + 2:
+            print(f"[{account_name}] {coin_ticker} 데이터 부족")
+            continue
+
+        # 이동평균 계산
+        df[f'ma_{SHORT_MA}'] = df['close'].rolling(SHORT_MA).mean()
+        df[f'ma_{LONG_MA}'] = df['close'].rolling(LONG_MA).mean()
+        df.dropna(inplace=True)
+
+        if len(df) < 2:
+            print(f"[{account_name}] {coin_ticker} 지표 계산 후 데이터 부족")
+            continue
+
+        now_price = GetCoinNowPrice(bitgetX, coin_ticker)
+        if now_price == 0:
+            print(f"[{account_name}] {coin_ticker} 현재가 조회 실패")
+            continue
+
+        # 현재 포지션 상태
+        current_position = BotDataDict.get(coin_ticker + '_POSITION', 0)
+        entry_count = BotDataDict.get(coin_ticker + '_ENTRY_COUNT', 0)
+        entry_price = BotDataDict.get(coin_ticker + '_ENTRY_PRICE', 0)
+        tp_triggered = BotDataDict.get(coin_ticker + '_TP_TRIGGERED', [])
+
+        # 실제 포지션 확인
+        try:
+            positions = bitgetX.fetch_positions([coin_ticker])
+            actual_position = 0
+            actual_size = 0
+            actual_entry_price = 0
+            for pos in positions:
+                if pos['symbol'] == coin_ticker and float(pos.get('contracts', 0)) != 0:
+                    actual_size = abs(float(pos['contracts']))
+                    actual_entry_price = float(pos.get('entryPrice', 0))
+                    if pos['side'] == 'long':
+                        actual_position = 1
+                    elif pos['side'] == 'short':
+                        actual_position = -1
+            # 진입가 업데이트
+            if actual_entry_price > 0 and entry_price == 0:
+                BotDataDict[coin_ticker + '_ENTRY_PRICE'] = actual_entry_price
+                entry_price = actual_entry_price
+        except Exception as e:
+            print(f"[{account_name}] {coin_ticker} 포지션 조회 오류: {e}")
+            actual_position = current_position
+            actual_size = BotDataDict.get(coin_ticker + '_POSITION_SIZE', 0)
+
+        # === 익절 체크 (전 캔들 종가 기준) ===
+        if actual_position != 0 and actual_size > 0 and entry_price > 0:
+            prev_close = df['close'].iloc[-2]  # 전 캔들 종가
+            
+            # 수익률 계산
+            if actual_position == 1:  # 롱
+                profit_pct = ((prev_close - entry_price) / entry_price) * 100
+            else:  # 숏
+                profit_pct = ((entry_price - prev_close) / entry_price) * 100
+            
+            # 익절 레벨 체크
+            for tp in TAKE_PROFIT_LEVELS:
+                tp_level = tp['level']
+                tp_profit = tp['profit_pct']
+                tp_sell_pct = tp['sell_pct']
+                
+                # 이미 실행된 레벨은 스킵
+                if tp_level in tp_triggered:
+                    continue
+                
+                # 수익률 도달 시 익절 실행
+                if profit_pct >= tp_profit:
+                    sell_amount = actual_size * (tp_sell_pct / 100)
+                    if sell_amount > 0:
+                        try:
+                            if actual_position == 1:  # 롱 익절
+                                bitgetX.create_order(
+                                    coin_ticker, 'market', 'sell', sell_amount,
+                                    None, {'holdSide': 'long', 'reduceOnly': True}
+                                )
+                            else:  # 숏 익절
+                                bitgetX.create_order(
+                                    coin_ticker, 'market', 'buy', sell_amount,
+                                    None, {'holdSide': 'short', 'reduceOnly': True}
+                                )
+                            
+                            # TP 레벨 기록
+                            tp_triggered.append(tp_level)
+                            BotDataDict[coin_ticker + '_TP_TRIGGERED'] = tp_triggered
+                            BotDataDict[coin_ticker + '_POSITION_SIZE'] = actual_size - sell_amount
+                            
+                            # 텔레그램 알림
+                            tp_msg = (
+                                f"💰 {first_String} {coin_ticker} 부분 익절 (TP{tp_level})\n"
+                                f"- 진입가: ${entry_price:.6f}\n"
+                                f"- 전캔들 종가: ${prev_close:.6f}\n"
+                                f"- 수익률: {profit_pct:.2f}%\n"
+                                f"- 익절 비율: {tp_sell_pct}%\n"
+                                f"- 익절 수량: {sell_amount:.6f}\n"
+                                f"- 남은 수량: {actual_size - sell_amount:.6f}"
+                            )
+                            print(tp_msg)
+                            telegram_alert.SendMessage(tp_msg)
+                            
+                            # 포지션 크기 업데이트
+                            actual_size -= sell_amount
+                            time.sleep(0.2)
+                        except Exception as e:
+                            print(f"[{account_name}] {coin_ticker} TP{tp_level} 익절 실패: {e}")
+                            telegram_alert.SendMessage(f"{first_String} {coin_ticker} TP{tp_level} 익절 실패: {e}")
+
+        # 골든크로스 확인
+        is_golden = check_golden_cross(df, SHORT_MA, LONG_MA)
+        # 데드크로스 확인
+        is_dead = check_dead_cross(df, SHORT_MA, LONG_MA)
+
+        # 알림 메시지
+        alert_msg = (
+            f"<{first_String} {coin_ticker}>\n"
+            f"- 현재가: ${now_price:.6f}\n"
+            f"- MA{SHORT_MA}: ${df[f'ma_{SHORT_MA}'].iloc[-1]:.6f}\n"
+            f"- MA{LONG_MA}: ${df[f'ma_{LONG_MA}'].iloc[-1]:.6f}\n"
+            f"- 골든크로스: {is_golden}\n"
+            f"- 데드크로스: {is_dead}\n"
+            f"- 현재 포지션: {'롱' if actual_position == 1 else '숏' if actual_position == -1 else '없음'}\n"
+            f"- 진입 횟수: {entry_count}/{SPLIT_COUNT}"
+        )
+        telegram_alert.SendMessage(alert_msg)
+
+        # === 골든크로스: 숏 청산 후 롱 진입 ===
+        if is_golden:
+            # 숏 포지션이면 청산
+            if actual_position == -1:
+                try:
+                    bitgetX.create_order(
+                        coin_ticker, 'market', 'buy', actual_size,
+                        None, {'holdSide': 'short', 'reduceOnly': True}
+                    )
+                    msg = f"{first_String} {coin_ticker} 숏 청산 (골든크로스)"
+                    print(msg)
+                    telegram_alert.SendMessage(msg)
+                    
+                    BotDataDict[coin_ticker + '_POSITION'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_COUNT'] = 0
+                    BotDataDict[coin_ticker + '_POSITION_SIZE'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = 0
+                    BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []
+                    actual_position = 0
+                    entry_count = 0
+                except Exception as e:
+                    print(f"[{account_name}] {coin_ticker} 숏 청산 실패: {e}")
+
+            # 롱 진입 (분할)
+            if actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT):
+                try:
+                    # 투자 금액 계산 (분할)
+                    total_invest = current_usdt_balance * INVEST_RATE * coin_rate
+                    split_invest = total_invest / SPLIT_COUNT
+                    amount = (split_invest * set_leverage) / now_price
+
+                    # 레버리지 설정
+                    bitgetX.set_leverage(set_leverage, coin_ticker, params={'marginCoin': 'USDT', 'holdSide': 'long'})
+
+                    # 롱 진입
+                    bitgetX.create_order(
+                        coin_ticker, 'market', 'buy', amount,
+                        None, {'holdSide': 'long'}
+                    )
+
+                    entry_count += 1
+                    BotDataDict[coin_ticker + '_POSITION'] = 1
+                    BotDataDict[coin_ticker + '_ENTRY_COUNT'] = entry_count
+                    BotDataDict[coin_ticker + '_POSITION_SIZE'] = BotDataDict.get(coin_ticker + '_POSITION_SIZE', 0) + amount
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = now_price
+                    BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []  # 신규 진입 시 익절 상태 초기화
+
+                    msg = f"{first_String} {coin_ticker} 롱 진입 ({entry_count}/{SPLIT_COUNT}) - ${split_invest:.2f} USDT @ ${now_price:.6f}"
+                    print(msg)
+                    telegram_alert.SendMessage(msg)
+                except Exception as e:
+                    print(f"[{account_name}] {coin_ticker} 롱 진입 실패: {e}")
+                    telegram_alert.SendMessage(f"{first_String} {coin_ticker} 롱 진입 실패: {e}")
+
+        # === 데드크로스: 롱 청산 후 숏 진입 ===
+        elif is_dead:
+            # 롱 포지션이면 청산
+            if actual_position == 1:
+                try:
+                    bitgetX.create_order(
+                        coin_ticker, 'market', 'sell', actual_size,
+                        None, {'holdSide': 'long', 'reduceOnly': True}
+                    )
+                    msg = f"{first_String} {coin_ticker} 롱 청산 (데드크로스)"
+                    print(msg)
+                    telegram_alert.SendMessage(msg)
+                    
+                    BotDataDict[coin_ticker + '_POSITION'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_COUNT'] = 0
+                    BotDataDict[coin_ticker + '_POSITION_SIZE'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = 0
+                    BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []
+                    actual_position = 0
+                    entry_count = 0
+                except Exception as e:
+                    print(f"[{account_name}] {coin_ticker} 롱 청산 실패: {e}")
+
+            # 숏 진입 (분할)
+            if actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT):
+                try:
+                    # 투자 금액 계산 (분할)
+                    total_invest = current_usdt_balance * INVEST_RATE * coin_rate
+                    split_invest = total_invest / SPLIT_COUNT
+                    amount = (split_invest * set_leverage) / now_price
+
+                    # 레버리지 설정
+                    bitgetX.set_leverage(set_leverage, coin_ticker, params={'marginCoin': 'USDT', 'holdSide': 'short'})
+
+                    # 숏 진입
+                    bitgetX.create_order(
+                        coin_ticker, 'market', 'sell', amount,
+                        None, {'holdSide': 'short'}
+                    )
+
+                    entry_count += 1
+                    BotDataDict[coin_ticker + '_POSITION'] = -1
+                    BotDataDict[coin_ticker + '_ENTRY_COUNT'] = entry_count
+                    BotDataDict[coin_ticker + '_POSITION_SIZE'] = BotDataDict.get(coin_ticker + '_POSITION_SIZE', 0) + amount
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = now_price
+                    BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []  # 신규 진입 시 익절 상태 초기화
+
+                    msg = f"{first_String} {coin_ticker} 숏 진입 ({entry_count}/{SPLIT_COUNT}) - ${split_invest:.2f} USDT @ ${now_price:.6f}"
+                    print(msg)
+                    telegram_alert.SendMessage(msg)
+                except Exception as e:
+                    print(f"[{account_name}] {coin_ticker} 숏 진입 실패: {e}")
+                    telegram_alert.SendMessage(f"{first_String} {coin_ticker} 숏 진입 실패: {e}")
+
+        # 봇 데이터 저장
+        with open(botdata_file_path, 'w') as f:
+            json.dump(BotDataDict, f, indent=4)
+
+    if min_n <= 2:
+        end_msg = f"{first_String} 종료"
+        telegram_alert.SendMessage(end_msg)
+
+
+# ==============================================================================
+# 메인 실행
+# ==============================================================================
 if __name__ == '__main__':
-    run_bot()
+    print("===== Bitget 골든/데드크로스 롱숏 봇 시작 =====")
+    for account in ACCOUNT_LIST:
+        print(f"\n--- {account['name']} 거래 시작 (레버리지: {account['leverage']}배) ---")
+        execute_trading_logic(account)
+    print("\n===== 모든 계정 거래 실행 완료 =====")

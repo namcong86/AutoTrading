@@ -314,7 +314,7 @@ COIN_LISTS_BY_YEAR = {
 }
 
 # 1. 첫 번째 파라미터 (연도) 처리
-year_choice = '2022' # 기본값
+year_choice = '2020' # 기본값
 if len(sys.argv) > 1:
     year_choice = sys.argv[1]
 
@@ -325,7 +325,7 @@ if year_choice not in COIN_LISTS_BY_YEAR:
     print(f"경고: 입력된 연도 '{year_choice}'에 대한 설정이 없습니다. 기본값 '2023' 설정을 사용합니다.")
 
 # 2. 두 번째 파라미터 (레버리지) 처리
-leverage = 3.5  # 기본값
+leverage = 3  # 기본값
 if len(sys.argv) > 2:
     try:
         leverage = float(sys.argv[2])
