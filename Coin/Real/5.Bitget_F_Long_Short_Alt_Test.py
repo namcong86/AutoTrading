@@ -19,28 +19,57 @@ import tkinter as tk
 from tkinter import ttk
 from datetime import datetime
 import os
+import ccxt
+import time
+
+# ==============================================================================
+# 한글 폰트 설정 (Windows)
+# ==============================================================================
+import matplotlib.font_manager as fm
+
+# 시스템에서 사용 가능한 한글 폰트 찾기
+def set_korean_font():
+    font_list = ['Malgun Gothic', 'NanumGothic', 'NanumBarunGothic', 'Gulim', 'Dotum']
+    for font_name in font_list:
+        try:
+            font_path = fm.findfont(fm.FontProperties(family=font_name))
+            if font_path and 'ttf' in font_path.lower():
+                plt.rcParams['font.family'] = font_name
+                plt.rcParams['axes.unicode_minus'] = False
+                print(f"[폰트] {font_name} 사용")
+                return True
+        except:
+            continue
+    # 폰트를 못찾으면 기본 설정
+    plt.rcParams['axes.unicode_minus'] = False
+    return False
+
+set_korean_font()
 
 # ==============================================================================
 # 백테스트 설정
 # ==============================================================================
 INITIAL_CAPITAL = 100000      # 초기 자본금 (USDT)
-LEVERAGE = 1.2                  # 레버리지 배수
+LEVERAGE = 1                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
 DAILY_MA = 120                # 일봉 이동평균 기간 (방향 필터용)
 TIMEFRAME = '1h'              # 캔들 타임프레임 ('1h' 또는 '15m')
 FEE_RATE = 0.0006             # 거래 수수료 (0.06%)
 
-# 익절 설정 (전캔들 기준, 각 조건당 한번씩만 적용)
+# 부분 익절 설정
+TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적용, False: 미적용)
+
+# 익절 설정 (전캔들 기준, 각 조건당 한번씩만 적용) - TAKE_PROFIT_ENABLED = True일 때만 적용
 TAKE_PROFIT_LEVELS = [
-    {'profit_pct': 3, 'sell_pct': 10},   # 3% 수익 시 10% 익절
-    {'profit_pct': 5, 'sell_pct': 20},   # 5% 수익 시 나머지의 20% 익절
-    {'profit_pct': 10, 'sell_pct': 30},  # 10% 수익 시 나머지의 30% 익절
+    {'profit_pct': 5, 'sell_pct': 5},   # 3% 수익 시 10% 익절
+    {'profit_pct': 10, 'sell_pct': 10},   # 5% 수익 시 나머지의 20% 익절
+    {'profit_pct': 20, 'sell_pct': 20},  # 10% 수익 시 나머지의 30% 익절
 ]
 
 # 테스트 기간
 START_DATE = '2021-07-01'
-END_DATE = '2025-11-20'
+END_DATE = datetime.now().strftime('%Y-%m-%d')  # 오늘 날짜까지
 
 # 반기별 출금 설정 (1월, 7월 1일에 6개월 수익의 일정 비율 출금)
 SEMI_ANNUAL_WITHDRAWAL_ENABLED = True   # 반기별 출금 활성화 여부
@@ -53,7 +82,6 @@ COIN_LIST = [
     'DOGE/USDT:USDT',
     'SOL/USDT:USDT',
     'BNB/USDT:USDT',
-
 
 ]
 
@@ -240,8 +268,16 @@ class CycleManager:
               f"{sell_pct}% 청산 @ ${price:.6f}, 수익률 {pnl_rate*100:+.2f}%, "
               f"수익금 ${pnl:+.2f} (잔여 {100-sell_pct}%)")
     
-    def check_take_profit(self, symbol, prev_close, timestamp, leverage, tp_levels):
-        """익절 조건 체크 - 전캔들 종가 기준"""
+    def check_take_profit(self, symbol, prev_close, timestamp, leverage, tp_levels, tp_enabled=True):
+        """익절 조건 체크 - 전캔들 종가 기준
+        
+        Args:
+            tp_enabled: 부분 익절 로직 활성화 여부 (False면 익절 체크 안함)
+        """
+        # 부분 익절이 비활성화되면 스킵
+        if not tp_enabled:
+            return
+            
         if symbol not in self.positions:
             return
         
@@ -352,12 +388,16 @@ class CycleManager:
                 self.available_balance -= actual_withdrawal
                 self.total_withdrawn += actual_withdrawal
                 
+                # 출금 후 총 자산 다시 계산
+                new_equity = self.get_total_equity(current_prices)
+                
                 self.withdrawal_history.append({
                     'date': str(current_date),
                     'quarter_start_balance': self.last_quarter_balance,
                     'current_equity': current_equity,
                     'quarter_profit': half_year_profit,
                     'withdrawal_amount': actual_withdrawal,
+                    'remaining_equity': new_equity,
                     'remaining_balance': self.available_balance,
                     'total_withdrawn': self.total_withdrawn
                 })
@@ -368,7 +408,8 @@ class CycleManager:
                 print(f"   현재 총 자산: ${current_equity:,.2f}")
                 print(f"   6개월 수익: ${half_year_profit:+,.2f}")
                 print(f"   출금액 ({withdrawal_rate*100:.0f}%): ${actual_withdrawal:,.2f}")
-                print(f"   출금 후 잔액: ${self.available_balance:,.2f}")
+                print(f"   출금 후 총 자산: ${new_equity:,.2f}")
+                print(f"   (포지션: ${new_equity - self.available_balance:,.2f} + 현금: ${self.available_balance:,.2f})")
                 print(f"   누적 출금액: ${self.total_withdrawn:,.2f}")
                 print(f"{'='*70}\n")
         else:
@@ -448,7 +489,9 @@ class IntegratedBacktest:
         self.coin_daily = {}      # {symbol: DataFrame (일봉)}
     
     def load_data(self, symbol, json_path, daily_json_path, start_date, end_date):
-        """코인별 데이터 로드 및 시그널 계산"""
+        """코인별 데이터 로드 및 시그널 계산
+        JSON 파일의 마지막 데이터 이후부터 현재까지 API로 추가 데이터 수집
+        """
         # 메인 데이터 로드
         with open(json_path, 'r') as f:
             data = json.load(f)
@@ -456,6 +499,11 @@ class IntegratedBacktest:
         df = pd.DataFrame(data)
         df['datetime'] = pd.to_datetime(df['datetime'])
         df.set_index('datetime', inplace=True)
+        
+        # API로 최신 데이터 가져오기
+        df = self.fetch_latest_data(df, symbol, json_path)
+        
+        # 기간 필터링
         df = df[(df.index >= start_date) & (df.index <= end_date)]
         df['symbol'] = symbol
         
@@ -463,11 +511,16 @@ class IntegratedBacktest:
         df['ma_short'] = df['close'].rolling(window=self.short_ma).mean()
         df['ma_long'] = df['close'].rolling(window=self.long_ma).mean()
         
-        # 크로스 감지
+        # 크로스 감지 (전전봉 vs 전봉 비교 → 전봉에서 크로스 확정 → 현재봉에서 진입)
         df['prev_ma_short'] = df['ma_short'].shift(1)
         df['prev_ma_long'] = df['ma_long'].shift(1)
-        df['golden_cross'] = (df['prev_ma_short'] <= df['prev_ma_long']) & (df['ma_short'] > df['ma_long'])
-        df['dead_cross'] = (df['prev_ma_short'] >= df['prev_ma_long']) & (df['ma_short'] < df['ma_long'])
+        df['prev2_ma_short'] = df['ma_short'].shift(2)
+        df['prev2_ma_long'] = df['ma_long'].shift(2)
+        
+        # 전봉에서 크로스가 발생했는지 체크 (전전봉 MA vs 전봉 MA 비교)
+        # 이렇게 하면 "전봉 마감 시 크로스 확정 → 현재봉 시가로 진입" 구조가 됨
+        df['golden_cross'] = (df['prev2_ma_short'] <= df['prev2_ma_long']) & (df['prev_ma_short'] > df['prev_ma_long'])
+        df['dead_cross'] = (df['prev2_ma_short'] >= df['prev2_ma_long']) & (df['prev_ma_short'] < df['prev_ma_long'])
         
         self.coin_data[symbol] = df
         
@@ -479,6 +532,10 @@ class IntegratedBacktest:
             df_daily = pd.DataFrame(daily_data)
             df_daily['datetime'] = pd.to_datetime(df_daily['datetime'])
             df_daily.set_index('datetime', inplace=True)
+            
+            # 일봉도 API로 최신 데이터 가져오기
+            df_daily = self.fetch_latest_data(df_daily, symbol, daily_json_path, timeframe='1d')
+            
             df_daily['daily_ma'] = df_daily['close'].rolling(window=self.daily_ma).mean()
             self.coin_daily[symbol] = df_daily
             print(f"  {symbol}: {len(df)}개 캔들, 일봉 {self.daily_ma}MA 필터 적용")
@@ -487,6 +544,114 @@ class IntegratedBacktest:
             print(f"  {symbol}: {len(df)}개 캔들, 일봉 데이터 없음 (양방향 허용)")
         
         return df
+    
+    def fetch_latest_data(self, existing_df, symbol, json_path, timeframe=None):
+        """JSON 파일의 마지막 데이터 이후부터 현재까지 API로 데이터 수집"""
+        try:
+            # Bitget 객체 생성
+            bitget = ccxt.bitget({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'swap'}
+            })
+            
+            # 타임프레임 결정
+            if timeframe is None:
+                if '1h' in json_path:
+                    timeframe = '1h'
+                elif '1d' in json_path:
+                    timeframe = '1d'
+                elif '15m' in json_path:
+                    timeframe = '15m'
+                else:
+                    timeframe = TIMEFRAME
+            
+            # 마지막 데이터 시간 확인
+            last_datetime = existing_df.index.max()
+            now = pd.Timestamp.now(tz='UTC').tz_localize(None)
+            
+            # 시간 차이 계산 (캔들 수 기준)
+            if timeframe == '1h':
+                time_diff_hours = (now - last_datetime).total_seconds() / 3600
+                candles_needed = int(time_diff_hours) + 1
+            elif timeframe == '1d':
+                time_diff_days = (now - last_datetime).total_seconds() / 86400
+                candles_needed = int(time_diff_days) + 1
+            elif timeframe == '15m':
+                time_diff_mins = (now - last_datetime).total_seconds() / 900
+                candles_needed = int(time_diff_mins) + 1
+            else:
+                candles_needed = 100
+            
+            if candles_needed <= 1:
+                print(f"  {symbol} ({timeframe}): 데이터 최신 상태")
+                return existing_df
+            
+            # 심볼 변환 (ADA/USDT:USDT -> ADAUSDT)
+            api_symbol = symbol.replace('/', '').replace(':USDT', '')
+            
+            print(f"  {symbol} ({timeframe}): {last_datetime} 이후 {candles_needed}개 캔들 API로 수집 중...")
+            
+            # API로 데이터 가져오기
+            since_ms = int(last_datetime.timestamp() * 1000)
+            all_ohlcv = []
+            
+            while len(all_ohlcv) < candles_needed:
+                ohlcv = bitget.fetch_ohlcv(symbol, timeframe, since=since_ms, limit=200)
+                if not ohlcv:
+                    break
+                all_ohlcv.extend(ohlcv)
+                since_ms = ohlcv[-1][0] + 1
+                time.sleep(0.2)
+                
+                if len(ohlcv) < 200:
+                    break
+            
+            if not all_ohlcv:
+                print(f"  {symbol} ({timeframe}): API에서 데이터 없음")
+                return existing_df
+            
+            # DataFrame 변환
+            new_df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            new_df['datetime'] = pd.to_datetime(new_df['timestamp'], unit='ms')
+            new_df.set_index('datetime', inplace=True)
+            new_df = new_df[['open', 'high', 'low', 'close', 'volume']]
+            
+            # 중복 제거 후 병합
+            new_df = new_df[new_df.index > last_datetime]
+            
+            if len(new_df) > 0:
+                combined_df = pd.concat([existing_df, new_df])
+                combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+                combined_df.sort_index(inplace=True)
+                
+                print(f"  {symbol} ({timeframe}): {len(new_df)}개 캔들 추가됨 (총 {len(combined_df)}개)")
+                
+                # JSON 파일 업데이트 (선택적)
+                self.save_updated_json(combined_df, json_path)
+                
+                return combined_df
+            else:
+                print(f"  {symbol} ({timeframe}): 새 데이터 없음")
+                return existing_df
+                
+        except Exception as e:
+            print(f"  {symbol}: API 데이터 수집 실패 - {e}")
+            return existing_df
+    
+    def save_updated_json(self, df, json_path):
+        """업데이트된 데이터를 JSON 파일로 저장"""
+        try:
+            # DataFrame을 JSON 형식으로 변환
+            df_save = df.reset_index()
+            df_save['datetime'] = df_save['datetime'].astype(str)
+            data = df_save.to_dict('records')
+            
+            with open(json_path, 'w') as f:
+                json.dump(data, f)
+            
+            print(f"    -> JSON 파일 업데이트: {json_path}")
+        except Exception as e:
+            print(f"    -> JSON 저장 실패: {e}")
     
     def get_daily_trend(self, symbol, timestamp):
         """일봉 기준 추세 확인"""
@@ -530,6 +695,7 @@ class IntegratedBacktest:
                 all_candles.append({
                     'timestamp': idx,
                     'symbol': symbol,
+                    'open': row['open'],      # 시가 추가 (진입용)
                     'close': row['close'],
                     'prev_close': row['prev_close'],
                     'golden_cross': row['golden_cross'],
@@ -563,32 +729,37 @@ class IntegratedBacktest:
             # 현재 포지션 확인
             current_pos = self.cycle_mgr.get_position(symbol)
             
-            # 익절 체크 (포지션이 있고, 전캔들 종가가 있는 경우)
+            # 익절 체크 (포지션이 있고, 전캔들 종가가 있는 경우, 익절 활성화 시)
             if current_pos and pd.notna(prev_close):
-                self.cycle_mgr.check_take_profit(symbol, prev_close, timestamp, self.leverage, TAKE_PROFIT_LEVELS)
+                self.cycle_mgr.check_take_profit(symbol, prev_close, timestamp, self.leverage, TAKE_PROFIT_LEVELS, TAKE_PROFIT_ENABLED)
                 # 익절 후 포지션 재확인 (물량이 0이 됐을 수 있음)
                 current_pos = self.cycle_mgr.get_position(symbol)
             
             # 일봉 추세 확인
             daily_trend = self.get_daily_trend(symbol, timestamp)
             
+            # 진입가격은 시가(open), 청산가격은 시가(open) - 전봉 마감 후 진입/청산이므로
+            entry_price = candle['open']
+            
             # 골든크로스 - 롱 진입 (숏 청산 후)
+            # (전봉에서 골든크로스 확정 → 현재봉 시가로 진입)
             if candle['golden_cross']:
                 if current_pos and current_pos['direction'] == 'short':
-                    self.cycle_mgr.close_position(symbol, close, timestamp, self.leverage)
+                    self.cycle_mgr.close_position(symbol, entry_price, timestamp, self.leverage)
                     current_pos = None
                 
                 if current_pos is None and daily_trend in ['long', 'both']:
-                    self.cycle_mgr.open_position(symbol, 'long', close, timestamp, self.leverage, current_prices)
+                    self.cycle_mgr.open_position(symbol, 'long', entry_price, timestamp, self.leverage, current_prices)
             
             # 데드크로스 - 숏 진입 (롱 청산 후)
+            # (전봉에서 데드크로스 확정 → 현재봉 시가로 진입)
             elif candle['dead_cross']:
                 if current_pos and current_pos['direction'] == 'long':
-                    self.cycle_mgr.close_position(symbol, close, timestamp, self.leverage)
+                    self.cycle_mgr.close_position(symbol, entry_price, timestamp, self.leverage)
                     current_pos = None
                 
                 if current_pos is None and daily_trend in ['short', 'both']:
-                    self.cycle_mgr.open_position(symbol, 'short', close, timestamp, self.leverage, current_prices)
+                    self.cycle_mgr.open_position(symbol, 'short', entry_price, timestamp, self.leverage, current_prices)
             
             # 반기별 출금 체크 (옵션 활성화 시)
             if SEMI_ANNUAL_WITHDRAWAL_ENABLED:
@@ -648,7 +819,7 @@ def analyze_results(results):
             # 첫 해: 해당 연도 첫 잔액 대비 (또는 초기자본 대비)
             start_balance = yearly_first.iloc[0]
             yearly_returns.iloc[i] = ((end_balance - start_balance) / start_balance) * 100
-        else:
+        else: 
             # 이후 연도: 전년말 잔액 대비
             prev_end_balance = yearly.iloc[i-1]
             yearly_returns.iloc[i] = ((end_balance - prev_end_balance) / prev_end_balance) * 100
@@ -752,13 +923,6 @@ def plot_results_with_tabs(daily_df, mdd, coin_stats, trades, initial_capital):
     root = tk.Tk()
     root.title("백테스트 결과 분석")
     root.geometry("1400x900")
-    
-    # 한글 폰트 설정
-    try:
-        plt.rc('font', family='Malgun Gothic')
-    except:
-        plt.rc('font', family='AppleGothic')
-    plt.rcParams['axes.unicode_minus'] = False
     
     # 노트북(탭) 위젯 생성
     notebook = ttk.Notebook(root)
@@ -1011,6 +1175,10 @@ if __name__ == '__main__':
     print(f"레버리지: {LEVERAGE}배")
     print(f"이동평균: {SHORT_MA} / {LONG_MA}")
     print(f"일봉 MA 필터: {DAILY_MA}일")
+    print(f"부분 익절: {'활성화' if TAKE_PROFIT_ENABLED else '비활성화'}")
+    if TAKE_PROFIT_ENABLED:
+        for tp in TAKE_PROFIT_LEVELS:
+            print(f"  - {tp['profit_pct']}% 수익 시 {tp['sell_pct']}% 익절")
     print(f"종목: {len(COIN_LIST)}개")
     for coin in COIN_LIST:
         print(f"  - {coin}")

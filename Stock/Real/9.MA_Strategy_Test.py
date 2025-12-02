@@ -397,10 +397,26 @@ if len(TotalMoneyList) > 0:
     resultData['SuccesCnt'] = SuccesCnt
     resultData['FailCnt'] = FailCnt
     
-
-
-
+    # 월별/연도별 수익률 계산
     result_df.index = pd.to_datetime(result_df.index)
+    
+    # 월별 수익률
+    monthly_balance = result_df['Total_Money'].resample('ME').last()
+    monthly_returns = monthly_balance.pct_change() * 100
+    monthly_returns = monthly_returns.dropna()
+    
+    # 연도별 수익률 (첫 해는 시작잔액 대비, 이후는 전년말 대비)
+    yearly_balance = result_df['Total_Money'].resample('YE').last()
+    yearly_first = result_df['Total_Money'].resample('YE').first()
+    yearly_returns = pd.Series(index=yearly_balance.index, dtype=float)
+    
+    for i, (date_idx, end_balance) in enumerate(yearly_balance.items()):
+        if i == 0:
+            start_balance = yearly_first.iloc[0]
+        else:
+            start_balance = yearly_balance.iloc[i-1]
+        yearly_returns.iloc[i] = ((end_balance - start_balance) / start_balance) * 100
+
 
     # Create a figure with subplots for the two charts
     fig, axs = plt.subplots(2, 1, figsize=(10, 10))
@@ -434,4 +450,24 @@ if len(TotalMoneyList) > 0:
     print("전략 수익률:", format(round(resultData['RevenueRate'],2), ',') , "%  MDD:", round(resultData['MDD'],2) , "%\n")
     print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
     print("-----------------------------------------------\n")
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+    
+    # 월별 수익률 출력
+    print("\n[월별] 월별 수익률")
+    print("=" * 50)
+    for date_idx, ret in monthly_returns.items():
+        print(f"{date_idx.strftime('%Y-%m')}: {ret:+.2f}%")
+    
+    # 연도별 수익률 출력
+    print("\n[연도별] 연도별 수익률")
+    print("=" * 50)
+    for date_idx, ret in yearly_returns.items():
+        year_end_balance = yearly_balance.loc[date_idx]
+        if date_idx == yearly_balance.index[0]:
+            year_start_balance = yearly_first.iloc[0]
+        else:
+            idx_pos = yearly_balance.index.get_loc(date_idx)
+            year_start_balance = yearly_balance.iloc[idx_pos - 1]
+        profit = year_end_balance - year_start_balance
+        print(f"{date_idx.year}년: {ret:+.2f}%  |  잔액: {year_end_balance:,.0f}  |  손익: {profit:+,.0f}")
+    
+    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")

@@ -314,7 +314,7 @@ COIN_LISTS_BY_YEAR = {
 }
 
 # 1. 첫 번째 파라미터 (연도) 처리
-year_choice = '2020' # 기본값
+year_choice = '2022' # 기본값
 if len(sys.argv) > 1:
     year_choice = sys.argv[1]
 

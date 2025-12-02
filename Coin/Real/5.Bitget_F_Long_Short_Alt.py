@@ -41,12 +41,15 @@ SPLIT_COUNT = 1          # 분할 진입 횟수 (1=일괄진입, 2~5=분할진�
 INVEST_RATE = 0.99       # 전체 자금 중 투자 비율
 FEE = 0.0006             # 수수료율 (0.06%)
 
-# 익절 레벨 설정 (전 캔들 종가 기준)
+# 부분 익절 설정
+TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적용, False: 미적용)
+
+# 익절 레벨 설정 (전 캔들 종가 기준) - TAKE_PROFIT_ENABLED = True일 때만 적용
 # profit_pct: 수익률 도달 시, sell_pct: 해당 시점 물량의 몇 %를 익절
 TAKE_PROFIT_LEVELS = [
-    {'level': 1, 'profit_pct': 3, 'sell_pct': 10},   # TP1: 3% 수익 시 10% 익절
-    {'level': 2, 'profit_pct': 5, 'sell_pct': 20},   # TP2: 5% 수익 시 20% 익절
-    {'level': 3, 'profit_pct': 10, 'sell_pct': 30},  # TP3: 10% 수익 시 30% 익절
+    {'level': 1, 'profit_pct': 5, 'sell_pct': 5},    # TP1: 5% 수익 시 5% 익절
+    {'level': 2, 'profit_pct': 10, 'sell_pct': 10},  # TP2: 10% 수익 시 10% 익절
+    {'level': 3, 'profit_pct': 20, 'sell_pct': 20},  # TP3: 20% 수익 시 20% 익절
 ]
 
 
@@ -103,27 +106,31 @@ def GetCoinNowPrice(exchange, ticker):
 
 
 def check_golden_cross(df, short_ma, long_ma):
-    """골든크로스 확인"""
-    if len(df) < 2:
+    """골든크로스 확인 (전전봉 vs 전봉 비교 → 전봉 마감 시 크로스 확정)"""
+    if len(df) < 3:
         return False
+    # 전전봉 MA
+    prev2_short = df[f'ma_{short_ma}'].iloc[-3]
+    prev2_long = df[f'ma_{long_ma}'].iloc[-3]
+    # 전봉 MA
     prev_short = df[f'ma_{short_ma}'].iloc[-2]
     prev_long = df[f'ma_{long_ma}'].iloc[-2]
-    curr_short = df[f'ma_{short_ma}'].iloc[-1]
-    curr_long = df[f'ma_{long_ma}'].iloc[-1]
     
-    return prev_short <= prev_long and curr_short > curr_long
+    return prev2_short <= prev2_long and prev_short > prev_long
 
 
 def check_dead_cross(df, short_ma, long_ma):
-    """데드크로스 확인"""
-    if len(df) < 2:
+    """데드크로스 확인 (전전봉 vs 전봉 비교 → 전봉 마감 시 크로스 확정)"""
+    if len(df) < 3:
         return False
+    # 전전봉 MA
+    prev2_short = df[f'ma_{short_ma}'].iloc[-3]
+    prev2_long = df[f'ma_{long_ma}'].iloc[-3]
+    # 전봉 MA
     prev_short = df[f'ma_{short_ma}'].iloc[-2]
     prev_long = df[f'ma_{long_ma}'].iloc[-2]
-    curr_short = df[f'ma_{short_ma}'].iloc[-1]
-    curr_long = df[f'ma_{long_ma}'].iloc[-1]
     
-    return prev_short >= prev_long and curr_short < curr_long
+    return prev2_short >= prev2_long and prev_short < prev_long
 
 
 # ==============================================================================
@@ -264,8 +271,8 @@ def execute_trading_logic(account_info):
             actual_position = current_position
             actual_size = BotDataDict.get(coin_ticker + '_POSITION_SIZE', 0)
 
-        # === 익절 체크 (전 캔들 종가 기준) ===
-        if actual_position != 0 and actual_size > 0 and entry_price > 0:
+        # === 익절 체크 (전 캔들 종가 기준) - TAKE_PROFIT_ENABLED 옵션 확인 ===
+        if TAKE_PROFIT_ENABLED and actual_position != 0 and actual_size > 0 and entry_price > 0:
             prev_close = df['close'].iloc[-2]  # 전 캔들 종가
             
             # 수익률 계산

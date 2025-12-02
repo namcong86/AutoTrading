@@ -10,6 +10,11 @@ BOT_CONFIGS = {
     "2": {"token": "8171304113:AAEAHXACEXfmee026mRelw3r07vFiyqbQ5o", "chat_id": "785579073"},  # 2.Binance_F_BTC_Leverage
     "3": {"token": "8175142086:AAEGcKyOutXeM6b0RJVlrASznhsNGYrQRj4", "chat_id": "785579073"},  # 3.Binance_F_DOGE_PEPE_Leverage + 3.GateIO_F_DOGE_PEPE_Leverage
     "4": {"token": "8028505122:AAF0xB3J2aWFN8QSGRLzBsplJQ7ugaHaqbg", "chat_id": "785579073"},  # 4.GateIO_F_Grid_Danta
+    "5": {"token": "7003568385:AAHI6CRDnXFTUWVdCmuwgB8JB7_Y2t_YRuo", "chat_id": "785579073"},  # 5.Bitget_F_Long_Short_Alt
+    "6": {"token": "8276010783:AAHfyHb93OZqLjhENspxX17_3jCOX7lpL1k", "chat_id": "785579073"},  # 6.Kosdaqpi_Bot
+    "7": {"token": "8226724190:AAF5CdEHf6T2SHZQ87mKv2Skis-OCRJIL_g", "chat_id": "785579073"},  # 7.Us_BothSide_3X_Strategy_Bot
+    "8": {"token": "8228219079:AAEkZI0F69uPlfCWLxaJFXUM4cwZIpOemsk", "chat_id": "785579073"},  # 8.Snow_Kr_Bot
+    "9": {"token": "8543401239:AAGWz-UHsU6hggpgAWTVdY18zhDo4W4viO8", "chat_id": "785579073"},  # 9.MA_Strategy_Bot
     
 }
 
