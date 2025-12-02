@@ -46,7 +46,7 @@ import KIS_API_Helper_US as KisUS
 
 import pprint
 
-import line_alert
+import telegram_alert
 
 
 #계좌 선택.. "VIRTUAL" 는 모의 계좌!
@@ -166,7 +166,7 @@ for stock_info in InvestStockList:
                 
                 msg = stock_name + "("+stock_code + ") 상승추세가 확인되었는데 보유수량이 없어 비중만큼 매수!!!!"
                 print(msg) 
-                line_alert.SendMessage(msg)
+                telegram_alert.SendMessage(msg)
                                     
                 BuyMoney = TotalMoney * stock_target_rate
 
@@ -193,7 +193,7 @@ for stock_info in InvestStockList:
                 
                 msg = stock_name + "("+stock_code + ") 하락세가 확인되었는데 보유수량이 있어 매도!!!!"
                 print(msg) 
-                line_alert.SendMessage(msg)
+                telegram_alert.SendMessage(msg)
 
 
                 CurrentPrice = KisUS.GetCurrentPrice(stock_code)
