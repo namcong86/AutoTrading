@@ -143,25 +143,25 @@ InvestStockList = list()
 
 InvestDataDict = dict()
 InvestDataDict['ticker'] = "TQQQ" 
-InvestDataDict['rate'] = 0.35
+InvestDataDict['rate'] = 1
 InvestStockList.append(InvestDataDict)
 
-InvestDataDict = dict()
-InvestDataDict['ticker'] = "SOXL" 
-InvestDataDict['rate'] = 0.35
-InvestStockList.append(InvestDataDict)
+# InvestDataDict = dict()
+# InvestDataDict['ticker'] = "SOXL" 
+# InvestDataDict['rate'] = 0.35
+# InvestStockList.append(InvestDataDict)
 
-#3배 인버스 ETF
+# #3배 인버스 ETF
 
-InvestDataDict = dict()
-InvestDataDict['ticker'] = "SQQQ" 
-InvestDataDict['rate'] = 0.15
-InvestStockList.append(InvestDataDict)
+# InvestDataDict = dict()
+# InvestDataDict['ticker'] = "SQQQ" 
+# InvestDataDict['rate'] = 0.15
+# InvestStockList.append(InvestDataDict)
 
-InvestDataDict = dict()
-InvestDataDict['ticker'] = "SOXS" 
-InvestDataDict['rate'] = 0.15
-InvestStockList.append(InvestDataDict)
+# InvestDataDict = dict()
+# InvestDataDict['ticker'] = "SOXS" 
+# InvestDataDict['rate'] = 0.15
+# InvestStockList.append(InvestDataDict)
 
 #'''
 

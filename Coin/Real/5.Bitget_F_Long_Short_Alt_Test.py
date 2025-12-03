@@ -50,10 +50,10 @@ set_korean_font()
 # 백테스트 설정
 # ==============================================================================
 INITIAL_CAPITAL = 100000      # 초기 자본금 (USDT)
-LEVERAGE = 1                  # 레버리지 배수
+LEVERAGE = 1.2                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
-DAILY_MA = 120                # 일봉 이동평균 기간 (방향 필터용)
+DAILY_MA = 115                # 일봉 이동평균 기간 (방향 필터용)
 TIMEFRAME = '1h'              # 캔들 타임프레임 ('1h' 또는 '15m')
 FEE_RATE = 0.0006             # 거래 수수료 (0.06%)
 
@@ -799,10 +799,92 @@ def analyze_results(results):
     daily_df['date'] = pd.to_datetime(daily_df['date'])
     daily_df.set_index('date', inplace=True)
     
-    # MDD 계산
+    # 전체 MDD 계산 (기존)
     daily_df['peak'] = daily_df['balance'].cummax()
     daily_df['drawdown'] = (daily_df['balance'] - daily_df['peak']) / daily_df['peak'] * 100
     mdd = daily_df['drawdown'].min()
+    
+    # ========================================
+    # 사이클 종료 잔액 기준 MDD 계산 (출금 보정 포함)
+    # - 사이클 종료 시점의 잔액만 비교
+    # - peak 이후 출금액은 최저점에 더해서 실질 MDD 계산
+    # ========================================
+    cycle_history = results.get('cycle_history', [])
+    withdrawal_history = results.get('withdrawal_history', [])
+    
+    # 출금 내역을 날짜별로 정리 (누적 출금액 추적용)
+    withdrawal_by_date = {}
+    cumulative_withdrawal = 0
+    for w in withdrawal_history:
+        cumulative_withdrawal = w['total_withdrawn']
+        withdrawal_by_date[w['date']] = cumulative_withdrawal
+    
+    # 사이클 종료 잔액 리스트 생성
+    cycle_end_balances = []
+    for cycle in cycle_history:
+        cycle_end_balances.append({
+            'cycle_num': cycle['cycle_num'],
+            'end_time': cycle['end_time'],
+            'balance': cycle['final_balance']
+        })
+    
+    # 사이클 종료 잔액 기준 MDD 계산 (출금 보정 포함)
+    cycle_end_mdd = 0
+    cycle_end_drawdowns = {}  # 각 사이클 종료 시점의 drawdown 저장
+    
+    if len(cycle_end_balances) > 1:
+        peak_balance = 0
+        peak_cycle = 0
+        
+        for i, cycle_data in enumerate(cycle_end_balances):
+            balance = cycle_data['balance']
+            cycle_num = cycle_data['cycle_num']
+            cycle_end_date = cycle_data['end_time'][:10]  # YYYY-MM-DD 형식
+            
+            # 현재 시점까지의 총 출금액 찾기
+            current_total_withdrawal = 0
+            for w_date, w_amount in withdrawal_by_date.items():
+                if w_date <= cycle_end_date:
+                    current_total_withdrawal = w_amount
+            
+            if balance > peak_balance:
+                # 새로운 peak 갱신
+                peak_balance = balance
+                peak_cycle = cycle_num
+                cycle_end_drawdowns[cycle_num] = 0  # peak일 때는 drawdown 0
+            else:
+                # peak 이후 출금액 계산 (peak 시점 출금액과 현재 출금액의 차이)
+                peak_total_withdrawal = 0
+                peak_end_date = cycle_end_balances[peak_cycle - 1]['end_time'][:10] if peak_cycle > 0 else ''
+                for w_date, w_amount in withdrawal_by_date.items():
+                    if w_date <= peak_end_date:
+                        peak_total_withdrawal = w_amount
+                
+                withdrawal_after_peak = current_total_withdrawal - peak_total_withdrawal
+                
+                # 실질 잔액 = 현재 잔액 + peak 이후 출금액
+                adjusted_balance = balance + withdrawal_after_peak
+                
+                # MDD 계산
+                if peak_balance > 0:
+                    dd = (adjusted_balance - peak_balance) / peak_balance * 100
+                    cycle_end_drawdowns[cycle_num] = dd  # 각 사이클의 drawdown 저장
+                    if dd < cycle_end_mdd:
+                        cycle_end_mdd = dd
+    
+    # 차트용 사이클 종료 기준 drawdown (사이클 종료 시점의 값을 해당 기간에 표시)
+    daily_df['cycle_end_drawdown'] = 0.0
+    
+    # 각 사이클 번호에 해당하는 drawdown 값을 daily_df에 매핑
+    for idx, row in daily_df.iterrows():
+        cycle_num = row['cycle']
+        if cycle_num in cycle_end_drawdowns:
+            daily_df.at[idx, 'cycle_end_drawdown'] = cycle_end_drawdowns[cycle_num]
+        else:
+            # 아직 종료되지 않은 사이클은 이전 사이클 값 유지 또는 0
+            daily_df.at[idx, 'cycle_end_drawdown'] = 0
+    
+    cycle_mdd = cycle_end_mdd  # 사이클 종료 잔액 기준 MDD 사용
     
     # 월별 수익률
     monthly = daily_df['balance'].resample('ME').last()
@@ -865,6 +947,7 @@ def analyze_results(results):
         print(f"총 수익률: {results['total_return']:.2f}%")
     
     print(f"최대 낙폭 (MDD): {mdd:.2f}%")
+    print(f"사이클 종료 기준 MDD: {cycle_mdd:.2f}% (출금 보정 포함)")
     print(f"총 사이클 수: {results['total_cycles']}회")
     print(f"총 거래 횟수: {total_trades}회")
     print(f"승률: {win_rate:.2f}% (승: {win_trades}회, 패: {lose_trades}회)")
@@ -913,10 +996,10 @@ def analyze_results(results):
         pnl = end_balance - (yearly.iloc[i-1] if i > 0 else yearly_first.iloc[0])
         print(f"{date.year}년: {ret:+.2f}%  |  잔액: ${end_balance:,.2f}  |  손익: ${pnl:+,.2f}")
     
-    return daily_df, mdd, coin_stats, trades
+    return daily_df, mdd, cycle_mdd, coin_stats, trades
 
 
-def plot_results_with_tabs(daily_df, mdd, coin_stats, trades, initial_capital):
+def plot_results_with_tabs(daily_df, mdd, cycle_mdd, coin_stats, trades, initial_capital):
     """탭으로 결과 표시 (전체 + 코인별)"""
     
     # Tkinter 윈도우 생성
@@ -957,11 +1040,15 @@ def plot_results_with_tabs(daily_df, mdd, coin_stats, trades, initial_capital):
     lines2, labels2 = ax1_log.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper left')
     
-    # MDD 차트
+    # MDD 차트 (전체 MDD + 사이클 종료 기준 MDD)
     ax2 = fig_total.add_subplot(2, 1, 2)
-    ax2.fill_between(daily_df.index, daily_df['drawdown'], 0, color='red', alpha=0.3, label='Drawdown')
+    ax2.fill_between(daily_df.index, daily_df['drawdown'], 0, color='red', alpha=0.3, label=f'전체 MDD ({mdd:.2f}%)')
     ax2.plot(daily_df.index, daily_df['drawdown'], color='red', linewidth=0.8)
-    ax2.set_title(f'최대 낙폭 (MDD: {mdd:.2f}%)', fontsize=12)
+    # 사이클 종료 기준 낙폭 (출금 보정 포함) - 파란 점선
+    ax2.plot(daily_df.index, daily_df['cycle_end_drawdown'], color='blue', linewidth=1.5, linestyle='--', alpha=0.8, label=f'사이클 종료 기준 낙폭 (출금 보정)')
+    # 사이클 종료 기준 MDD 수평선
+    ax2.axhline(y=cycle_mdd, color='green', linestyle=':', alpha=0.7, linewidth=2, label=f'사이클 종료 기준 MDD ({cycle_mdd:.2f}%)')
+    ax2.set_title(f'낙폭 - 전체 MDD: {mdd:.2f}% / 사이클 종료 기준 MDD: {cycle_mdd:.2f}% (출금 보정)', fontsize=12)
     ax2.set_xlabel('날짜')
     ax2.set_ylabel('낙폭 (%)')
     ax2.legend(loc='lower left')
@@ -1221,8 +1308,8 @@ if __name__ == '__main__':
     results = backtest.run_backtest()
     
     # 결과 분석
-    daily_df, mdd, coin_stats, trades = analyze_results(results)
+    daily_df, mdd, cycle_mdd, coin_stats, trades = analyze_results(results)
     
     # 탭으로 차트 출력
     if daily_df is not None and not daily_df.empty:
-        plot_results_with_tabs(daily_df, mdd, coin_stats, trades, INITIAL_CAPITAL)
+        plot_results_with_tabs(daily_df, mdd, cycle_mdd, coin_stats, trades, INITIAL_CAPITAL)

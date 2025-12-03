@@ -27,11 +27,12 @@ ACCOUNT_LIST = [
     },
 ]
 
-# 투자 종목 리스트
+# 투자 종목 리스트 (사이클 기반 1/N 분배)
 INVEST_COIN_LIST = [
-    {'ticker': 'ADA/USDT:USDT', 'rate': 1.0},  # rate는 전체 자금 중 이 코인에 할당할 비율
-    # 추가 코인은 여기에 추가
-    # {'ticker': 'DOGE/USDT:USDT', 'rate': 0.5},
+    {'ticker': 'ADA/USDT:USDT', 'rate': 0.25},
+    {'ticker': 'DOGE/USDT:USDT', 'rate': 0.25},
+    {'ticker': 'SOL/USDT:USDT', 'rate': 0.25},
+    {'ticker': 'BNB/USDT:USDT', 'rate': 0.25},
 ]
 
 # 전략 설정
