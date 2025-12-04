@@ -812,6 +812,114 @@ if __name__ == "__main__":
     print("백테스팅 계산 완료. 결과 분석 및 차트를 준비합니다...")
     print("\n\n" + "="*50 + "\n--- 일일 잔액 로그 ---\n" + "="*50)
     for log in balance_logs: print(log)
+    
+    # ==============================================================================
+    # ▼▼▼ 오늘 기준 (어제자 마감 캔들) 진입조건 상세 로그 출력 ▼▼▼
+    # ==============================================================================
+    print("\n" + "="*70)
+    print("--- 오늘 기준 진입조건 상세 (어제자 마감 캔들 기준) ---")
+    print("="*70)
+    
+    for ticker in valid_tickers:
+        if ticker not in dfs:
+            continue
+        df_coin = dfs[ticker]
+        if len(df_coin) < 3:
+            print(f"\n[{ticker}] 데이터 부족으로 조건 확인 불가")
+            continue
+        
+        i = len(df_coin) - 1
+        last_date = df_coin.index[i]
+        
+        print(f"\n{'='*50}")
+        print(f"[{ticker}] 기준일: {last_date.strftime('%Y-%m-%d')}")
+        print(f"{'='*50}")
+        
+        # 기본 매수 조건
+        cond_buy_two_green = (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and 
+                              df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2])
+        cond_buy_price_up = (df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and 
+                             df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1])
+        cond_buy_short_ma_up = (df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and 
+                                df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1])
+        cond_buy_mid_ma_stable = (df_coin['30ma_slope'].iloc[i-1] > -2)
+        cond_buy_rsi_up = (df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1])
+        filter_no_sudden_surge = (df_coin['change'].iloc[i-1] < 0.5)
+        
+        # Disparity Index 조건 - 오늘 미포함
+        filter_disparity = False
+        disparity_detail = ""
+        if i >= disparity_period:
+            recent_disparity = df_coin['disparity_index'].iloc[i-disparity_period:i]
+            yesterday_disparity = df_coin['disparity_index'].iloc[i-1]
+            max_disparity = recent_disparity.max()
+            if yesterday_disparity == max_disparity:
+                filter_disparity = True
+                disparity_detail = f"전일값({yesterday_disparity:.2f})이 {disparity_period}일 최고값"
+            else:
+                try:
+                    max_idx = recent_disparity.idxmax()
+                    yesterday_idx = df_coin.index[i-1]
+                    if max_idx < yesterday_idx:
+                        range_disparity = df_coin.loc[max_idx:yesterday_idx, 'disparity_index']
+                        if (range_disparity >= 100).all():
+                            filter_disparity = True
+                            disparity_detail = f"최고값~전일 모두 100 이상"
+                        else:
+                            disparity_detail = f"최고값~전일 중 100 미만 존재"
+                    else:
+                        disparity_detail = f"최고값이 전일 이후"
+                except Exception:
+                    disparity_detail = "계산 오류"
+        else:
+            filter_disparity = True
+            disparity_detail = f"{disparity_period}일 데이터 부족 (통과)"
+        
+        # 200MA 위치 및 추가 조건
+        is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
+        filter_ma50_not_declining = True
+        cond_no_long_upper_shadow = True
+        cond_body_over_15_percent = True
+        
+        if is_above_200ma:
+            filter_ma50_not_declining = (df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1])
+            prev_candle = df_coin.iloc[i-1]
+            upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
+            body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
+            cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
+            candle_range = prev_candle['high'] - prev_candle['low']
+            candle_body = abs(prev_candle['open'] - prev_candle['close'])
+            if candle_range > 0:
+                cond_body_over_15_percent = (candle_body >= candle_range * 0.15)
+        
+        should_buy = (cond_buy_two_green and cond_buy_price_up and cond_buy_short_ma_up and
+                      cond_buy_mid_ma_stable and cond_buy_rsi_up and filter_no_sudden_surge and
+                      filter_disparity and filter_ma50_not_declining and
+                      cond_no_long_upper_shadow and cond_body_over_15_percent)
+        
+        def bool_to_str(val):
+            return "✅ True" if val else "❌ False"
+        
+        print(f"▶ 최종 매수 결정: {bool_to_str(should_buy)}")
+        print(f"--------------------")
+        print(f" 1. 2연속 양봉: {cond_buy_two_green}")
+        print(f" 2. 전일 종가/고가 상승: {cond_buy_price_up}")
+        print(f" 3. 7ma+20ma 상승: {cond_buy_short_ma_up}")
+        print(f" 4. 30ma 기울기 > -2: {cond_buy_mid_ma_stable}")
+        print(f" 5. RSI_MA 상승: {cond_buy_rsi_up}")
+        print(f" 6. 급등 아님: {filter_no_sudden_surge}")
+        print(f" 7. Disparity Index 조건: {filter_disparity}")
+        print(f" 8. 200MA 위치: {'위' if is_above_200ma else '아래'}")
+        if is_above_200ma:
+            print(f" 9. 50MA 하락 아님: {filter_ma50_not_declining}")
+            print(f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}")
+            print(f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}")
+    
+    print("\n" + "="*70)
+    # ==============================================================================
+    # ▲▲▲ 오늘 기준 진입조건 상세 로그 출력 끝 ▲▲▲
+    # ==============================================================================
+    
     print("\n\n" + "="*50 + "\n--- 매수/매도 로그 ---\n" + "="*50)
     if not trade_logs: print("거래 내역이 없습니다.")
     else:

@@ -287,12 +287,13 @@ def execute_trading_logic(account_info):
             cond_rsi_ma_up = df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2]
             cond_20ma_up = df['20ma'].iloc[-3] <= df['20ma'].iloc[-2]
             
-            # Disparity Index 조건 (30일 기준)
+            # Disparity Index 조건 (30일 기준) - 오늘 미포함 (전일까지만)
             disparity_period = 30
             filter_disparity = False
             
-            if len(df) >= disparity_period:
-                recent_disparity = df['disparity_index'].iloc[-disparity_period:]
+            if len(df) >= disparity_period + 1:
+                # 오늘 미포함: iloc[-disparity_period-1:-1] = 31일전 ~ 전일 (30개)
+                recent_disparity = df['disparity_index'].iloc[-disparity_period-1:-1]
                 yesterday_disparity = df['disparity_index'].iloc[-2]
                 max_disparity = recent_disparity.max()
                 
