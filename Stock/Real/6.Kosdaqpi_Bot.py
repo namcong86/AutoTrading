@@ -60,7 +60,7 @@ import telegram_alert
 
 
 #계좌 선택.. "VIRTUAL" 는 모의 계좌!
-Common.SetChangeMode("VIRTUAL") #REAL or VIRTUAL
+Common.SetChangeMode("REAL") #REAL or VIRTUAL
 
 
 BOT_NAME = Common.GetNowDist() + "_MyKospidaq_Bot"

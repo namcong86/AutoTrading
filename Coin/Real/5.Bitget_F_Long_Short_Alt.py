@@ -12,6 +12,17 @@ import pandas as pd
 import json
 import socket
 import telegram_alert
+import myBinance
+import ende_key
+import my_key
+
+# 암복호화 클래스 객체 생성
+simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
+
+# 암호화된 액세스키와 시크릿키 복호화
+Bitget_AccessKey = simpleEnDecrypt.decrypt(my_key.bitget_access)
+Bitget_SecretKey = simpleEnDecrypt.decrypt(my_key.bitget_secret)
+Bitget_Passphrase = simpleEnDecrypt.decrypt(my_key.bitget_passphrase)
 
 # ==============================================================================
 # 설정
@@ -20,9 +31,9 @@ import telegram_alert
 ACCOUNT_LIST = [
     {
         "name": "BitgetMain",
-        "access_key": "bg_b191c3cc69263a9993453a08acbde6f5",
-        "secret_key": "c2690dc2dadee98fd976d1c78f52e223dd6b98dfe6a45f24899d68a332481fd6",
-        "passphrase": "namcongMain",
+        "access_key": Bitget_AccessKey,
+        "secret_key": Bitget_SecretKey,
+        "passphrase": Bitget_Passphrase,
         "leverage": 1  # 레버리지 (1~10 설정 가능)
     },
 ]

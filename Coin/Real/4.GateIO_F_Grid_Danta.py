@@ -15,13 +15,19 @@ import sys
 import os
 import socket
 import telegram_alert # telegram_alert.py 파일이 필요합니다.
+import myBinance
+import ende_key
+import my_key
 
 # ==============================================================================
 # 1. 기본 설정 및 API 키
 # ==============================================================================
-# Gate.io API 키 (실제 키로 교체하고 보안상 환경변수 사용을 권장합니다)
-GATEIO_ACCESS_KEY = "07a0ba2f6ed018fcb0fde7d08b58b40c"
-GATEIO_SECRET_KEY = "7fcd29026f6d7d73647981fe4f4b4f75f4569ad0262d0fada5db3a558b50072a"
+# 암복호화 클래스 객체 생성
+simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
+
+# 암호화된 액세스키와 시크릿키 복호화
+GATEIO_ACCESS_KEY = simpleEnDecrypt.decrypt(my_key.gateio_access)
+GATEIO_SECRET_KEY = simpleEnDecrypt.decrypt(my_key.gateio_secret)
 
 # 알림 첫 문구
 FIRST_STRING = "4.GateIO 단타 그리드봇"

@@ -38,47 +38,50 @@ import pandas as pd
 
 #import yfinance
 
+# 암복호화 관련 import
+from cryptography.fernet import Fernet
+import ende_Stock_key
+import my_Stock_key
 
-stock_info = None
-
-# Windows 환경을 위한 설정 파일 경로
-import os
-import sys
-
-# 현재 스크립트 파일의 디렉토리 경로를 가져옵니다
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# myStockInfo.yaml 파일을 찾기 위해 현재 폴더부터 상위 폴더를 탐색
-def find_yaml_file(start_dir, filename='myStockInfo.yaml', max_depth=5):
-    """
-    현재 디렉토리부터 상위 디렉토리로 올라가며 파일을 찾습니다.
-    max_depth: 최대 몇 단계 상위까지 탐색할지 (기본 5단계)
-    """
-    current = start_dir
-    for _ in range(max_depth):
-        yaml_path = os.path.join(current, filename)
-        if os.path.exists(yaml_path):
-            return yaml_path
-        # 상위 디렉토리로 이동
-        parent = os.path.dirname(current)
-        if parent == current:  # 루트 디렉토리에 도달
-            break
-        current = parent
-    return None
-
-# yaml 파일 경로 찾기
-yaml_path = find_yaml_file(current_dir)
-
-if yaml_path is None:
-    raise FileNotFoundError(f"myStockInfo.yaml 파일을 찾을 수 없습니다. {current_dir} 및 상위 폴더를 확인해주세요.")
-
-print(f"설정 파일 로드: {yaml_path}")
-
-#설정 파일 정보를 읽어 옵니다.
-with open(yaml_path, encoding='UTF-8') as f:
-    stock_info = yaml.load(f, Loader=yaml.FullLoader)
+# 암복호화 클래스
+class SimpleEnDecrypt:
+    def __init__(self, key=None):
+        if key is None:
+            key = Fernet.generate_key()
+        self.key = key
+        self.f = Fernet(self.key)
     
-    
+    def decrypt(self, data, is_out_string=True):
+        if isinstance(data, bytes):
+            ou = self.f.decrypt(data)
+        else:
+            ou = self.f.decrypt(data.encode('utf-8'))
+        if is_out_string is True:
+            return ou.decode('utf-8')
+        else:
+            return ou
+
+# 복호화 객체 생성
+simpleEnDecrypt = SimpleEnDecrypt(ende_Stock_key.ende_key)
+
+# 암호화된 키 복호화하여 stock_info 딕셔너리 생성
+stock_info = {
+    'REAL_APP_KEY': simpleEnDecrypt.decrypt(my_Stock_key.REAL_APP_KEY),
+    'REAL_APP_SECRET': simpleEnDecrypt.decrypt(my_Stock_key.REAL_APP_SECRET),
+    'REAL_CANO': simpleEnDecrypt.decrypt(my_Stock_key.REAL_CANO),
+    'REAL_ACNT_PRDT_CD': simpleEnDecrypt.decrypt(my_Stock_key.REAL_ACNT_PRDT_CD),
+    'REAL_TOKEN_PATH': my_Stock_key.REAL_TOKEN_PATH,
+    'REAL_URL': my_Stock_key.REAL_URL,
+    'VIRTUAL_APP_KEY': simpleEnDecrypt.decrypt(my_Stock_key.VIRTUAL_APP_KEY),
+    'VIRTUAL_APP_SECRET': simpleEnDecrypt.decrypt(my_Stock_key.VIRTUAL_APP_SECRET),
+    'VIRTUAL_CANO': simpleEnDecrypt.decrypt(my_Stock_key.VIRTUAL_CANO),
+    'VIRTUAL_ACNT_PRDT_CD': simpleEnDecrypt.decrypt(my_Stock_key.VIRTUAL_ACNT_PRDT_CD),
+    'VIRTUAL_TOKEN_PATH': my_Stock_key.VIRTUAL_TOKEN_PATH,
+    'VIRTUAL_URL': my_Stock_key.VIRTUAL_URL,
+}
+
+print("암호화된 키 복호화 완료!")
+
 
 ############################################################################################################################################################
 NOW_DIST = ""

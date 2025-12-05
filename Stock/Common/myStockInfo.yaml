@@ -1,23 +1,24 @@
 # 한국투자증권 API 설정 파일
-# https://apiportal.koreainvestment.com/ 에서 발급받으세요
 # 
-# ※ 토큰은 자동으로 관리됩니다 ※
-# - 토큰은 24시간마다 자동 갱신됩니다
-# - TOKEN_PATH에 지정된 경로에 자동으로 저장됩니다
-# - 만료 시 자동으로 새 토큰을 발급받습니다
+# ※ 이 파일은 더 이상 사용되지 않습니다 ※
 # 
-# ===== 실계좌 설정 =====
-REAL_APP_KEY: "여기에_실계좌_APP_KEY를_입력하세요"
-REAL_APP_SECRET: "여기에_실계좌_APP_SECRET을_입력하세요"
-REAL_CANO: "여기에_실계좌_계좌번호를_입력하세요"
-REAL_ACNT_PRDT_CD: "01"  # 보통 01 (종합계좌)
-REAL_TOKEN_PATH: "KIStoken_real.json"
-REAL_URL: "https://openapi.koreainvestment.com:9443"
-
-# ===== 모의계좌 설정 =====
-VIRTUAL_APP_KEY: "PSSwRv0NsLE19rsrLF1FVRbEfAVovKTZ03k2"
-VIRTUAL_APP_SECRET: "ljo14R9kQvU8wQAcisAL9IhTQxwR4M14Za5PyLos6s+GPW34sRgyg/HMd3YV0ESh+N0vRrG/b3CevRsMDEa33pK9KFrBcO2gFLDeRPyKyRBcs+mifED8EYzYlNPSJH6jwvsSY7YK6wVxtc29N6doEIVZCi6wCXdTXioK3NfxyHQblBONklE="
-VIRTUAL_CANO: "50090117"
-VIRTUAL_ACNT_PRDT_CD: "01"  # 보통 01
-VIRTUAL_TOKEN_PATH: "KIStoken_virtual.json"
-VIRTUAL_URL: "https://openapivts.koreainvestment.com:29443"
+# 암호화된 키는 my_Stock_key.py에서 관리됩니다.
+# ende_Stock_key.py의 키로 복호화하여 사용합니다.
+# 
+# KIS_Common.py에서 자동으로 복호화하여 사용하므로
+# 별도의 설정이 필요하지 않습니다.
+#
+# ===== 기존 설정 (백업용, 평문) =====
+# REAL_APP_KEY: "PSkRTnIBM97j43UtSXdm4kQxkETQrgXMXWBV"
+# REAL_APP_SECRET: "f6Fd50xhgw50HcXI3LyJpX/yhvAxKsqSfiVd+Rzme59M3qr/hyjKyceqLfmAnIgfQOMhPHrN8Xo14h5L+m2EIPP90wQF8+bHppm6AAa4SHHCbYh1+vG08NIyg8BxxCD6H3XdMKUufWgrhBuwKD12pYy4+3SGaWvixKExGAi0MjrBmZqKML0="
+# REAL_CANO: "43559518"
+# REAL_ACNT_PRDT_CD: "01"
+# REAL_TOKEN_PATH: "KIStoken_real.json"
+# REAL_URL: "https://openapi.koreainvestment.com:9443"
+#
+# VIRTUAL_APP_KEY: "PSSwRv0NsLE19rsrLF1FVRbEfAVovKTZ03k2"
+# VIRTUAL_APP_SECRET: "ljo14R9kQvU8wQAcisAL9IhTQxwR4M14Za5PyLos6s+GPW34sRgyg/HMd3YV0ESh+N0vRrG/b3CevRsMDEa33pK9KFrBcO2gFLDeRPyKyRBcs+mifED8EYzYlNPSJH6jwvsSY7YK6wVxtc29N6doEIVZCi6wCXdTXioK3NfxyHQblBONklE="
+# VIRTUAL_CANO: "50090117"
+# VIRTUAL_ACNT_PRDT_CD: "01"
+# VIRTUAL_TOKEN_PATH: "KIStoken_virtual.json"
+# VIRTUAL_URL: "https://openapivts.koreainvestment.com:29443"

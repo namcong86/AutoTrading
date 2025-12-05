@@ -30,7 +30,7 @@ import pprint
 import telegram_alert
 import time
 
-Common.SetChangeMode("VIRTUAL")
+Common.SetChangeMode("REAL")
 
 
 

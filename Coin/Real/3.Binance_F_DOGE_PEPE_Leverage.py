@@ -23,7 +23,7 @@ ACCOUNT_LIST = [
         "name": "Main",
         "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_M),
         "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_M),
-        "leverage": 3.5  # 메인 계정 레버리지
+        "leverage": 3  # 메인 계정 레버리지
     },
     {
         "name": "Sub1",
