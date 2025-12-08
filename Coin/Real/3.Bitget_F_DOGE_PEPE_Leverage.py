@@ -17,6 +17,12 @@ else:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import datetime
 import telegram_alert
+import myBinance
+import ende_key
+import my_key
+
+# 암복호화 클래스 객체 생성
+simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
 # ==============================================================================
 # ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 헬퍼 함수들 (myBitget 대체) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
@@ -81,19 +87,13 @@ def GetAmount(money, price, leverage=1.0):
 # ==============================================================================
 
 # --- [수정] 비트겟 다계정 정보 설정 ---
+# 암호화된 키를 복호화하여 사용
 ACCOUNT_LIST = [
     {
-        "name": "BitgetMain",
-        "access_key": "bg_b191c3cc69263a9993453a08acbde6f5",
-        "secret_key": "c2690dc2dadee98fd976d1c78f52e223dd6b98dfe6a45f24899d68a332481fd6",
-        "passphrase": "namcongMain",
-        "leverage": 1
-    },
-    {
-        "name": "Bitget_Sub2",
-        "access_key": "bg_bd6993376f8cf5febefcef0f359377af",
-        "secret_key": "5348eca99c71c15a8694d1fd8f104b9ed248d88b13c6616907ebf3d93b4473a1",
-        "passphrase": "namcongSub2",
+        "name": "Bitget_Sub1",
+        "access_key": simpleEnDecrypt.decrypt(my_key.bitget_access_S1),
+        "secret_key": simpleEnDecrypt.decrypt(my_key.bitget_secret_S1),
+        "passphrase": simpleEnDecrypt.decrypt(my_key.bitget_passphrase_S1),
         "leverage": 1
     },
 ]

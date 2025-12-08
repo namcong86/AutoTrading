@@ -28,9 +28,9 @@ import my_key
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
 # 암호화된 액세스키와 시크릿키 복호화
-Bitget_AccessKey = simpleEnDecrypt.decrypt(my_key.bitget_access)
-Bitget_SecretKey = simpleEnDecrypt.decrypt(my_key.bitget_secret)
-Bitget_Passphrase = simpleEnDecrypt.decrypt(my_key.bitget_passphrase)
+Bitget_AccessKey = simpleEnDecrypt.decrypt(my_key.bitget_access_M)
+Bitget_SecretKey = simpleEnDecrypt.decrypt(my_key.bitget_secret_M)
+Bitget_Passphrase = simpleEnDecrypt.decrypt(my_key.bitget_passphrase_M)
 
 # ==============================================================================
 # 설정
