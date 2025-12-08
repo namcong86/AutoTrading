@@ -199,16 +199,20 @@ def GetPrdtNo(dist = "REAL"):
 
 #토큰 저장할 경로
 def GetTokenPath(dist = "REAL"):
-    global stock_info
+    import socket
+    import os
     
-    key = ""
+    pcServerGb = socket.gethostname()
     
-    if dist == "REAL":
-        key = "REAL_TOKEN_PATH"
-    elif dist == "VIRTUAL":
-        key = "VIRTUAL_TOKEN_PATH"
-        
-    return stock_info[key]
+    token_name = f"KIStoken_{dist.lower()}.json"
+    
+    if pcServerGb == "AutoBotCong":
+        # 운영 서버
+        return f"/var/AutoBot/json/{token_name}"
+    else:
+        # 로컬 PC - Stock/json 폴더
+        stock_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(stock_dir, 'json', token_name)
 '''
 #위의 함수는 다계좌 매매시 수정해야 되지만 아래 함수를 쓰면 수정할 필요가 없게 개선되었습니다!
 #위 함수를 주석처리하고 아래 함수를 사용해도 됩니다 :)

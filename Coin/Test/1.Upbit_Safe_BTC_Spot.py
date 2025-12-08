@@ -21,13 +21,16 @@ https://blog.naver.com/zacra/223203988739
 그래도 모르겠다면 클래스 댓글, 블로그 댓글, 단톡방( https://blog.naver.com/zacra/223111402375 )에 질문주세요! ^^
 '''
 
-import myUpbit
 import time
 import pyupbit
-import ende_key
-import my_key
 import pandas as pd
 import pprint
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+import myUpbit
+import ende_key
+import my_key
 import json
 import urllib3
 import telegram_alert
@@ -86,10 +89,10 @@ pcServerGb = socket.gethostname()
 BotDataDict = dict()
 if pcServerGb == "AutoBotCong" :
     #서버: 
-    botdata_file_path = "/var/AutoBot/json/Upbit_Safe_Data.json"
+    botdata_file_path = "/var/AutoBot/json/1.Upbit_Safe_BTC_Spot_Data.json"
 else:
     #PC
-    botdata_file_path = "C:\\AutoTrading\\AutoTrading\\json\\Upbit_Safe_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '1.Upbit_Safe_BTC_Spot_Data.json')
 
 
 try:

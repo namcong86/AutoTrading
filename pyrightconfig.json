@@ -1,6 +1,7 @@
 {
     "extraPaths": [
-        "./Coin/Common"
+        "./Coin/Common",
+        "./Stock/Common"
     ],
     "typeCheckingMode": "off"
 }

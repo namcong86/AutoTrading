@@ -27,14 +27,20 @@ import pandas as pd
 import pprint
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+import socket
+
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    sys.path.insert(0, "/var/AutoBot/Common")
+else:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+
 import myUpbit
 import ende_key
 import my_key
 import json
 import urllib3
 import telegram_alert
-import socket
 
 # 암복호화 클래스 객체 생성
 simpleEnDecrypt = myUpbit.SimpleEnDecrypt(ende_key.ende_key)

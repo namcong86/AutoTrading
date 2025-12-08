@@ -21,7 +21,16 @@ https://blog.naver.com/zacra/223203988739
 '''
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'Common'))
+import socket
+
+# 서버/로컬 환경 판단 및 경로 설정
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    # 운영 서버
+    sys.path.insert(0, "/var/AutoBot/Common")
+else:
+    # 로컬 PC
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 
 import KIS_Common as Common
 import KIS_API_Helper_US as KisUS

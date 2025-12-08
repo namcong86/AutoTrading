@@ -66,9 +66,9 @@ def load_data(ticker, timeframe, start_date, end_date):
     safe_ticker_name = ticker.replace('/', '_').lower()
     # CSV 파일 이름 규칙을 스크립트 설정과 일치시킵니다.
     csv_filename = f"{str(INVEST_COIN_LIST).replace('/USDT', '').lower()}_usdt_{COIN_EXCHANGE}_{TIMEFRAME}.csv"
-    # 스크립트 파일과 같은 디렉토리에서 CSV 파일을 찾습니다.
+    # json 폴더에서 CSV 파일을 찾습니다.
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_file = os.path.join(script_dir, csv_filename)
+    csv_file = os.path.join(script_dir, '..', 'json', csv_filename)
 
     print(f"--- [{csv_file}] 데이터 준비 중 ---")
 

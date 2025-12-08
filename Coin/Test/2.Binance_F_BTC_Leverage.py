@@ -8,6 +8,8 @@ import pandas as pd
 import json
 import socket
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import myBinance
 import telegram_alert
 import ende_key
@@ -17,8 +19,8 @@ import my_key
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
 # 암호화된 액세스키와 시크릿키 복호화
-Binance_AccessKey = simpleEnDecrypt.decrypt(my_key.binance_access_S2)
-Binance_ScretKey = simpleEnDecrypt.decrypt(my_key.binance_secret_S2)
+Binance_AccessKey = simpleEnDecrypt.decrypt(my_key.binance_access_S3)
+Binance_ScretKey = simpleEnDecrypt.decrypt(my_key.binance_secret_S3)
 
 binanceX = ccxt.binance({
     'apiKey': Binance_AccessKey,
@@ -29,9 +31,9 @@ binanceX = ccxt.binance({
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/BinanceF_BTC_Data.json"
+    botdata_file_path = "/var/AutoBot/json/2.Binance_F_BTC_Leverage_Data.json"
 else:
-    botdata_file_path = "./BinanceF_BTC_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '2.Binance_F_BTC_Leverage_Data.json')
 
 try:
     with open(botdata_file_path, 'r') as f:

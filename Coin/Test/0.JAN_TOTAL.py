@@ -1,9 +1,13 @@
 import ccxt
 import socket
 import requests
-import telegram_alert
 import time
 import pyupbit
+from datetime import datetime
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+import telegram_alert
 import myUpbit  # 우리가 만든 함수들이 들어있는 모듈
 from datetime import datetime
 from collections import defaultdict
@@ -411,7 +415,7 @@ try:
         gspreadJsonPath = "/var/AutoBot/json/autobot.json"
     else:
         #PC
-        gspreadJsonPath = "C:\\AutoTrading\\AutoTrading\\json\\autobot.json"
+        gspreadJsonPath = os.path.join(os.path.dirname(__file__), '..', 'json', 'autobot.json')
 
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds = ServiceAccountCredentials.from_json_keyfile_name(gspreadJsonPath, scope)

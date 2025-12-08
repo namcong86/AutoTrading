@@ -13,7 +13,12 @@ import json
 import socket
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    sys.path.insert(0, "/var/AutoBot/Common")
+else:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import telegram_alert
 import myBinance
 import ende_key

@@ -8,23 +8,31 @@ import pandas as pd
 import json
 import socket
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import telegram_alert
 import logging
 import hashlib
 import hmac
 import requests
 import datetime
+import myBinance
+import ende_key
+import my_key
 
-# Gate.io API 키 (실제 키로 교체하고 보안상 환경변수 사용 권장)
-GateIO_AccessKey = "07a0ba2f6ed018fcb0fde7d08b58b40c"
-GateIO_SecretKey = "7fcd29026f6d7d73647981fe4f4b4f75f4569ad0262d0fada5db3a558b50072a"
+# 암복호화 클래스 객체 생성
+simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
+
+# 암호화된 액세스키와 시크릿키 복호화
+GateIO_AccessKey = simpleEnDecrypt.decrypt(my_key.gateio_access)
+GateIO_SecretKey = simpleEnDecrypt.decrypt(my_key.gateio_secret)
 
 # Gate.io Futures API 클래스 (2.Gateio_F_BTC_New.py 에서 복사)
 class GateioFuturesAPI:
     def __init__(self, api_key, api_secret, url='https://api.gateio.ws'):
         self.api_key = api_key
         self.api_secret = api_secret
-        self.url = url
+        self.url = url 
         
     def _generate_signature(self, method, url, query_string='', body=''):
         t = time.time()
@@ -77,9 +85,9 @@ gateio_api = GateioFuturesAPI(GateIO_AccessKey, GateIO_SecretKey)
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/GateIO_F_DOGE_PEPE_Data.json"
+    botdata_file_path = "/var/AutoBot/json/3.GateIO_F_DOGE_PEPE_Leverage_Data.json"
 else:
-    botdata_file_path = "./GateIO_F_DOGE_PEPE_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3.GateIO_F_DOGE_PEPE_Leverage_Data.json')
 
 try:
     with open(botdata_file_path, 'r') as f:
@@ -517,10 +525,10 @@ for coin_data in InvestCoinList:
 
                         # 로그 메시지에 실제 매수될 '코인 수량' (계약 수 * contractSize)을 표시합니다.
                         actual_bought_coin_quantity = amount_to_buy * contractSize
-                        
+                         
                         exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
-                                    f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, "
+                                    f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, " 
                                     f"매수 계약 수: {amount_to_buy:.6f}, "
                                     f"실제 매수 코인 수: {actual_bought_coin_quantity:.2f})")
                         logger.info(exec_msg)

@@ -13,8 +13,14 @@ import json
 import logging
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import socket
+
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    sys.path.insert(0, "/var/AutoBot/Common")
+else:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+
 import telegram_alert # telegram_alert.py 파일이 필요합니다.
 import myBinance
 import ende_key
