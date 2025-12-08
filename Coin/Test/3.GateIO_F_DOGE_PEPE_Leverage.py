@@ -113,7 +113,7 @@ InvestRate = 1
 fee = 0.001
 
 #알림 첫문구
-first_String = f"3.GateIO DOGE+PEPE {set_leverage}배 "
+first_String = f"3.GateIO Sub1 DOGE+PEPE {set_leverage}배 "
 
 t = time.gmtime()
 hour_n = t.tm_hour

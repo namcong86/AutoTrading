@@ -28,13 +28,9 @@ import my_key
 # 암복호화 클래스 객체 생성
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
-# 암호화된 액세스키와 시크릿키 복호화 (Main 계정)
-GateIO_AccessKey = simpleEnDecrypt.decrypt(my_key.gateio_access_M)
-GateIO_SecretKey = simpleEnDecrypt.decrypt(my_key.gateio_secret_M)
-
-# Sub1 계정
-GateIO_AccessKey_S1 = simpleEnDecrypt.decrypt(my_key.gateio_access_S1)
-GateIO_SecretKey_S1 = simpleEnDecrypt.decrypt(my_key.gateio_secret_S1)
+# 암호화된 액세스키와 시크릿키 복호화 (Sub1 계정)
+GateIO_AccessKey = simpleEnDecrypt.decrypt(my_key.gateio_access_S1)
+GateIO_SecretKey = simpleEnDecrypt.decrypt(my_key.gateio_secret_S1)
 
 # Gate.io Futures API 클래스 (2.Gateio_F_BTC_New.py 에서 복사)
 class GateioFuturesAPI:
@@ -122,7 +118,7 @@ InvestRate = 1
 fee = 0.001
 
 #알림 첫문구
-first_String = f"3.GateIO DOGE+PEPE {set_leverage}배 "
+first_String = f"3.GateIO Sub1 DOGE+PEPE {set_leverage}배 "
 
 t = time.gmtime()
 hour_n = t.tm_hour
