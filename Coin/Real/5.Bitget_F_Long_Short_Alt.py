@@ -11,6 +11,9 @@ import time
 import pandas as pd
 import json
 import socket
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import telegram_alert
 import myBinance
 import ende_key

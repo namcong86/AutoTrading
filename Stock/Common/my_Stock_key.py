@@ -17,8 +17,8 @@ VIRTUAL_CANO = "gAAAAABpMppdcpEMZMuC-cnuSBNzITG5Dm3XkcvpJ-xzBaPv0hW41YzGGtbqlKrR
 VIRTUAL_ACNT_PRDT_CD = "gAAAAABpMppdaO8smGWrzlYOeOLzYhUambd2PqgCeE0-LU45FUOFmRuJPbqeT_Lpj6Y_9-rlvsZMIob_oAF4LFnC_aGhLT04VA=="
 
 # ===== 토큰 경로 및 URL (암호화 불필요) =====
-REAL_TOKEN_PATH = "KIStoken_real.json"
+REAL_TOKEN_PATH = "json/KIStoken_real.json"
 REAL_URL = "https://openapi.koreainvestment.com:9443"
 
-VIRTUAL_TOKEN_PATH = "KIStoken_virtual.json"
+VIRTUAL_TOKEN_PATH = "json/KIStoken_virtual.json"
 VIRTUAL_URL = "https://openapivts.koreainvestment.com:29443"

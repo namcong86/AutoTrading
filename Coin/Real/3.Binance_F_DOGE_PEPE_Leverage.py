@@ -8,6 +8,8 @@ import pandas as pd
 import json
 import socket
 import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import myBinance
 import telegram_alert
 import ende_key
@@ -29,7 +31,13 @@ ACCOUNT_LIST = [
         "name": "Sub1",
         "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S1),
         "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S1),
-        "leverage": 10  # 서브 계정 1 레버리지
+        "leverage": 6  # 서브 계정 1 레버리지
+    },
+    {
+        "name": "Sub2",
+        "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S2),
+        "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S2),
+        "leverage": 10  # 서브 계정 2 레버리지
     }
 ]
 
@@ -334,22 +342,28 @@ def execute_trading_logic(account_info):
             # <<< 코드 수정: Main 계정에서만 조건별 True/False 알림 전송 (신규 조건 추가) >>>
             # ==============================================================================
             if account_name == "Main":
+                # True/False를 이모지로 시각적으로 구분
+                def tf_emoji(val):
+                    return "✅" if val else "❌"
+                
+                buy_emoji = "🟢 True" if buy else "🔴 False"
+                
                 alert_msg = (
                     f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
                     f"- 포지션 없음\n\n"
-                    f"▶ 최종 매수 결정: {buy}\n"
+                    f"▶️ 최종 매수 결정: {buy_emoji}\n"
                     f"--------------------\n"
-                    f" 1. 2연속 양봉: {cond_2_pos_candle}\n"
-                    f" 2. 전일 종가/고가 상승: {cond_price_up}\n"
-                    f" 3. 7ma 상승: {cond_7ma_up}\n"
-                    f" 4. 30ma 기울기 > -2: {cond_30ma_slope}\n"
-                    f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
-                    f" 6. 50ma 조건 충족: {cond_ma_50}\n"
-                    f" 7. 20ma 상승: {cond_20ma_up}\n"
-                    f" 8. 급등 아님: {cond_no_surge}\n"
-                    f" 9. Disparity Index 조건: {filter_disparity}\n"
-                    f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
-                    f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
+                    f" 1. 2연속 양봉: {tf_emoji(cond_2_pos_candle)}\n"
+                    f" 2. 전일 종가/고가 상승: {tf_emoji(cond_price_up)}\n"
+                    f" 3. 7ma 상승: {tf_emoji(cond_7ma_up)}\n"
+                    f" 4. 30ma 기울기 > -2: {tf_emoji(cond_30ma_slope)}\n"
+                    f" 5. RSI_MA 상승: {tf_emoji(cond_rsi_ma_up)}\n"
+                    f" 6. 50ma 조건 충족: {tf_emoji(cond_ma_50)}\n"
+                    f" 7. 20ma 상승: {tf_emoji(cond_20ma_up)}\n"
+                    f" 8. 급등 아님: {tf_emoji(cond_no_surge)}\n"
+                    f" 9. Disparity Index 조건: {tf_emoji(filter_disparity)}\n"
+                    f" 10. 긴 윗꼬리 없음: {tf_emoji(cond_no_long_upper_shadow)}\n"
+                    f" 11. 캔들 몸통 15% 이상: {tf_emoji(cond_body_over_15_percent)}"
                 )
                 telegram_alert.SendMessage(alert_msg)
             # ==============================================================================

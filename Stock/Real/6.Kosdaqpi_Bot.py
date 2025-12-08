@@ -187,7 +187,12 @@ for stock_code in InvestStockList:
 ###################################################################
 KospidaqStrategyList = list()
 #파일 경로입니다.
-data_file_path = "/var/AutoBot/KrStock_" + BOT_NAME + ".json"
+import socket
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    data_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + ".json"
+else:
+    data_file_path = "./json/KrStock_" + BOT_NAME + ".json"
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 
@@ -218,7 +223,10 @@ except Exception as e:
 ###################################################################
 DateData = dict()
 #파일 경로입니다.
-date_file_path = "/var/AutoBot/KrStock_" + BOT_NAME + "_Date.json"
+if pcServerGb == "AutoBotCong":
+    date_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + "_Date.json"
+else:
+    date_file_path = "./json/KrStock_" + BOT_NAME + "_Date.json"
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 
@@ -245,7 +253,10 @@ except Exception as e:
 DateSiGaLogicDoneDict = dict()
 
 #파일 경로입니다.
-siga_logic_file_path = "/var/AutoBot/KrStock_" + BOT_NAME + "_TodaySigaLogicDoneDate.json"
+if pcServerGb == "AutoBotCong":
+    siga_logic_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + "_TodaySigaLogicDoneDate.json"
+else:
+    siga_logic_file_path = "./json/KrStock_" + BOT_NAME + "_TodaySigaLogicDoneDate.json"
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 
     with open(siga_logic_file_path, 'r') as json_file:

@@ -180,7 +180,12 @@ pprint.pprint(InvestStockList)
 ############# 해당 전략으로 매수한 종목 데이터 리스트 ####################
 InfinityUpgradeDataList = list()
 #파일 경로입니다.
-bot_file_path = "/var/AutoBot/UsStock_" + BOT_NAME + ".json"
+import socket
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    bot_file_path = "/var/AutoBot/json/UsStock_" + BOT_NAME + ".json"
+else:
+    bot_file_path = "./json/UsStock_" + BOT_NAME + ".json"
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 

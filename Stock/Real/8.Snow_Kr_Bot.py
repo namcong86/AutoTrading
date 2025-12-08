@@ -64,7 +64,12 @@ Is_Rebalance_Go = False
 YMDict = dict()
 
 #파일 경로입니다.
-asset_tym_file_path = "/var/autobot/" + BOT_NAME + ".json"
+import socket
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    asset_tym_file_path = "/var/AutoBot/json/" + BOT_NAME + ".json"
+else:
+    asset_tym_file_path = "./json/" + BOT_NAME + ".json"
 
 try:
     with open(asset_tym_file_path, 'r') as json_file:
