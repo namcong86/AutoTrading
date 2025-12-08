@@ -90,9 +90,9 @@ def execute_trading_logic(account_info):
 
     pcServerGb = socket.gethostname()
     if pcServerGb == "AutoBotCong":
-        botdata_file_path = f"/var/AutoBot/json/BinanceF_7COIN_Data_{account_name}.json"
+        botdata_file_path = f"/var/AutoBot/json/3.Binance_F_DOGE_PEPE_Leverage_Data_{account_name}.json"
     else:
-        botdata_file_path = f"./BinanceF_7COIN_Data_{account_name}.json"
+        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3.Binance_F_DOGE_PEPE_Leverage_Data_{account_name}.json')
 
     try:
         with open(botdata_file_path, 'r') as f:

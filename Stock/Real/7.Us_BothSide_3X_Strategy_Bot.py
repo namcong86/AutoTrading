@@ -183,9 +183,9 @@ InfinityUpgradeDataList = list()
 import socket
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    bot_file_path = "/var/AutoBot/json/UsStock_" + BOT_NAME + ".json"
+    bot_file_path = "/var/AutoBot/json/7.Us_BothSide_3X_Strategy_Bot_Data.json"
 else:
-    bot_file_path = "./json/UsStock_" + BOT_NAME + ".json"
+    bot_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '7.Us_BothSide_3X_Strategy_Bot_Data.json')
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 

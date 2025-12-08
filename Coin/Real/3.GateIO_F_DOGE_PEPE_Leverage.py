@@ -85,9 +85,9 @@ gateio_api = GateioFuturesAPI(GateIO_AccessKey, GateIO_SecretKey)
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/GateIO_F_DOGE_PEPE_Data.json"
+    botdata_file_path = "/var/AutoBot/json/3.GateIO_F_DOGE_PEPE_Leverage_Data.json"
 else:
-    botdata_file_path = "./GateIO_F_DOGE_PEPE_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3.GateIO_F_DOGE_PEPE_Leverage_Data.json')
 
 try:
     with open(botdata_file_path, 'r') as f:

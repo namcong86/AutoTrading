@@ -67,9 +67,9 @@ YMDict = dict()
 import socket
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    asset_tym_file_path = "/var/AutoBot/json/" + BOT_NAME + ".json"
+    asset_tym_file_path = "/var/AutoBot/json/8.Snow_Kr_Bot_Data.json"
 else:
-    asset_tym_file_path = "./json/" + BOT_NAME + ".json"
+    asset_tym_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '8.Snow_Kr_Bot_Data.json')
 
 try:
     with open(asset_tym_file_path, 'r') as json_file:

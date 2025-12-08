@@ -31,9 +31,9 @@ binanceX = ccxt.binance({
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/BinanceF_BTC_Data.json"
+    botdata_file_path = "/var/AutoBot/json/2.Binance_F_BTC_Leverage_Data.json"
 else:
-    botdata_file_path = "./BinanceF_BTC_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '2.Binance_F_BTC_Leverage_Data.json')
 
 try:
     with open(botdata_file_path, 'r') as f:

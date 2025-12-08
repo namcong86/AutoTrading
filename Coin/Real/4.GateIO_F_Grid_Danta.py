@@ -77,9 +77,9 @@ LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 6
 pcServerGb = socket.gethostname()
 # 상태 저장 파일
 if pcServerGb == "AutoBotCong":
-    BOT_DATA_FILE_PATH = "/var/AutoBot/json/GateIO_F_Grid_Danta_FinalData.json"
+    BOT_DATA_FILE_PATH = "/var/AutoBot/json/4.GateIO_F_Grid_Danta_Data.json"
 else:
-    BOT_DATA_FILE_PATH = "./GateIO_F_Grid_Danta_FinalData.json"
+    BOT_DATA_FILE_PATH = os.path.join(os.path.dirname(__file__), '..', 'json', '4.GateIO_F_Grid_Danta_Data.json')
 
 
 # ==============================================================================

@@ -190,9 +190,9 @@ KospidaqStrategyList = list()
 import socket
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    data_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + ".json"
+    data_file_path = "/var/AutoBot/json/6.Kosdaqpi_Bot_Data.json"
 else:
-    data_file_path = "./json/KrStock_" + BOT_NAME + ".json"
+    data_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '6.Kosdaqpi_Bot_Data.json')
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 

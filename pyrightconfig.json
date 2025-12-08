@@ -1,0 +1,6 @@
+{
+    "extraPaths": [
+        "./Coin/Common"
+    ],
+    "typeCheckingMode": "off"
+}

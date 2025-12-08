@@ -181,9 +181,9 @@ def execute_trading_logic(account_info):
     # 데이터 파일 경로
     pcServerGb = socket.gethostname()
     if pcServerGb == "AutoBotCong":
-        botdata_file_path = f"/var/AutoBot/json/BitgetF_LongShort_Data_{account_name}.json"
+        botdata_file_path = f"/var/AutoBot/json/5.Bitget_F_Long_Short_Alt_Data_{account_name}.json"
     else:
-        botdata_file_path = f"./BitgetF_LongShort_Data_{account_name}.json"
+        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'5.Bitget_F_Long_Short_Alt_Data_{account_name}.json')
 
     # 봇 데이터 로드
     try:

@@ -89,10 +89,10 @@ pcServerGb = socket.gethostname()
 BotDataDict = dict()
 if pcServerGb == "AutoBotCong" :
     #서버: 
-    botdata_file_path = "/var/AutoBot/json/Upbit_Safe_Data.json"
+    botdata_file_path = "/var/AutoBot/json/1.Upbit_Safe_BTC_Spot_Data.json"
 else:
     #PC
-    botdata_file_path = "C:\\AutoTrading\\AutoTrading\\json\\Upbit_Safe_Data.json"
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '1.Upbit_Safe_BTC_Spot_Data.json')
 
 
 try:
