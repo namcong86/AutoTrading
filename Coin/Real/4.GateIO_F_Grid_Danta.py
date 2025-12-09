@@ -33,8 +33,8 @@ import my_key
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
 # 암호화된 액세스키와 시크릿키 복호화
-GATEIO_ACCESS_KEY = simpleEnDecrypt.decrypt(my_key.gateio_access)
-GATEIO_SECRET_KEY = simpleEnDecrypt.decrypt(my_key.gateio_secret)
+GATEIO_ACCESS_KEY = simpleEnDecrypt.decrypt(my_key.gateio_access_M)
+GATEIO_SECRET_KEY = simpleEnDecrypt.decrypt(my_key.gateio_secret_M)
 
 # 알림 첫 문구
 FIRST_STRING = "4.GateIO 단타 그리드봇"
