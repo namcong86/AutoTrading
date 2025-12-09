@@ -17,8 +17,19 @@ VIRTUAL_CANO = "gAAAAABpMppdcpEMZMuC-cnuSBNzITG5Dm3XkcvpJ-xzBaPv0hW41YzGGtbqlKrR
 VIRTUAL_ACNT_PRDT_CD = "gAAAAABpMppdaO8smGWrzlYOeOLzYhUambd2PqgCeE0-LU45FUOFmRuJPbqeT_Lpj6Y_9-rlvsZMIob_oAF4LFnC_aGhLT04VA=="
 
 # ===== 토큰 경로 및 URL (암호화 불필요) =====
-REAL_TOKEN_PATH = "json/KIStoken_real.json"
-REAL_URL = "https://openapi.koreainvestment.com:9443"
+import socket
+import os
 
-VIRTUAL_TOKEN_PATH = "json/KIStoken_virtual.json"
+pcServerGb = socket.gethostname()
+if pcServerGb == "AutoBotCong":
+    # 운영 서버
+    REAL_TOKEN_PATH = "/var/AutoBot/json/KIStoken_real.json"
+    VIRTUAL_TOKEN_PATH = "/var/AutoBot/json/KIStoken_virtual.json"
+else:
+    # 로컬 PC - Stock/json 폴더
+    stock_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    REAL_TOKEN_PATH = os.path.join(stock_dir, 'json', 'KIStoken_real.json')
+    VIRTUAL_TOKEN_PATH = os.path.join(stock_dir, 'json', 'KIStoken_virtual.json')
+
+REAL_URL = "https://openapi.koreainvestment.com:9443"
 VIRTUAL_URL = "https://openapivts.koreainvestment.com:29443"
