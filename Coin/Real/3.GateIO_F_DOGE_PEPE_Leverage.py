@@ -266,6 +266,14 @@ for coin_data in InvestCoinList:
         print(f"{coin_ticker} 잔고가 없어 다음 코인으로 넘어갑니다.")
         continue # 잔고가 없으면 해당 코인 스킵
 
+    # Gate.io cross 모드 미리 설정 (포지션 생성 전)
+    try:
+        exchange.set_margin_mode('cross', coin_ticker, params={'settle': 'usdt'})
+        print(f"{coin_ticker} cross 모드 설정 완료.")
+        time.sleep(0.1)
+    except Exception as e:
+        print(f"{coin_ticker} cross 모드 설정 오류: {e}")
+
     # 포지션 정보 (LONG)
     amt_b = 0.0
     unrealizedProfit = 0.0
@@ -521,11 +529,15 @@ for coin_data in InvestCoinList:
                 # BuyMargin = min(max(BuyMargin, 10.0), cap)
 
                 try:
-                    # Gate.io 크로스 모드 및 레버리지 설정
-                    exchange.set_margin_mode('cross', coin_ticker, params={'settle': 'usdt'})
-                    time.sleep(0.1)
-                    exchange.set_leverage(set_leverage, coin_ticker, params={'settle': 'usdt'})
-                    print(f"{coin_ticker} 크로스 모드 및 레버리지 {set_leverage}배 설정 완료.")
+                    # Gate.io 레버리지 설정 (cross 마진 모드 강제 적용)
+                    # CCXT는 'set_leverage' 시 marginMode를 파라미터로 받는 것을 지원합니다.
+                    leverage_params = {
+                        'settle': 'usdt',
+                        # Gate.io의 경우, 마진 모드를 명시적으로 파라미터에 넣어줍니다.
+                        'marginMode': 'cross' 
+                    }
+                    exchange.set_leverage(set_leverage, coin_ticker, params=leverage_params)
+                    print(f"{coin_ticker} 레버리지 {set_leverage}배 및 cross 모드 설정 완료.")
                     time.sleep(0.1)
 
                 except Exception as e:
