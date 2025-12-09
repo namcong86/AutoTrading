@@ -64,15 +64,7 @@ class GateioFuturesAPI:
             print(f"Error fetching futures account: {response.status_code} - {response.text}")
             return None
 
-# 로깅 설정 (2.Gateio_F_BTC_New.py 에서 복사 및 수정)
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('3.GateIO_F_DOGE_PEPE_Leverage.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+
 logger = logging.getLogger(__name__)
 
 exchange = ccxt.gateio({
@@ -100,12 +92,12 @@ try:
         BotDataDict = json.load(f)
 except FileNotFoundError:
     BotDataDict = {}
-    logger.info(f"BotDataDict file not found. Creating new file: {botdata_file_path}")
+    print(f"BotDataDict file not found. Creating new file: {botdata_file_path}")
     with open(botdata_file_path, 'w') as outfile:
         json.dump(BotDataDict, outfile, indent=4)
 except json.JSONDecodeError:
     BotDataDict = {}
-    logger.warning(f"Warning: {botdata_file_path} contained invalid JSON. Initializing with empty data.")
+    print(f"Warning: {botdata_file_path} contained invalid JSON. Initializing with empty data.")
     with open(botdata_file_path, 'w') as outfile:
         json.dump(BotDataDict, outfile, indent=4)
 
@@ -130,7 +122,7 @@ day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 if hour_n == 0 and min_n <= 2:
     start_msg = f"{first_String} 시작"
     telegram_alert.SendMessage(start_msg)
-    logger.info(start_msg)
+    print(start_msg)
 
 
 # 투자 코인 리스트 (Bitget과 동일 10종) - Gate.io 심볼 형식에 맞춰 기입
@@ -157,7 +149,7 @@ def get_ohlcv_gateio(exchange_obj, ticker, timeframe='1d', limit=100):
         df.set_index('timestamp', inplace=True)
         return df
     except Exception as e:
-        logger.error(f"Error fetching OHLCV for {ticker}: {e}")
+        print(f"Error fetching OHLCV for {ticker}: {e}")
         return pd.DataFrame()
 
 def get_coin_now_price_gateio(exchange_obj, ticker):
@@ -165,7 +157,7 @@ def get_coin_now_price_gateio(exchange_obj, ticker):
     try:
         return exchange_obj.fetch_ticker(ticker)['last']
     except Exception as e:
-        logger.error(f"Error fetching ticker for {ticker}: {e}")
+        print(f"Error fetching ticker for {ticker}: {e}")
         return None
 
 def get_amount_gateio(exchange_obj, ticker, buy_money_usd, price, leverage):
@@ -205,7 +197,7 @@ def get_amount_gateio(exchange_obj, ticker, buy_money_usd, price, leverage):
 
         return amount_in_contracts
     except Exception as e:
-        logger.error(f"Error calculating amount for {ticker}: {e}")
+        print(f"Error calculating amount for {ticker}: {e}")
         return 0
 
 
@@ -217,7 +209,7 @@ try:
     all_current_positions = exchange.fetch_positions(symbols=[cd['ticker'] for cd in InvestCoinList], params={'settle': 'usdt'})
     all_current_positions = [p for p in all_current_positions if p.get('contracts') is not None and abs(p['contracts']) > 0]
 except Exception as e:
-    logger.error(f"포지션 정보 조회 중 오류: {e}")
+    print(f"포지션 정보 조회 중 오류: {e}")
 
 
 is_any_bot_position_active = bool(all_current_positions)
@@ -253,25 +245,25 @@ for coin_data in InvestCoinList:
 
             if account and 'available' in account:
                 total_usdt = float(account['available'])
-                logger.info(f"Found USDT balance for {coin_ticker} in Perpetual Futures (Gate.io API): {total_usdt}")
+                print(f"Found USDT balance for {coin_ticker} in Perpetual Futures (Gate.io API): {total_usdt}")
                 break
             else:
-                logger.warning(f"No USDT balance found for {coin_ticker} in Gate.io API response. Retrying...")
+                print(f"No USDT balance found for {coin_ticker} in Gate.io API response. Retrying...")
                 if attempt == max_retries - 1:
-                    logger.error(f"No USDT balance available for {coin_ticker} after retries. Cannot proceed with trading.")
+                    print(f"No USDT balance available for {coin_ticker} after retries. Cannot proceed with trading.")
                     total_usdt = 0
                     break
                 time.sleep(retry_delay)
         except Exception as e:
-            logger.error(f"Error fetching balance for {coin_ticker} (attempt {attempt + 1}/{max_retries}): {e}")
+            print(f"Error fetching balance for {coin_ticker} (attempt {attempt + 1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
-                logger.error(f"Cannot proceed for {coin_ticker} without balance information.")
+                print(f"Cannot proceed for {coin_ticker} without balance information.")
                 total_usdt = 0
                 break
             time.sleep(retry_delay)
     
     if total_usdt == 0:
-        logger.warning(f"{coin_ticker} 잔고가 없어 다음 코인으로 넘어갑니다.")
+        print(f"{coin_ticker} 잔고가 없어 다음 코인으로 넘어갑니다.")
         continue # 잔고가 없으면 해당 코인 스킵
 
     # 포지션 정보 (LONG)
@@ -281,10 +273,10 @@ for coin_data in InvestCoinList:
 
     try:
         current_position_list = exchange.fetch_positions(symbols=[coin_ticker], params={'settle': 'usdt'})
-        logger.info(f"{coin_ticker} 포지션 조회 응답 개수: {len(current_position_list)}")
+        print(f"{coin_ticker} 포지션 조회 응답 개수: {len(current_position_list)}")
         if current_position_list:
             for pos_info in current_position_list:
-                logger.info(f"{coin_ticker} 포지션 상세 - symbol: {pos_info.get('symbol')}, side: {pos_info.get('side')}, contracts: {pos_info.get('contracts')}")
+                print(f"{coin_ticker} 포지션 상세 - symbol: {pos_info.get('symbol')}, side: {pos_info.get('side')}, contracts: {pos_info.get('contracts')}")
                 # side가 'long'이고 contracts > 0인 경우만 처리
                 # 심볼 비교: exchange.market(coin_ticker)['id']로 정확한 심볼 얻기
                 pos_symbol = pos_info.get('symbol', '')
@@ -292,17 +284,17 @@ for coin_data in InvestCoinList:
                     amt_b = float(pos_info['contracts'])
                     unrealizedProfit = float(pos_info['unrealizedPnl'])
                     position_info = pos_info
-                    logger.info(f"{coin_ticker} 포지션 발견 - 수량: {amt_b}, 미실현 수익: {unrealizedProfit}")
+                    print(f"{coin_ticker} 포지션 발견 - 수량: {amt_b}, 미실현 수익: {unrealizedProfit}")
                     break
 
     except Exception as e:
-        logger.error(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
+        print(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
         telegram_alert.SendMessage(f"{first_String} {coin_ticker} 포지션 조회 오류: {e}")
 
     # 지표용 일봉 데이터 조회
     df = get_ohlcv_gateio(exchange, coin_ticker, '1d', limit=260)  # 200MA 계산 대비
     if df.empty or len(df) < 60:
-        logger.warning(f"{coin_ticker} 데이터 부족으로 건너뜜. (가져온 데이터 수: {len(df)})")
+        print(f"{coin_ticker} 데이터 부족으로 건너뜜. (가져온 데이터 수: {len(df)})")
         continue
     # 거래대금
     df['value'] = df['close'] * df['volume']
@@ -332,19 +324,19 @@ for coin_data in InvestCoinList:
     
     df.dropna(inplace=True)
     if len(df) < 60:
-        logger.warning(f"{coin_ticker} 지표 계산 후 데이터 부족으로 건너뜜. (남은 데이터 수: {len(df)})")
+        print(f"{coin_ticker} 지표 계산 후 데이터 부족으로 건너뜜. (남은 데이터 수: {len(df)})")
         continue
 
     now_price = get_coin_now_price_gateio(exchange, coin_ticker)
     if now_price is None:
-        logger.warning(f"{coin_ticker} 현재 가격 조회 실패로 건너뜜.")
+        print(f"{coin_ticker} 현재 가격 조회 실패로 건너뜜.")
         continue
     
     DiffValue = -2  # 30MA 기울기 기준
 
     # --- 매도 로직 (포지션 보유 시) ---
     if abs(amt_b) > 0:
-        logger.info(f"{coin_ticker} 포지션이 있어 매도 조건 확인 중. 현재 포지션 수량: {amt_b}")
+        print(f"{coin_ticker} 포지션이 있어 매도 조건 확인 중. 현재 포지션 수량: {amt_b}")
 
         # Bitget과 동일한 매도 조건
         def is_doji_candle(o, c, h, l):
@@ -384,7 +376,7 @@ for coin_data in InvestCoinList:
         RevenueRate = (unrealizedProfit / max(invest_base, 1e-9)) * 100.0
 
         # ===== 이전 알림 방식 (로그 출력) =====
-        logger.info(
+        print(
             f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
             f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
             f"▶️ 최종 매도 결정: {sell_triggered}\n"
@@ -405,7 +397,7 @@ for coin_data in InvestCoinList:
 
         if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
             sell_triggered = False
-            logger.info(f"{coin_ticker} 금일 이미 거래 발생하였습니다.")
+            print(f"{coin_ticker} 금일 이미 거래 발생하였습니다.")
 
         if sell_triggered:
             try:
@@ -413,7 +405,7 @@ for coin_data in InvestCoinList:
                 exchange.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params=sell_params)
                 
                 exec_msg = f"{first_String} 조건 만족하여 매도 ({coin_ticker}) (참고 미실현수익: {unrealizedProfit:.2f} USDT)"
-                logger.info(exec_msg)
+                print(exec_msg)
                 telegram_alert.SendMessage(exec_msg)
                 
                 BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
@@ -422,11 +414,11 @@ for coin_data in InvestCoinList:
                     json.dump(BotDataDict, f)
             except Exception as e:
                 err_msg = f"{first_String} {coin_ticker} 매도 주문 실패: {e}"
-                logger.error(err_msg)
+                print(err_msg)
                 telegram_alert.SendMessage(err_msg)
     # --- 매수 로직 (포지션 없음) ---
     else:
-        logger.info(f"{coin_ticker} 포지션이 없어 매수 조건 확인 중.")
+        print(f"{coin_ticker} 포지션이 없어 매수 조건 확인 중.")
 
         # Bitget과 동일한 매수 조건
         cond_no_surge = df['change'].iloc[-2] < 0.5
@@ -492,7 +484,7 @@ for coin_data in InvestCoinList:
         )
 
         # ===== 이전 알림 방식 (로그 출력) =====
-        logger.info(
+        print(
             f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
             f"- 포지션 없음\n\n"
             f"▶️ 최종 매수 결정: {buy_triggered}\n"
@@ -533,11 +525,11 @@ for coin_data in InvestCoinList:
                     exchange.set_margin_mode('cross', coin_ticker, params={'settle': 'usdt'})
                     time.sleep(0.1)
                     exchange.set_leverage(set_leverage, coin_ticker, params={'settle': 'usdt'})
-                    logger.info(f"{coin_ticker} 크로스 모드 및 레버리지 {set_leverage}배 설정 완료.")
+                    print(f"{coin_ticker} 크로스 모드 및 레버리지 {set_leverage}배 설정 완료.")
                     time.sleep(0.1)
 
                 except Exception as e:
-                    logger.warning(f"{coin_ticker} 레버리지 설정 오류: {e}. 주문은 계속 시도됩니다.")
+                    print(f"{coin_ticker} 레버리지 설정 오류: {e}. 주문은 계속 시도됩니다.")
 
                 try:
                     # now_price는 현재 코인 1개당 USDT 가격입니다.
@@ -548,11 +540,11 @@ for coin_data in InvestCoinList:
                     # contractSize 확인 로그
                     market_info_debug = exchange.market(coin_ticker)
                     contract_size_debug = market_info_debug.get('contractSize', 1.0)
-                    logger.info(f"{coin_ticker} 계약 정보 - contractSize: {contract_size_debug}, 현재가: {now_price:.2f} USDT")
-                    logger.info(f"{coin_ticker} 매수 계산 - 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배, 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, 진입 계약수: {amount_to_buy:.6f}")
+                    print(f"{coin_ticker} 계약 정보 - contractSize: {contract_size_debug}, 현재가: {now_price:.2f} USDT")
+                    print(f"{coin_ticker} 매수 계산 - 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배, 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, 진입 계약수: {amount_to_buy:.6f}")
 
                     if amount_to_buy <= 0:
-                        logger.error(f"{coin_ticker} 계산된 매수 수량이 0 이하입니다. 매수 주문을 생성하지 않습니다.")
+                        print(f"{coin_ticker} 계산된 매수 수량이 0 이하입니다. 매수 주문을 생성하지 않습니다.")
                     else:
                         market_info = exchange.market(coin_ticker)
                         contract_size_raw = market_info.get('contractSize')
@@ -575,26 +567,26 @@ for coin_data in InvestCoinList:
                         
                         # 추가 로그: 진입 수량과 USDT 기준
                         position_notional = amount_to_buy * contractSize * now_price
-                        logger.info(f"{coin_ticker} 매수 체결 - 진입수량: {actual_bought_coin_quantity:.6f}개, 포지션 명목가: {position_notional:.2f} USDT, 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배")
+                        print(f"{coin_ticker} 매수 체결 - 진입수량: {actual_bought_coin_quantity:.6f}개, 포지션 명목가: {position_notional:.2f} USDT, 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배")
                          
                         exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
                                     f"예상 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, " 
                                     f"매수 계약 수: {amount_to_buy:.6f}, "
                                     f"실제 매수 코인 수: {actual_bought_coin_quantity:.2f})")
-                        logger.info(exec_msg)
+                        print(exec_msg)
                         telegram_alert.SendMessage(exec_msg)
                 except Exception as e:
                     err_msg = f"{coin_ticker} 매수 주문 실패: {e}"
-                    logger.error(err_msg)
+                    print(err_msg)
                     telegram_alert.SendMessage(err_msg)
             else:
-                logger.info(f"{coin_ticker} 금일 이미 매수 또는 거래 제한일. 매수 건너뛰었습니다. BUY_DATE: {BotDataDict.get(coin_ticker + '_BUY_DATE')}, DATE_CHECK: {BotDataDict.get(coin_ticker + '_DATE_CHECK')}")
+                print(f"{coin_ticker} 금일 이미 매수 또는 거래 제한일. 매수 건너뛰었습니다. BUY_DATE: {BotDataDict.get(coin_ticker + '_BUY_DATE')}, DATE_CHECK: {BotDataDict.get(coin_ticker + '_DATE_CHECK')}")
 
         else:
             if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
                 warn_msg = f"{first_String} 조건 만족하지 않아 현금 보유 합니다({coin_ticker})"
-                logger.info(warn_msg)
+                print(warn_msg)
                 telegram_alert.SendMessage(warn_msg)
                 
                 BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n 
@@ -612,4 +604,4 @@ if trading_summary:
 if hour_n == 0 and min_n <= 2:
     end_msg = f"{first_String} 종료 "
     telegram_alert.SendMessage(end_msg)
-    logger.info(end_msg)
+    print(end_msg)
