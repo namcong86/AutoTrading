@@ -1,6 +1,7 @@
 # Git 무시할 폴더 목록
 log/
 json/
+Coin/Test/
 
 # API Keys and sensitive data
 autobot.json

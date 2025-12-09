@@ -230,6 +230,10 @@ def execute_trading_logic(account_info):
     t = time.gmtime()
     hour_n = t.tm_hour
     min_n = t.tm_min
+    day_n = t.tm_mday
+
+    # 마지막 일일 요약 알림 시간 확인
+    last_daily_alert_day = BotDataDict.get('LAST_DAILY_ALERT_DAY', 0)
 
     if min_n <= 2:
         start_msg = f"{first_String} 시작"
@@ -392,19 +396,50 @@ def execute_trading_logic(account_info):
         is_golden = check_golden_cross(df, SHORT_MA, LONG_MA)
         # 데드크로스 확인
         is_dead = check_dead_cross(df, SHORT_MA, LONG_MA)
-
-        # 알림 메시지
-        alert_msg = (
-            f"<{first_String} {coin_ticker}>\n"
-            f"- 현재가: ${now_price:.6f}\n"
-            f"- MA{SHORT_MA}: ${df[f'ma_{SHORT_MA}'].iloc[-1]:.6f}\n"
-            f"- MA{LONG_MA}: ${df[f'ma_{LONG_MA}'].iloc[-1]:.6f}\n"
-            f"- 골든크로스: {is_golden}\n"
-            f"- 데드크로스: {is_dead}\n"
-            f"- 현재 포지션: {'롱' if actual_position == 1 else '숏' if actual_position == -1 else '없음'}\n"
-            f"- 진입 횟수: {entry_count}/{SPLIT_COUNT}"
-        )
-        telegram_alert.SendMessage(alert_msg)
+        
+        # 크로스 형태 통합
+        if is_golden and is_dead:
+            cross_status = "방향 전환중"
+        elif is_golden:
+            cross_status = "🟢 골든"
+        elif is_dead:
+            cross_status = "🔴 데드"
+        else:
+            cross_status = "⚪ 보합"
+        
+        # 일봉 MA 방향
+        daily_direction = get_daily_ma_direction(bitgetX, coin_ticker, DAILY_MA)
+        daily_direction_emoji = "📈" if daily_direction == "UP" else "📉" if daily_direction == "DOWN" else "➡️"
+        daily_direction_text = f"{daily_direction_emoji} {daily_direction}"
+        
+        # 현재 포지션 정보
+        position_text = '없음'
+        if actual_position == 1:
+            if entry_price > 0 and now_price > 0:
+                position_profit = ((now_price - entry_price) / entry_price) * 100
+                position_text = f"🟢 롱 (+{position_profit:.2f}%)"
+            else:
+                position_text = "🟢 롱"
+        elif actual_position == -1:
+            if entry_price > 0 and now_price > 0:
+                position_profit = ((entry_price - now_price) / entry_price) * 100
+                position_text = f"🔴 숏 (+{position_profit:.2f}%)"
+            else:
+                position_text = "🔴 숏"
+        
+        # 아침 9시(UTC 기준)에만 일일 요약 알림 전송
+        if hour_n == 9 and min_n <= 2 and last_daily_alert_day != day_n:
+            alert_msg = (
+                f"<{first_String} {coin_ticker}>\n"
+                f"- 현재가: ${now_price:.6f}\n"
+                f"- MA{SHORT_MA}: ${df[f'ma_{SHORT_MA}'].iloc[-1]:.6f}\n"
+                f"- MA{LONG_MA}: ${df[f'ma_{LONG_MA}'].iloc[-1]:.6f}\n"
+                f"- 일봉{DAILY_MA}MA: {daily_direction_text}\n"
+                f"- 크로스형태: {cross_status}\n"
+                f"- 현재 포지션: {position_text}"
+            )
+            telegram_alert.SendMessage(alert_msg)
+            BotDataDict['LAST_DAILY_ALERT_DAY'] = day_n
 
         # === 골든크로스: 숏 청산 후 롱 진입 ===
         if is_golden:
@@ -452,9 +487,16 @@ def execute_trading_logic(account_info):
                     BotDataDict[coin_ticker + '_ENTRY_PRICE'] = now_price
                     BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []  # 신규 진입 시 익절 상태 초기화
 
-                    msg = f"{first_String} {coin_ticker} 롱 진입 ({entry_count}/{SPLIT_COUNT}) - ${split_invest:.2f} USDT @ ${now_price:.6f}"
-                    print(msg)
-                    telegram_alert.SendMessage(msg)
+                    # 상세 진입 알림
+                    entry_msg = (
+                        f"🟢 {first_String} {coin_ticker} 롱 진입\\n"
+                        f"- 진입가격: ${now_price:.6f}\\n"
+                        f"- 진입량(코인): {amount:.6f}\\n"
+                        f"- 진입량(USDT): ${split_invest:.2f}\\n"
+                        f"- 포지션방향: 🟢 LONG"
+                    )
+                    print(entry_msg)
+                    telegram_alert.SendMessage(entry_msg)
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 롱 진입 실패: {e}")
                     telegram_alert.SendMessage(f"{first_String} {coin_ticker} 롱 진입 실패: {e}")
@@ -505,9 +547,16 @@ def execute_trading_logic(account_info):
                     BotDataDict[coin_ticker + '_ENTRY_PRICE'] = now_price
                     BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []  # 신규 진입 시 익절 상태 초기화
 
-                    msg = f"{first_String} {coin_ticker} 숏 진입 ({entry_count}/{SPLIT_COUNT}) - ${split_invest:.2f} USDT @ ${now_price:.6f}"
-                    print(msg)
-                    telegram_alert.SendMessage(msg)
+                    # 상세 진입 알림
+                    entry_msg = (
+                        f"🔴 {first_String} {coin_ticker} 숏 진입\\n"
+                        f"- 진입가격: ${now_price:.6f}\\n"
+                        f"- 진입량(코인): {amount:.6f}\\n"
+                        f"- 진입량(USDT): ${split_invest:.2f}\\n"
+                        f"- 포지션방향: 🔴 SHORT"
+                    )
+                    print(entry_msg)
+                    telegram_alert.SendMessage(entry_msg)
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 숏 진입 실패: {e}")
                     telegram_alert.SendMessage(f"{first_String} {coin_ticker} 숏 진입 실패: {e}")
