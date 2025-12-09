@@ -90,17 +90,15 @@ def GetAmount(money, price, leverage=1.0):
 # 암호화된 키를 복호화하여 사용
 ACCOUNT_LIST = [
     {
-        "name": "Bitget_Sub1",
+        "name": "Sub1",
         "access_key": simpleEnDecrypt.decrypt(my_key.bitget_access_S1),
         "secret_key": simpleEnDecrypt.decrypt(my_key.bitget_secret_S1),
         "passphrase": simpleEnDecrypt.decrypt(my_key.bitget_passphrase_S1),
-        "leverage": 1
-    },
+        "leverage": 6  # 서브 계정 1 레버리지
+    }
 ]
-
-# ==============================================================================
 # 투자 종목 리스트 - 비트겟 티커명으로 수정
-# ==============================================================================
+# ====================================================0==========================
 INVEST_COIN_LIST = [
     {'ticker': 'DOGE/USDT:USDT', 'rate': 0.12},
     {'ticker': 'ADA/USDT:USDT', 'rate': 0.12},
@@ -115,7 +113,7 @@ INVEST_COIN_LIST = [
 ]
 # ==============================================================================
 
-INVEST_RATE = 0.999
+INVEST_RATE = 1
 FEE = 0.0006  # 비트겟 메이커 수수료 0.06%
 
 # --- 핵심 거래 로직을 담은 함수 ---
@@ -215,6 +213,9 @@ def execute_trading_logic(account_info):
         return
 
     # --- 메인 루프 시작 ---
+    # 모든 코인의 거래 결과를 요약할 딕셔너리
+    trading_summary = {}
+    
     for coin_data in INVEST_COIN_LIST:
         coin_ticker = coin_data['ticker']
         
@@ -228,10 +229,12 @@ def execute_trading_logic(account_info):
         amt_b = 0
         unrealizedProfit = 0.0
         
+        current_pos_side = 'long' # Default
         for pos in all_positions:
             if pos['symbol'] == coin_ticker:
                 amt_b = float(pos.get('contracts', 0))
                 unrealizedProfit = float(pos.get('unrealizedPnl', 0.0))
+                current_pos_side = pos.get('side', 'long')
                 break
 
         # 기술적 지표 계산
@@ -280,8 +283,8 @@ def execute_trading_logic(account_info):
             telegram_alert.SendMessage(f"{first_String} {coin_ticker} 현재가 조회 실패")
             continue
 
-        # 비트겟 주문 파라미터
-        params = {'holdSide': 'long'}
+        # 비트겟 주문 파라미터 (크로스 모드에서는 holdSide 사용 금지)
+        params = {}
 
         if abs(amt_b) > 0:
             # --- 매도 조건 ---
@@ -303,39 +306,60 @@ def execute_trading_logic(account_info):
             original_sell_cond = (cond_fall_pattern or cond_2_neg_candle or cond_loss) and cond_not_rising
             sell_condition_triggered = original_sell_cond or cond_doji
             
-            if "Main" in account_name:
-                alert_msg = (
-                    f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
-                    f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
-                    f"▶ 최종 매도 결정: {sell_condition_triggered}\n"
-                    f"--------------------\n"
-                    f"[기본 매도 조건: {original_sell_cond}]\n"
-                    f" ㄴ하락패턴: {cond_fall_pattern}\n"
-                    f" ㄴ2연속음봉: {cond_2_neg_candle}\n"
-                    f" ㄴ손실중: {cond_loss}\n"
-                    f" ㄴ(AND)상승추세아님: {cond_not_rising}\n"
-                    f"[추가 매도 조건]\n"
-                    f" ㄴ2연속도지: {cond_doji}"
-                )
-                telegram_alert.SendMessage(alert_msg)
+            # ===== 이전 알림 방식 (주석 처리) =====
+            # alert_msg = (
+            #     f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
+            #     f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
+            #     f"▶ 최종 매도 결정: {sell_condition_triggered}\n"
+            #     f"--------------------\n"
+            #     f"[기본 매도 조건: {original_sell_cond}]\n"
+            #     f" ㄴ하락패턴: {cond_fall_pattern}\n"
+            #     f" ㄴ2연속음봉: {cond_2_neg_candle}\n"
+            #     f" ㄴ손실중: {cond_loss}\n"
+            #     f" ㄴ(AND)상승추세아님: {cond_not_rising}\n"
+            #     f"[추가 매도 조건]\n"
+            #     f" ㄴ2연속도지: {cond_doji}"
+            # )
+            # telegram_alert.SendMessage(alert_msg)
+            
+            # ===== 새로운 요약 알림 방식 =====
+            # 거래 요약에 추가 (수익률과 매도조건)
+            sell_emoji = "🔴" if sell_condition_triggered else "⚪"
+            trading_summary[coin_ticker] = f"{sell_emoji} 수익률: {RevenueRate:.1f}% | 매도: {sell_condition_triggered}"
 
-            if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
-                sell_condition_triggered = False
-
-            if sell_condition_triggered:
-                try:
-                    # 실제 매도 주문 실행
-                    bitgetX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
-                    exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도!! (미실현 수익: {unrealizedProfit:.2f} USDT)"
-                    print(exec_msg)
-                    telegram_alert.SendMessage(exec_msg)
-                    BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
-                    BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
-                    with open(botdata_file_path, 'w') as f:
-                        json.dump(BotDataDict, f, indent=4)
-                except Exception as e:
-                    print(f"[{account_name}] 매도 주문 실패 for {coin_ticker}: {e}")
-                    telegram_alert.SendMessage(f"[{account_name}] {coin_ticker} 매도 실패: {e}")
+            if BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
+                if sell_condition_triggered:
+                    try:
+                        # 실제 매도 주문 실행 (양방향 모드: holdSide만 사용)
+                        print(f"[{account_name}] {coin_ticker} 매도 시도 - 포지션 수량: {amt_b} (Side: {current_pos_side})")
+                        if amt_b == 0:
+                            print(f"[{account_name}] {coin_ticker} 포지션이 없어 매도 건너뜀")
+                            continue
+                        
+                        # Hedge Mode Close Params: holdSide만 명시
+                        # Long 포지션 종료: Sell, holdSide='long'
+                        # Short 포지션 종료: Buy, holdSide='short'
+                        close_side = 'buy' if current_pos_side == 'long' else 'sell'
+                        
+                        bitgetX.create_order(
+                            coin_ticker, 
+                            'market', 
+                            close_side, 
+                            abs(amt_b), 
+                            None, 
+                            {'holdSide': current_pos_side, 'tradeSide': 'close'}
+                        )
+                        
+                        exec_msg = f"{first_String} {coin_ticker} 조건 만족하여 매도(Close {current_pos_side})!! (미실현 수익: {unrealizedProfit:.2f} USDT)"
+                        print(exec_msg)
+                        telegram_alert.SendMessage(exec_msg)
+                        BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
+                        BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
+                        with open(botdata_file_path, 'w') as f:
+                            json.dump(BotDataDict, f, indent=4)
+                    except Exception as e:
+                        print(f"[{account_name}] 매도 주문 실패 for {coin_ticker}: {e}")
+                        telegram_alert.SendMessage(f"[{account_name}] {coin_ticker} 매도 실패: {e}")
         
         else:
             # --- 매수 조건 ---
@@ -403,25 +427,29 @@ def execute_trading_logic(account_info):
                 cond_body_over_15_percent
             )
             
-            if "Main" in account_name:
-                alert_msg = (
-                    f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
-                    f"- 포지션 없음\n\n"
-                    f"▶ 최종 매수 결정: {buy}\n"
-                    f"--------------------\n"
-                    f" 1. 2연속 양봉: {cond_2_pos_candle}\n"
-                    f" 2. 전일 종가/고가 상승: {cond_price_up}\n"
-                    f" 3. 7ma 상승: {cond_7ma_up}\n"
-                    f" 4. 30ma 기울기 > -2: {cond_30ma_slope}\n"
-                    f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
-                    f" 6. 50ma 조건 충족: {cond_ma_50}\n"
-                    f" 7. 20ma 상승: {cond_20ma_up}\n"
-                    f" 8. 급등 아님: {cond_no_surge}\n"
-                    f" 9. Disparity Index 조건: {filter_disparity}\n"
-                    f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
-                    f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
-                )
-                telegram_alert.SendMessage(alert_msg)
+            # ===== 이전 알림 방식 (로그 출력) =====
+            print(
+                f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
+                f"- 포지션 없음\n\n"
+                f"▶ 최종 매수 결정: {buy}\n"
+                f"--------------------\n"
+                f" 1. 2연속 양봉: {cond_2_pos_candle}\n"
+                f" 2. 전일 종가/고가 상승: {cond_price_up}\n"
+                f" 3. 7ma 상승: {cond_7ma_up}\n"
+                f" 4. 30ma 기울기 > -2: {cond_30ma_slope}\n"
+                f" 5. RSI_MA 상승: {cond_rsi_ma_up}\n"
+                f" 6. 50ma 조건 충족: {cond_ma_50}\n"
+                f" 7. 20ma 상승: {cond_20ma_up}\n"
+                f" 8. 급등 아님: {cond_no_surge}\n"
+                f" 9. Disparity Index 조건: {filter_disparity}\n"
+                f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
+                f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
+            )
+            
+            # ===== 새로운 요약 알림 방식 =====
+            # 거래 요약에 추가 (매수 조건 TRUE/FALSE)
+            buy_emoji = "🟢" if buy else "⚪"
+            trading_summary[coin_ticker] = f"{buy_emoji} 매수: {buy}"
 
             if buy:
                 if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
@@ -429,7 +457,8 @@ def execute_trading_logic(account_info):
                     total_coin_count = len(INVEST_COIN_LIST)
                     num_open_positions = len(all_positions)
 
-                    if num_open_positions == (total_coin_count - 1):
+                    # 마지막 남은 코인일 때만 전체 잔고 사용, 아니면 할당비율 적용
+                    if total_coin_count > 1 and num_open_positions == (total_coin_count - 1):
                         InvestMoney = current_usdt_balance
                     else:
                         InvestMoney = cycle_investment_base * INVEST_RATE * coin_data['rate']
@@ -438,16 +467,27 @@ def execute_trading_logic(account_info):
                     cap = df['value_ma'].iloc[-2] / 10
                     BuyMoney = min(max(BuyMoney, 10), cap)
                     
-                    amount = float(bitgetX.amount_to_precision(coin_ticker, GetAmount(BuyMoney, now_price, 1.0))) * set_leverage
+                    # 레버리지를 적용한 포지션 가치로 수량 계산
+                    position_value = BuyMoney * set_leverage
+                    amount = float(bitgetX.amount_to_precision(coin_ticker, GetAmount(position_value, now_price, 1.0)))
+                    
+                    print(f"[{account_name}] {coin_ticker} 주문 계산:")
+                    print(f"  - 할당 증거금: {BuyMoney:.2f} USDT")
+                    print(f"  - 레버리지: {set_leverage}배")
+                    print(f"  - 포지션 가치: {position_value:.2f} USDT")
+                    print(f"  - 현재가: {now_price:.2f} USDT")
+                    print(f"  - 주문 수량: {amount:.6f} 개")
+                    print(f"  - 실제 필요 금액: {amount * now_price:.2f} USDT")
 
                     try:
-                        # 비트겟 레버리지 설정
+                        # 비트겟 크로스 모드 및 레버리지 설정
+                        bitgetX.set_margin_mode('cross', coin_ticker, params={'marginCoin': 'USDT'})
+                        time.sleep(0.1)
                         bitgetX.set_leverage(
                             leverage=set_leverage, 
                             symbol=coin_ticker,
                             params={
-                                'marginCoin': 'USDT',
-                                'holdSide': 'long'
+                                'marginCoin': 'USDT'
                             }
                         )
                         
@@ -456,8 +496,8 @@ def execute_trading_logic(account_info):
                         telegram_alert.SendMessage(f"{first_String} {coin_ticker} 레버리지 설정 오류: {e}")
 
                     try:
-                        # 실제 매수 주문 실행
-                        bitgetX.create_order(coin_ticker, 'market', 'buy', amount, None, params)
+                        # 실제 매수 주문 실행 (양방향 모드: tradeSide='open', holdSide='long')
+                        bitgetX.create_order(coin_ticker, 'market', 'buy', amount, None, {'tradeSide': 'open', 'holdSide': 'long'})
                         BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                         BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                         with open(botdata_file_path, 'w') as f:
@@ -478,6 +518,13 @@ def execute_trading_logic(account_info):
                     BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                     with open(botdata_file_path, 'w') as f:
                         json.dump(BotDataDict, f, indent=4)
+    
+    # ===== 거래 결과 요약 알림 =====
+    if trading_summary:
+        summary_msg = f"📊Bitget_[{account_name}] 거래 조건 검사 결과\n" + "="*35 + "\n"
+        for ticker, status in trading_summary.items():
+            summary_msg += f"{ticker}: {status}\n"
+        telegram_alert.SendMessage(summary_msg)
     
     if hour_n == 0 and min_n <= 2:
         end_msg = f"{first_String} 종료"

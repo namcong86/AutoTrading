@@ -23,7 +23,7 @@ import requests
 import datetime
 import myBinance
 import ende_key
-import my_key
+import my_key 
 
 # 암복호화 클래스 객체 생성
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
@@ -69,7 +69,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     handlers=[
-        logging.FileHandler('trading_bot_doge_pepe.log'),
+        logging.FileHandler('3.GateIO_F_DOGE_PEPE_Leverage.log', encoding='utf-8'),
         logging.StreamHandler(sys.stdout)
     ]
 )
@@ -80,7 +80,8 @@ exchange = ccxt.gateio({
     'secret': GateIO_SecretKey,
     'enableRateLimit': True,
     'options': {
-        'defaultType': 'future',
+        'defaultType': 'swap',
+        'defaultSettle': 'usdt',
         'createMarketBuyOrderRequiresPrice': False,
     }
 })
@@ -90,9 +91,9 @@ gateio_api = GateioFuturesAPI(GateIO_AccessKey, GateIO_SecretKey)
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/3.GateIO_F_DOGE_PEPE_Leverage_Data.json"
+    botdata_file_path = "/var/AutoBot/json/3.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json"
 else:
-    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3.GateIO_F_DOGE_PEPE_Leverage_Data.json')
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json')
 
 try:
     with open(botdata_file_path, 'r') as f:
@@ -112,7 +113,7 @@ except json.JSONDecodeError:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = 3
+    set_leverage = 6
 
 InvestRate = 1
 fee = 0.001
@@ -170,33 +171,42 @@ def get_coin_now_price_gateio(exchange_obj, ticker):
 def get_amount_gateio(exchange_obj, ticker, buy_money_usd, price, leverage):
     """
     매수 금액 (USD), 가격, 레버리지를 바탕으로 매수할 '계약 수'를 계산합니다.
-    Gate.io의 'quanto_multiplier'를 고려하여 CCXT의 precision을 통해
-    거래소에서 요구하는 정확한 계약 수량을 반환합니다.
+    Gate.io의 'contractSize'를 고려하여 거래소에서 요구하는 정확한 계약 수량을 반환합니다.
+    
+    Parameters:
+    - buy_money_usd: 증거금 (USDT)
+    - leverage: 레버리지 (보통 1.0 - 이미 calculate된 상태)
+    - price: 현재 코인 가격
     """
-    if price is None or price == 0: return 0
+    if price is None or price == 0: 
+        return 0
 
-    # 해당 코인의 market 정보를 가져옵니다.
-    market_info = exchange_obj.market(ticker)
-    
-    # quanto_multiplier를 가져오되, 없으면 기본값 1을 사용 (대부분의 코인은 1)
-    # Gate.io API는 string으로 반환할 수 있으므로 float으로 변환
-    contractSize = float(market_info.get('contractSize', '1'))
-    
-    # 레버리지 적용된 포지션 가치 (USDT)
-    leveraged_position_value = buy_money_usd * leverage 
-    
-    # 예상 코인 수량 (레버리지 적용된 가치를 현재 코인 가격으로 나눔)
-    estimated_coin_amount = leveraged_position_value / price
+    try:
+        # 레버리지 적용된 포지션 가치 (USDT)
+        # buy_money_usd는 이미 증거금이므로, leverage * buy_money_usd = 포지션의 총 명목가
+        leveraged_position_value = buy_money_usd * leverage 
+        
+        # 예상 코인 수량 (레버리지 적용된 가치를 현재 코인 가격으로 나눔)
+        # 이것이 실제 매수할 코인의 개수입니다
+        estimated_coin_amount = leveraged_position_value / price
 
-    # 이 코인 수량을 contractSize 나누어 '계약 수'를 계산합니다.
-    # Gate.io에서 create_market_buy_order는 이 '계약 수'를 인자로 받습니다.
-    amount_in_contracts = estimated_coin_amount / contractSize
+        # Gate.io contractSize는 보통 1이므로, 직접 반환
+        # (만약 다른 값이면 곱하기)
+        market_info = exchange_obj.market(ticker)
+        contract_size_raw = market_info.get('contractSize')
+        if contract_size_raw is None:
+            contractSize = 1.0
+        else:
+            contractSize = float(contract_size_raw) if contract_size_raw else 1.0
+        
+        # 계약 수량 = 코인 수량 / contractSize
+        # 예: ETH 0.3개, contractSize=1 → 계약 수 0.3
+        amount_in_contracts = estimated_coin_amount / contractSize
 
-    # CCXT의 amount_to_precision을 사용하여 거래소의 정밀도에 맞춰 조정된 '계약 수'를 얻습니다.
-    # 이 값이 실제 주문에 사용될 '계약 수'입니다.
-    final_order_amount = amount_in_contracts
-    
-    return final_order_amount
+        return amount_in_contracts
+    except Exception as e:
+        logger.error(f"Error calculating amount for {ticker}: {e}")
+        return 0
 
 
 # --- 전체 포지션 존재 여부 확인 (루프 시작 전 한 번) ---
@@ -204,7 +214,7 @@ all_current_positions = []
 try:
     # 모든 마켓 정보를 미리 로드하여 get_amount_gateio에서 사용할 수 있도록 함
     exchange.load_markets() 
-    all_current_positions = exchange.fetch_positions(symbols=[cd['ticker'] for cd in InvestCoinList])
+    all_current_positions = exchange.fetch_positions(symbols=[cd['ticker'] for cd in InvestCoinList], params={'settle': 'usdt'})
     all_current_positions = [p for p in all_current_positions if p.get('contracts') is not None and abs(p['contracts']) > 0]
 except Exception as e:
     logger.error(f"포지션 정보 조회 중 오류: {e}")
@@ -214,6 +224,9 @@ is_any_bot_position_active = bool(all_current_positions)
 
 
 # --- 메인 루프 ---
+# 모든 코인의 거래 결과를 요약할 딕셔너리
+trading_summary = {}
+
 for coin_data in InvestCoinList:
     coin_ticker = coin_data['ticker']
     # market_id = exchange.market(coin_ticker)['id'] # 사용되지 않아 주석 처리
@@ -267,13 +280,19 @@ for coin_data in InvestCoinList:
     position_info = None
 
     try:
-        current_position_list = exchange.fetch_positions(symbols=[coin_ticker], params={'type': 'swap'})
+        current_position_list = exchange.fetch_positions(symbols=[coin_ticker], params={'settle': 'usdt'})
+        logger.info(f"{coin_ticker} 포지션 조회 응답 개수: {len(current_position_list)}")
         if current_position_list:
             for pos_info in current_position_list:
-                if pos_info['symbol'] == coin_ticker and pos_info['side'] == 'long':
+                logger.info(f"{coin_ticker} 포지션 상세 - symbol: {pos_info.get('symbol')}, side: {pos_info.get('side')}, contracts: {pos_info.get('contracts')}")
+                # side가 'long'이고 contracts > 0인 경우만 처리
+                # 심볼 비교: exchange.market(coin_ticker)['id']로 정확한 심볼 얻기
+                pos_symbol = pos_info.get('symbol', '')
+                if pos_symbol and pos_info.get('side') == 'long' and float(pos_info.get('contracts', 0)) > 0:
                     amt_b = float(pos_info['contracts'])
                     unrealizedProfit = float(pos_info['unrealizedPnl'])
                     position_info = pos_info
+                    logger.info(f"{coin_ticker} 포지션 발견 - 수량: {amt_b}, 미실현 수익: {unrealizedProfit}")
                     break
 
     except Exception as e:
@@ -364,7 +383,8 @@ for coin_data in InvestCoinList:
                 invest_base = 1.0
         RevenueRate = (unrealizedProfit / max(invest_base, 1e-9)) * 100.0
 
-        alert_msg = (
+        # ===== 이전 알림 방식 (로그 출력) =====
+        logger.info(
             f"<{first_String} {coin_ticker} 매도 조건 검사>\n"
             f"- 포지션 보유 중 (수익률: {RevenueRate:.2f}%)\n\n"
             f"▶️ 최종 매도 결정: {sell_triggered}\n"
@@ -377,7 +397,11 @@ for coin_data in InvestCoinList:
             f"[추가 매도 조건]\n"
             f" ㄴ2연속도지: {cond_doji}"
         )
-        telegram_alert.SendMessage(alert_msg)
+        
+        # ===== 새로운 요약 알림 방식 =====
+        # 거래 요약에 추가 (수익률과 매도조건)
+        sell_emoji = "🔴" if sell_triggered else "⚪"
+        trading_summary[coin_ticker] = f"{sell_emoji} 수익률: {RevenueRate:.1f}% | 매도: {sell_triggered}"
 
         if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
             sell_triggered = False
@@ -467,8 +491,8 @@ for coin_data in InvestCoinList:
             cond_body_over_15_percent
         )
 
-        # 텔레그램 알림 (Bitget 형식)
-        alert_msg = (
+        # ===== 이전 알림 방식 (로그 출력) =====
+        logger.info(
             f"<{first_String} {coin_ticker} 매수 조건 검사>\n"
             f"- 포지션 없음\n\n"
             f"▶️ 최종 매수 결정: {buy_triggered}\n"
@@ -485,7 +509,11 @@ for coin_data in InvestCoinList:
             f" 10. 긴 윗꼬리 없음: {cond_no_long_upper_shadow}\n"
             f" 11. 캔들 몸통 15% 이상: {cond_body_over_15_percent}"
         )
-        telegram_alert.SendMessage(alert_msg)
+        
+        # ===== 새로운 요약 알림 방식 =====
+        # 거래 요약에 추가 (매수 조건 TRUE/FALSE)
+        buy_emoji = "🟢" if buy_triggered else "⚪"
+        trading_summary[coin_ticker] = f"{buy_emoji} 매수: {buy_triggered}"
         
         if buy_triggered: 
             if BotDataDict.get(coin_ticker + '_BUY_DATE') != day_str and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n :
@@ -501,26 +529,40 @@ for coin_data in InvestCoinList:
                 # BuyMargin = min(max(BuyMargin, 10.0), cap)
 
                 try:
-                    exchange.set_leverage(set_leverage, coin_ticker, params={'type': 'swap', 'marginMode': 'cross'})
-                    logger.info(f"{coin_ticker} 레버리지 {set_leverage}배, 교차 마진(Cross) 설정 완료.")
+                    # Gate.io 크로스 모드 및 레버리지 설정
+                    exchange.set_margin_mode('cross', coin_ticker, params={'settle': 'usdt'})
+                    time.sleep(0.1)
+                    exchange.set_leverage(set_leverage, coin_ticker, params={'settle': 'usdt'})
+                    logger.info(f"{coin_ticker} 크로스 모드 및 레버리지 {set_leverage}배 설정 완료.")
                     time.sleep(0.1)
 
                 except Exception as e:
-                    logger.error(f"{coin_ticker} 레버리지 설정 오류: {e}. 주문은 시도됩니다.")
+                    logger.warning(f"{coin_ticker} 레버리지 설정 오류: {e}. 주문은 계속 시도됩니다.")
 
                 try:
                     # now_price는 현재 코인 1개당 USDT 가격입니다.
                     # amount_to_buy는 get_amount_gateio로부터 반환된 '계약 수'입니다.
+                    # BuyMargin은 이미 증거금이므로 레버리지를 set_leverage로 전달
                     amount_to_buy = get_amount_gateio(exchange, coin_ticker, BuyMargin, now_price, set_leverage)
+
+                    # contractSize 확인 로그
+                    market_info_debug = exchange.market(coin_ticker)
+                    contract_size_debug = market_info_debug.get('contractSize', 1.0)
+                    logger.info(f"{coin_ticker} 계약 정보 - contractSize: {contract_size_debug}, 현재가: {now_price:.2f} USDT")
+                    logger.info(f"{coin_ticker} 매수 계산 - 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배, 포지션 가치: {BuyMargin * set_leverage:.2f} USDT, 진입 계약수: {amount_to_buy:.6f}")
 
                     if amount_to_buy <= 0:
                         logger.error(f"{coin_ticker} 계산된 매수 수량이 0 이하입니다. 매수 주문을 생성하지 않습니다.")
                     else:
                         market_info = exchange.market(coin_ticker)
-                        contractSize = float(market_info.get('contractSize', '1')) # string -> float
+                        contract_size_raw = market_info.get('contractSize')
+                        if contract_size_raw is None:
+                            contractSize = 1.0
+                        else:
+                            contractSize = float(contract_size_raw) if contract_size_raw else 1.0
 
-                        # exchange.create_market_buy_order 함수는 두 번째 인자로 '계약 수'를 받습니다.
-                        exchange.create_market_buy_order(coin_ticker, amount_to_buy, params={'type': 'swap'})
+                        # Gate.io 선물 매수 주문 (settle 파라미터 필수)
+                        exchange.create_order(coin_ticker, 'market', 'buy', amount_to_buy, None, params={'settle': 'usdt'})
 
                         BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                         BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
@@ -530,6 +572,10 @@ for coin_data in InvestCoinList:
 
                         # 로그 메시지에 실제 매수될 '코인 수량' (계약 수 * contractSize)을 표시합니다.
                         actual_bought_coin_quantity = amount_to_buy * contractSize
+                        
+                        # 추가 로그: 진입 수량과 USDT 기준
+                        position_notional = amount_to_buy * contractSize * now_price
+                        logger.info(f"{coin_ticker} 매수 체결 - 진입수량: {actual_bought_coin_quantity:.6f}개, 포지션 명목가: {position_notional:.2f} USDT, 증거금: {BuyMargin:.2f} USDT, 레버리지: {set_leverage}배")
                          
                         exec_msg = (f"{first_String} 조건 만족하여 매수({coin_ticker}) "
                                     f"(증거금: {BuyMargin:.2f} USDT, "
@@ -556,6 +602,13 @@ for coin_data in InvestCoinList:
                     json.dump(BotDataDict, f)
 
 # --- 루프 종료 후 작업 ---
+# ===== 거래 결과 요약 알림 =====
+if trading_summary:
+    summary_msg = f"📊 Gateio Sub1 거래 조건 검사 결과\n" + "="*35 + "\n"
+    for ticker, status in trading_summary.items():
+        summary_msg += f"{ticker}: {status}\n"
+    telegram_alert.SendMessage(summary_msg)
+
 if hour_n == 0 and min_n <= 2:
     end_msg = f"{first_String} 종료 "
     telegram_alert.SendMessage(end_msg)
