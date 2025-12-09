@@ -42,7 +42,8 @@ ACCOUNT_LIST = [
         "access_key": Bitget_AccessKey,
         "secret_key": Bitget_SecretKey,
         "passphrase": Bitget_Passphrase,
-        "leverage": 1  # 레버리지 (1~10 설정 가능)
+        "leverage": 2,  # 레버리지 설정 (정수 1~10)
+        "effective_leverage": 1.2  # 실제 주문 시 적용할 배수
     },
 ]
 
@@ -57,6 +58,7 @@ INVEST_COIN_LIST = [
 # 전략 설정
 SHORT_MA = 20            # 단기 이동평균
 LONG_MA = 120            # 장기 이동평균
+DAILY_MA = 115           # 일봉 이동평균 (방향 필터용)
 SPLIT_COUNT = 1          # 분할 진입 횟수 (1=일괄진입, 2~5=분할진입)
 INVEST_RATE = 0.99       # 전체 자금 중 투자 비율
 FEE = 0.0006             # 수수료율 (0.06%)
@@ -67,9 +69,9 @@ TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적
 # 익절 레벨 설정 (전 캔들 종가 기준) - TAKE_PROFIT_ENABLED = True일 때만 적용
 # profit_pct: 수익률 도달 시, sell_pct: 해당 시점 물량의 몇 %를 익절
 TAKE_PROFIT_LEVELS = [
-    {'level': 1, 'profit_pct': 5, 'sell_pct': 5},    # TP1: 5% 수익 시 5% 익절
-    {'level': 2, 'profit_pct': 10, 'sell_pct': 10},  # TP2: 10% 수익 시 10% 익절
-    {'level': 3, 'profit_pct': 20, 'sell_pct': 20},  # TP3: 20% 수익 시 20% 익절
+    {'profit_pct': 5, 'sell_pct': 5},    # 5% 수익 시 5% 익절
+    {'profit_pct': 10, 'sell_pct': 10},  # 10% 수익 시 10% 익절
+    {'profit_pct': 20, 'sell_pct': 20},  # 20% 수익 시 20% 익절
 ]
 
 
@@ -153,6 +155,30 @@ def check_dead_cross(df, short_ma, long_ma):
     return prev2_short >= prev2_long and prev_short < prev_long
 
 
+def get_daily_ma_direction(exchange, ticker, daily_ma_period):
+    """일봉 이동평균 기준 방향 필터
+    Returns: 'long' (현재가 > 일봉MA), 'short' (현재가 < 일봉MA), 'both' (데이터 부족)
+    """
+    try:
+        df_daily = GetOhlcv(exchange, ticker, '1d', target_rows=daily_ma_period + 10)
+        if df_daily.empty or len(df_daily) < daily_ma_period:
+            return 'both'
+        
+        df_daily[f'ma_{daily_ma_period}'] = df_daily['close'].rolling(daily_ma_period).mean()
+        df_daily.dropna(inplace=True)
+        
+        if df_daily.empty:
+            return 'both'
+        
+        last_close = df_daily['close'].iloc[-1]
+        last_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        
+        return 'long' if last_close > last_ma else 'short'
+    except Exception as e:
+        print(f"일봉 MA 조회 오류 ({ticker}): {e}")
+        return 'both'
+
+
 # ==============================================================================
 # 메인 트레이딩 로직
 # ==============================================================================
@@ -163,8 +189,9 @@ def execute_trading_logic(account_info):
     secret_key = account_info['secret_key']
     passphrase = account_info['passphrase']
     set_leverage = account_info['leverage']
+    effective_leverage = account_info.get('effective_leverage', set_leverage)
 
-    first_String = f"[5.Bitget 롱숏 {account_name}] {set_leverage}배 "
+    first_String = f"[5.Bitget 롱숏 {account_name}] {effective_leverage}배 "
 
     # 비트겟 객체 생성
     try:
@@ -223,6 +250,16 @@ def execute_trading_logic(account_info):
     except Exception as e:
         print(f"[{account_name}] 잔고 조회 실패: {e}")
         return
+
+    # 레버리지 설정 (모든 코인에 대해 미리 설정)
+    print(f"[{account_name}] 레버리지 {set_leverage}배 설정 중...")
+    for coin_data in INVEST_COIN_LIST:
+        try:
+            bitgetX.set_leverage(set_leverage, coin_data['ticker'], params={'marginCoin': 'USDT'})
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"[{account_name}] {coin_data['ticker']} 레버리지 설정 실패 (이미 설정됨 또는 오류): {e}")
+    print(f"[{account_name}] 레버리지 설정 완료")
 
     # 메인 루프
     for coin_data in INVEST_COIN_LIST:
@@ -303,12 +340,11 @@ def execute_trading_logic(account_info):
             
             # 익절 레벨 체크
             for tp in TAKE_PROFIT_LEVELS:
-                tp_level = tp['level']
                 tp_profit = tp['profit_pct']
                 tp_sell_pct = tp['sell_pct']
                 
-                # 이미 실행된 레벨은 스킵
-                if tp_level in tp_triggered:
+                # 이미 실행된 레벨은 스킵 (profit_pct를 키로 사용)
+                if tp_profit in tp_triggered:
                     continue
                 
                 # 수익률 도달 시 익절 실행
@@ -319,22 +355,22 @@ def execute_trading_logic(account_info):
                             if actual_position == 1:  # 롱 익절
                                 bitgetX.create_order(
                                     coin_ticker, 'market', 'sell', sell_amount,
-                                    None, {'holdSide': 'long', 'reduceOnly': True}
+                                    None, {'reduceOnly': True}
                                 )
                             else:  # 숏 익절
                                 bitgetX.create_order(
                                     coin_ticker, 'market', 'buy', sell_amount,
-                                    None, {'holdSide': 'short', 'reduceOnly': True}
+                                    None, {'reduceOnly': True}
                                 )
                             
-                            # TP 레벨 기록
-                            tp_triggered.append(tp_level)
+                            # TP 레벨 기록 (profit_pct를 저장)
+                            tp_triggered.append(tp_profit)
                             BotDataDict[coin_ticker + '_TP_TRIGGERED'] = tp_triggered
                             BotDataDict[coin_ticker + '_POSITION_SIZE'] = actual_size - sell_amount
                             
                             # 텔레그램 알림
                             tp_msg = (
-                                f"💰 {first_String} {coin_ticker} 부분 익절 (TP{tp_level})\n"
+                                f"💰 {first_String} {coin_ticker} 부분 익절 ({tp_profit}%)\n"
                                 f"- 진입가: ${entry_price:.6f}\n"
                                 f"- 전캔들 종가: ${prev_close:.6f}\n"
                                 f"- 수익률: {profit_pct:.2f}%\n"
@@ -349,8 +385,8 @@ def execute_trading_logic(account_info):
                             actual_size -= sell_amount
                             time.sleep(0.2)
                         except Exception as e:
-                            print(f"[{account_name}] {coin_ticker} TP{tp_level} 익절 실패: {e}")
-                            telegram_alert.SendMessage(f"{first_String} {coin_ticker} TP{tp_level} 익절 실패: {e}")
+                            print(f"[{account_name}] {coin_ticker} {tp_profit}% 익절 실패: {e}")
+                            telegram_alert.SendMessage(f"{first_String} {coin_ticker} {tp_profit}% 익절 실패: {e}")
 
         # 골든크로스 확인
         is_golden = check_golden_cross(df, SHORT_MA, LONG_MA)
@@ -372,12 +408,15 @@ def execute_trading_logic(account_info):
 
         # === 골든크로스: 숏 청산 후 롱 진입 ===
         if is_golden:
+            # 일봉 MA 방향 필터 확인
+            daily_direction = get_daily_ma_direction(bitgetX, coin_ticker, DAILY_MA)
+            
             # 숏 포지션이면 청산
             if actual_position == -1:
                 try:
                     bitgetX.create_order(
                         coin_ticker, 'market', 'buy', actual_size,
-                        None, {'holdSide': 'short', 'reduceOnly': True}
+                        None, {'reduceOnly': True}
                     )
                     msg = f"{first_String} {coin_ticker} 숏 청산 (골든크로스)"
                     print(msg)
@@ -393,21 +432,17 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 숏 청산 실패: {e}")
 
-            # 롱 진입 (분할)
-            if actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT):
+            # 롱 진입 (분할) - 일봉 MA 위에 있을 때만
+            if (actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT)) and daily_direction == 'long':
                 try:
                     # 투자 금액 계산 (분할)
                     total_invest = current_usdt_balance * INVEST_RATE * coin_rate
                     split_invest = total_invest / SPLIT_COUNT
-                    amount = (split_invest * set_leverage) / now_price
-
-                    # 레버리지 설정
-                    bitgetX.set_leverage(set_leverage, coin_ticker, params={'marginCoin': 'USDT', 'holdSide': 'long'})
+                    amount = (split_invest * effective_leverage) / now_price
 
                     # 롱 진입
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'buy', amount,
-                        None, {'holdSide': 'long'}
+                        coin_ticker, 'market', 'buy', amount
                     )
 
                     entry_count += 1
@@ -426,12 +461,15 @@ def execute_trading_logic(account_info):
 
         # === 데드크로스: 롱 청산 후 숏 진입 ===
         elif is_dead:
+            # 일봉 MA 방향 필터 확인
+            daily_direction = get_daily_ma_direction(bitgetX, coin_ticker, DAILY_MA)
+            
             # 롱 포지션이면 청산
             if actual_position == 1:
                 try:
                     bitgetX.create_order(
                         coin_ticker, 'market', 'sell', actual_size,
-                        None, {'holdSide': 'long', 'reduceOnly': True}
+                        None, {'reduceOnly': True}
                     )
                     msg = f"{first_String} {coin_ticker} 롱 청산 (데드크로스)"
                     print(msg)
@@ -447,21 +485,17 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 롱 청산 실패: {e}")
 
-            # 숏 진입 (분할)
-            if actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT):
+            # 숏 진입 (분할) - 일봉 MA 아래에 있을 때만
+            if (actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT)) and daily_direction == 'short':
                 try:
                     # 투자 금액 계산 (분할)
                     total_invest = current_usdt_balance * INVEST_RATE * coin_rate
                     split_invest = total_invest / SPLIT_COUNT
-                    amount = (split_invest * set_leverage) / now_price
-
-                    # 레버리지 설정
-                    bitgetX.set_leverage(set_leverage, coin_ticker, params={'marginCoin': 'USDT', 'holdSide': 'short'})
+                    amount = (split_invest * effective_leverage) / now_price
 
                     # 숏 진입
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'sell', amount,
-                        None, {'holdSide': 'short'}
+                        coin_ticker, 'market', 'sell', amount
                     )
 
                     entry_count += 1
