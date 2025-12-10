@@ -295,7 +295,7 @@ for coin_data in InvestCoinList:
                 buy = cond_up1 and cond_up2 and cond_close_inc and cond_high_inc and cond_7ma and cond_16ma and cond_73ma
 
                 #매수조건 알림
-                if True:#hour_n == 0 and min_n <= 4:
+                if hour_n == 0 and min_n <= 4:
                     print(analysis_msg)
                     telegram_alert.SendMessage(analysis_msg)
 
