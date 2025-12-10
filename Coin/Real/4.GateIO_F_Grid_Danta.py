@@ -10,10 +10,22 @@ import pandas as pd
 import numpy as np
 import datetime
 import json
-import logging
 import sys
 import os
 import socket
+import builtins
+from datetime import datetime as dt_class
+
+# 원본 print 함수 저장 및 타임스탬프 포함 print 함수 정의
+_original_print = builtins.print
+
+def timestamped_print(*args, **kwargs):
+    """타임스탬프가 포함된 로그 출력 함수"""
+    timestamp = dt_class.now().strftime('%Y-%m-%d %H:%M:%S')
+    _original_print(f"[{timestamp}]", *args, **kwargs)
+
+# 전역 print 함수를 타임스탬프 버전으로 교체
+builtins.print = timestamped_print
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
@@ -38,17 +50,6 @@ GATEIO_SECRET_KEY = simpleEnDecrypt.decrypt(my_key.gateio_secret_M)
 
 # 알림 첫 문구
 FIRST_STRING = "4.GateIO 단타 그리드봇"
-
-# 로깅 설정
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('trading_bot_grid_danta_v_final.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger(__name__)
 
 # ==============================================================================
 # 2. 전략 및 거래 설정 (테스트 스크립트 기반)
@@ -103,7 +104,7 @@ try:
     })
     exchange.load_markets()
 except Exception as e:
-    logger.error(f"거래소 연결 실패: {e}")
+    print("[ERROR] " + f"거래소 연결 실패: {e}")
     sys.exit()
 
 try:
@@ -111,7 +112,7 @@ try:
         BotDataDict = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     BotDataDict = {}
-    logger.info(f"상태 파일을 찾을 수 없거나 비어있어 새로 생성합니다: {BOT_DATA_FILE_PATH}")
+    print(f"상태 파일을 찾을 수 없거나 비어있어 새로 생성합니다: {BOT_DATA_FILE_PATH}")
 
 def save_bot_data():
     """상태 데이터를 JSON 파일에 저장합니다."""
@@ -130,7 +131,7 @@ def fetch_ohlcv(ticker, timeframe, limit=300):
         df.set_index('timestamp', inplace=True)
         return df
     except Exception as e:
-        logger.error(f"[{ticker}] OHLCV 데이터 조회 오류: {e}")
+        print("[ERROR] " + f"[{ticker}] OHLCV 데이터 조회 오류: {e}")
         return pd.DataFrame()
 
 def calculate_indicators(df):
@@ -222,7 +223,7 @@ def get_available_balance(settle_currency='USDT'):
         balance = exchange.fetch_balance(params={'type': 'swap', 'settle': settle_currency.lower()})
         return balance.get('free', {}).get(settle_currency, 0)
     except Exception as e:
-        logger.error(f"잔고 조회 오류: {e}")
+        print("[ERROR] " + f"잔고 조회 오류: {e}")
         return 0
 
 def get_average_price(entries):
@@ -248,19 +249,19 @@ def set_margin_mode_cross(ticker):
     """포지션의 마진 모드를 CROSS로 설정합니다."""
     try:
         exchange.set_margin_mode('cross', ticker, params={'settle': 'usdt'})
-        logger.info(f"[{ticker}] 마진 모드를 CROSS로 설정했습니다.")
+        print(f"[{ticker}] 마진 모드를 CROSS로 설정했습니다.")
     except Exception as e:
-        logger.warning(f"[{ticker}] 마진 모드 설정 오류 (이미 CROSS일 수 있음): {e}")
+        print("[WARNING] " + f"[{ticker}] 마진 모드 설정 오류 (이미 CROSS일 수 있음): {e}")
 
 # ==============================================================================
 # 6. 메인 실행 로직 (최종 수정 로직 적용)
 # ==============================================================================
 def run_bot():
     """봇의 메인 실행 로직입니다."""
-    logger.info("===== 봇 실행 시작 (최종 수정 로직 적용) =====")
+    print("===== 봇 실행 시작 (최종 수정 로직 적용) =====")
 
     for coin_ticker in INVEST_COIN_LIST:
-        logger.info(f"\n--- [{coin_ticker}] 처리 시작 ---")
+        print(f"\n--- [{coin_ticker}] 처리 시작 ---")
         
         # 0. 마진 모드를 CROSS로 설정
         set_margin_mode_cross(coin_ticker)
@@ -278,7 +279,7 @@ def run_bot():
         # 2. 데이터 및 지표 계산
         df = fetch_ohlcv(coin_ticker, TIMEFRAME)
         if df.empty or len(df) < 50: 
-            logger.warning(f"[{coin_ticker}] 지표 계산을 위한 데이터가 부족합니다 (가져온 데이터 수: {len(df)}). 건너뜁니다.")
+            print("[WARNING] " + f"[{coin_ticker}] 지표 계산을 위한 데이터가 부족합니다 (가져온 데이터 수: {len(df)}). 건너뜁니다.")
             continue
         
         df = calculate_indicators(df)
@@ -288,13 +289,13 @@ def run_bot():
         df.dropna(inplace=True)
 
         if len(df) < 3:
-            logger.warning(f"[{coin_ticker}] 지표 계산 후 데이터가 부족하여 건너뜁니다.")
+            print("[WARNING] " + f"[{coin_ticker}] 지표 계산 후 데이터가 부족하여 건너뜁니다.")
             continue
             
         prev_candle = df.iloc[-2]
         prev_prev_candle = df.iloc[-3]
         current_price = df['close'].iloc[-1]
-        logger.info(f"[{coin_ticker}] 현재 가격: {current_price:.5f}, 이전 봉 RSI: {prev_candle['rsi']:.2f}, MACD Hist: {prev_candle['macd_histogram']:.4f}")
+        print(f"[{coin_ticker}] 현재 가격: {current_price:.5f}, 이전 봉 RSI: {prev_candle['rsi']:.2f}, MACD Hist: {prev_candle['macd_histogram']:.4f}")
 
         cash = get_available_balance()
         long_avg_price = get_average_price(long_pos_data['entries'])
@@ -303,11 +304,11 @@ def run_bot():
         if USE_MACD_BUY_LOCK:
             if long_pos_data['buy_blocked_by_macd'] and prev_candle['macd_histogram'] > 0:
                 long_pos_data['buy_blocked_by_macd'] = False
-                logger.info("[롱] MACD 히스토그램 양수 전환. 매수 잠금 해제.")
+                print("[롱] MACD 히스토그램 양수 전환. 매수 잠금 해제.")
                 save_bot_data() # <<< 롱 잠금 해제 시 저장
             if USE_SHORT_STRATEGY and short_pos_data['sell_blocked_by_macd'] and prev_candle['macd_histogram'] < 0:
                 short_pos_data['sell_blocked_by_macd'] = False
-                logger.info("[숏] MACD 히스토그램 음수 전환. 매도 잠금 해제.")
+                print("[숏] MACD 히스토그램 음수 전환. 매도 잠금 해제.")
                 save_bot_data() # <<< 숏 잠금 해제 시 저장
 
         # 3. 롱 포지션 청산(Exit) 로직 (부분/전체 익절)
@@ -337,7 +338,7 @@ def run_bot():
                     exchange.create_market_sell_order(coin_ticker, total_contracts_to_sell, {'reduceOnly': True})
                     
                     msg = f"✅ [LONG EXIT] {coin_ticker} 포지션 청산. 사유: {sell_reason}"
-                    logger.info(msg)
+                    print(msg)
                     telegram_alert.SendMessage(FIRST_STRING + msg)
 
                     for i in sorted(entries_to_sell_indices, reverse=True):
@@ -348,9 +349,9 @@ def run_bot():
                     # [밸런싱 로직] -> 제거됨
 
                 except Exception as e:
-                    logger.error(f"[{coin_ticker}] 롱 포지션 청산 주문 실패: {e}")
+                    print("[ERROR] " + f"[{coin_ticker}] 롱 포지션 청산 주문 실패: {e}")
             else:
-                logger.info(f"[{coin_ticker}] 롱 포지션 청산 조건 미충족. 대기합니다.")
+                print(f"[{coin_ticker}] 롱 포지션 청산 조건 미충족. 대기합니다.")
 
         # 4. 롱 포지션 신규 진입 로직 (조건부 진입 및 숏 동시 정리)
         if len(long_pos_data['entries']) < MAX_LONG_BUY_COUNT:
@@ -366,17 +367,17 @@ def run_bot():
                          reset_check_df = df[df.index > last_buy_time]
                          if not reset_check_df.empty and (reset_check_df['rsi'] > 25).any():
                              should_buy = True
-                             logger.info("[롱 추가진입 조건] RSI 리셋 확인됨.")
+                             print("[롱 추가진입 조건] RSI 리셋 확인됨.")
                     if not should_buy and get_rsi_level(prev_candle['rsi']) > get_rsi_level(long_pos_data['entries'][-1]['trigger_rsi']):
                         should_buy = True
-                        logger.info("[롱 추가진입 조건] RSI 레벨 심화 확인됨.")
+                        print("[롱 추가진입 조건] RSI 레벨 심화 확인됨.")
             
             if should_buy:
                 is_prev_day_close_below_ma = prev_candle.get('prev_tf_close_below_ma30', False)
                 long_short_diff = len(long_pos_data['entries']) - len(short_pos_data['entries'])
                 if is_prev_day_close_below_ma and long_short_diff >= LONG_ENTRY_LOCK_SHORT_COUNT_DIFF:
                     should_buy = False
-                    logger.info(f"[롱 진입 잠금] 일봉 MA하락 및 롱/숏 개수차({long_short_diff})로 인해 진입이 잠깁니다.")
+                    print(f"[롱 진입 잠금] 일봉 MA하락 및 롱/숏 개수차({long_short_diff})로 인해 진입이 잠깁니다.")
 
             if should_buy and not long_pos_data.get('buy_blocked_by_macd', False):
                 if USE_SHORT_STRATEGY and len(short_pos_data['entries']) > 0:
@@ -388,13 +389,13 @@ def run_bot():
                             exchange.create_market_buy_order(coin_ticker, total_s_contracts_to_buy, {'reduceOnly': True})
 
                             msg = f"↔️ [연계 EXIT] 롱 진입 전, 수익중인 숏 포지션 {len(closing_shorts)}개 정리."
-                            logger.info(msg)
+                            print(msg)
                             telegram_alert.SendMessage(FIRST_STRING + msg)
 
                             for i in sorted(entries_to_close_s_indices, reverse=True):
                                 del short_pos_data['entries'][i]
                         except Exception as e:
-                            logger.error(f"[{coin_ticker}] 롱 진입 전 숏 포지션 정리 주문 실패: {e}")
+                            print("[ERROR] " + f"[{coin_ticker}] 롱 진입 전 숏 포지션 정리 주문 실패: {e}")
 
                 try:
                     # 레버리지 및 마진 모드 설정
@@ -406,7 +407,7 @@ def run_bot():
                     buy_collateral = get_buy_amount(base_amount, prev_candle['rsi'], next_entry_num) if USE_ADDITIVE_BUYING else base_amount
 
                     if cash < buy_collateral:
-                        logger.warning(f"[{coin_ticker}] 롱 진입 시도 실패: 잔고 부족")
+                        print("[WARNING] " + f"[{coin_ticker}] 롱 진입 시도 실패: 잔고 부족")
                     else:
                         amount_to_buy = calculate_order_amount(coin_ticker, buy_collateral, current_price, LEVERAGE)
                         exchange.create_market_buy_order(coin_ticker, amount_to_buy)
@@ -420,17 +421,17 @@ def run_bot():
                         
                         if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] < 0:
                             long_pos_data['buy_blocked_by_macd'] = True
-                            logger.info("[롱] MACD 히스토그램 음수. 매수 잠금 활성화.")
+                            print("[롱] MACD 히스토그램 음수. 매수 잠금 활성화.")
                         
                         save_bot_data()
 
                         msg = f"📈 [LONG ENTRY] {coin_ticker} {next_entry_num}차 매수. 가격: {current_price:.5f}, RSI: {prev_candle['rsi']:.2f}"
-                        logger.info(msg)
+                        print(msg)
                         telegram_alert.SendMessage(FIRST_STRING + msg)
                 except Exception as e:
-                    logger.error(f"[{coin_ticker}] 롱 포지션 진입 주문 실패: {e}")
+                    print("[ERROR] " + f"[{coin_ticker}] 롱 포지션 진입 주문 실패: {e}")
             else:
-                logger.info(f"[{coin_ticker}] 롱 포지션 진입 조건을 충족하지 못했습니다.")
+                print(f"[{coin_ticker}] 롱 포지션 진입 조건을 충족하지 못했습니다.")
         
         # 5. 숏 포지션 신규 진입 로직 (고정 RSI, 조건부 진입)
         if USE_SHORT_STRATEGY and len(short_pos_data['entries']) < MAX_SHORT_BUY_COUNT:
@@ -456,7 +457,7 @@ def run_bot():
                         reset_check_s_df = df[df.index > last_short_time]
                         if not reset_check_s_df.empty and (reset_check_s_df['rsi'] < current_short_entry_rsi).any():
                             should_short = True
-                            logger.info("[숏 추가진입 조건] RSI 리셋 확인됨.")
+                            print("[숏 추가진입 조건] RSI 리셋 확인됨.")
 
             if should_short and not short_pos_data.get('sell_blocked_by_macd', False):
                 try:
@@ -467,7 +468,7 @@ def run_bot():
                     sell_collateral = cash * BASE_BUY_RATE
 
                     if cash < sell_collateral:
-                        logger.warning(f"[{coin_ticker}] 숏 진입 시도 실패: 잔고 부족")
+                        print("[WARNING] " + f"[{coin_ticker}] 숏 진입 시도 실패: 잔고 부족")
                     else:
                         amount_to_sell = calculate_order_amount(coin_ticker, sell_collateral, current_price, LEVERAGE)
                         exchange.create_market_sell_order(coin_ticker, amount_to_sell)
@@ -481,23 +482,23 @@ def run_bot():
 
                         if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] > 0:
                             short_pos_data['sell_blocked_by_macd'] = True
-                            logger.info("[숏] MACD 히스토그램 양수. 매도 잠금 활성화.")
+                            print("[숏] MACD 히스토그램 양수. 매도 잠금 활성화.")
 
                         save_bot_data()
                         
                         next_entry_num = len(short_pos_data['entries'])
                         msg = f"📉 [SHORT ENTRY] {coin_ticker} {next_entry_num}차 매도. 가격: {current_price:.5f}, RSI: {prev_candle['rsi']:.2f}"
-                        logger.info(msg)
+                        print(msg)
                         telegram_alert.SendMessage(FIRST_STRING + msg)
                 except Exception as e:
-                    logger.error(f"[{coin_ticker}] 숏 포지션 진입 주문 실패: {e}")
+                    print("[ERROR] " + f"[{coin_ticker}] 숏 포지션 진입 주문 실패: {e}")
             else:
-                logger.info(f"[{coin_ticker}] 숏 포지션 진입 조건을 충족하지 못했습니다.")
+                print(f"[{coin_ticker}] 숏 포지션 진입 조건을 충족하지 못했습니다.")
 
-        logger.info(f"--- [{coin_ticker}] 처리 완료 ---")
+        print(f"--- [{coin_ticker}] 처리 완료 ---")
         time.sleep(1) 
 
-    logger.info("===== 봇 실행 종료 =====")
+    print("===== 봇 실행 종료 =====")
 
 if __name__ == '__main__':
     run_bot()

@@ -9,6 +9,19 @@ import json
 import socket
 import sys
 import os
+from datetime import datetime
+import builtins
+
+# 원본 print 함수 저장 및 타임스탬프 포함 print 함수 정의
+_original_print = builtins.print
+
+def timestamped_print(*args, **kwargs):
+    """타임스탬프가 포함된 로그 출력 함수"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    _original_print(f"[{timestamp}]", *args, **kwargs)
+
+# 전역 print 함수를 타임스탬프 버전으로 교체
+builtins.print = timestamped_print
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
@@ -118,6 +131,9 @@ def execute_trading_logic(account_info):
     if hour_n == 0 and min_n <= 2:
         start_msg = f"{first_String} 시작"
         telegram_alert.SendMessage(start_msg)
+
+    # 모든 코인의 거래 결과를 요약할 딕셔너리
+    trading_summary = {}
 
     cycle_investment_base = 0
     all_positions = []
@@ -241,6 +257,10 @@ def execute_trading_logic(account_info):
                     f" ㄴ2연속도지: {cond_doji}"
                 )
                 telegram_alert.SendMessage(alert_msg)
+            
+            # 거래 요약에 추가 (수익률과 매도조건)
+            sell_emoji = "🔴" if sell_condition_triggered else "⚪"
+            trading_summary[coin_ticker] = f"{sell_emoji} 수익률: {RevenueRate:.1f}% | 매도: {sell_condition_triggered}"
             # ==============================================================================
 
             if BotDataDict.get(coin_ticker + '_DATE_CHECK') == day_n:
@@ -371,6 +391,10 @@ def execute_trading_logic(account_info):
                     f" 11. 캔들 몸통 15% 이상: {tf_emoji(cond_body_over_15_percent)}"
                 )
                 telegram_alert.SendMessage(alert_msg)
+            
+            # 거래 요약에 추가 (매수 조건 TRUE/FALSE)
+            buy_summary_emoji = "🟢" if buy else "⚪"
+            trading_summary[coin_ticker] = f"{buy_summary_emoji} 매수: {buy}"
             # ==============================================================================
 
             if buy:
@@ -422,6 +446,13 @@ def execute_trading_logic(account_info):
                     with open(botdata_file_path, 'w') as f:
                         json.dump(BotDataDict, f, indent=4)
     
+    # ===== 거래 결과 요약 알림 (Main 계정에서만) =====
+    if account_name == "Main" and trading_summary:
+        summary_msg = f"📊 Binance Main 거래 조건 검사 결과\n" + "="*35 + "\n"
+        for ticker, status in trading_summary.items():
+            summary_msg += f"{ticker}: {status}\n"
+        telegram_alert.SendMessage(summary_msg)
+
     if hour_n == 0 and min_n <= 2:
         end_msg = f"{first_String} 종료"
         telegram_alert.SendMessage(end_msg)
