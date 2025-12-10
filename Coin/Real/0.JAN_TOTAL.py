@@ -14,10 +14,18 @@ else:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
 import telegram_alert
 import myUpbit  # 우리가 만든 함수들이 들어있는 모듈
+import myBinance
+import ende_key
+import my_key
 from datetime import datetime
 from collections import defaultdict
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
+# ==============================================================================
+# 암복호화 클래스 객체 생성
+# ==============================================================================
+simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
 # ==============================================================================
 #  거래소 활성화 설정 (Control Panel)
@@ -27,57 +35,74 @@ from oauth2client.service_account import ServiceAccountCredentials
 # 예: 바이낸스 계열만 사용하려면 다른 모든 거래소를 False로 설정합니다.
 # ------------------------------------------------------------------------------
 EXCHANGE_CONFIG = {
-    "Binance":      True,
-    "Binance_sub1": True,
-    "Binance_sub2": True,
-    "Binance_sub3": True,
-    "OKX":          False,
-    "Bybit":        False,
-    "Bitget":       False,
-    "MEXC":         False,
-    "Upbit":        False,  # 업비트도 여기서 활성화/비활성화 가능
+    "Upbit":        True,   # 업비트
+    "Binance":      True,   # 바이낸스 메인
+    "Binance_sub1": True,   # 바이낸스 서브1
+    "Binance_sub2": True,   # 바이낸스 서브2
+    "Binance_sub3": True,   # 바이낸스 서브3
+    "GateIO":       True,   # GateIO 메인
+    "GateIO_sub1":  True,   # GateIO 서브1
+    "Bitget":       True,   # 비트겟 메인
+    "Bitget_sub1":  True,   # 비트겟 서브1
+    "OKX":          False,  # OKX (비활성화)
+    "Bybit":        False,  # Bybit (비활성화)
+    "MEXC":         False,  # MEXC (비활성화)
 }
 
 # ==============================================================================
-# API 키 설정
+# API 키 설정 (my_key.py에서 암호화된 키를 복호화하여 사용)
 # ==============================================================================
+
 # 업비트 키
-Upbit_AccessKey = "AYneBweCn6FFMeWtTO0Cxq0XJxU7rCZ6WpzUsvNk"
-Upbit_ScretKey = "BV0gy2txNyF9Brv594YXxcRYs3EQZe9TaWMtN14Z"
+Upbit_AccessKey = simpleEnDecrypt.decrypt(my_key.upbit_access)
+Upbit_ScretKey = simpleEnDecrypt.decrypt(my_key.upbit_secret)
 
-# Binance API 인증 정보 (기존 계정)
-Binance_api_key = "3L5mMgSFzt8HlPt6daAIzLxRTqFPaA1ItKMYNgNdgNkBOtBmlUMDzefQAK1UMs4J"
-Binance_api_secret = "CXNpmRpSGpH9BXjkIbqKMtp1icekWPsTyIEhC0OcPrzclKnai9ATzrH3BVHUI9zL"
+# Binance API (메인 계정)
+Binance_api_key = simpleEnDecrypt.decrypt(my_key.binance_access_M)
+Binance_api_secret = simpleEnDecrypt.decrypt(my_key.binance_secret_M)
 
-# Binance API 인증 정보 (서브 계정 1)
-Binance_api_key_sub1 = "qXIylTz7Qh2nrVh1kPJQTXX9Fm0G8Tot86Lgqzm652mTdnEj7DrbJO6KT261fQJk"
-Binance_api_secret_sub1 = "DarhAG7HjLW7OJBe814q42io5UOYB9dzhwQlbijuz5m5gN9mREA5wfbeGT7H0PwI"
+# Binance API (서브 계정 1)
+Binance_api_key_sub1 = simpleEnDecrypt.decrypt(my_key.binance_access_S1)
+Binance_api_secret_sub1 = simpleEnDecrypt.decrypt(my_key.binance_secret_S1)
 
-# Binance API 인증 정보 (서브 계정 2)
-Binance_api_key_sub2 = "lkDPjRCIHmp3olbPKYABO9yN3IXriiK1ikcyN8CyukNV6GDwqs3CfHfTuH1d0sOB"
-Binance_api_secret_sub2 = "TECfDyTTtYwCJbaC2k949ey08KsnB7X9dGOqteAaeIyZbT62bbj2uKKA4ygZCBTj"
+# Binance API (서브 계정 2)
+Binance_api_key_sub2 = simpleEnDecrypt.decrypt(my_key.binance_access_S2)
+Binance_api_secret_sub2 = simpleEnDecrypt.decrypt(my_key.binance_secret_S2)
 
-# Binance API 인증 정보 (서브 계정 3)
-Binance_api_key_sub3 = "EYNqzB1k2echWMLnmUSZWf1O03U8fiPUMQX9OHL83eeWGotYgoq1dJaDQYleh8Wa"
-Binance_api_secret_sub3 = "PW2cxdCPGSJXMhiEgT2aABt0NikxOntPVOzMxgAYkWe4DxSU1xIzPJgZfnujf28h"
+# Binance API (서브 계정 3)
+Binance_api_key_sub3 = simpleEnDecrypt.decrypt(my_key.binance_access_S3)
+Binance_api_secret_sub3 = simpleEnDecrypt.decrypt(my_key.binance_secret_S3)
 
-# OKX API 인증 정보
-OKX_api_key = "16de0caf-ae2c-46cb-9109-764687da4441"
-OKX_api_secret = "B5444AB8DA31B45411069CFB3CB764A0"
-OKX_passphrase = "Dmz52425!"
+# GateIO API (메인 계정)
+GateIO_api_key = simpleEnDecrypt.decrypt(my_key.gateio_access_M)
+GateIO_api_secret = simpleEnDecrypt.decrypt(my_key.gateio_secret_M)
 
-# Bybit API 인증 정보  
-Bybit_api_key = "31CXXwbnMdY8z6Jpsa"
-Bybit_api_secret = "oKIcjUl60b629L5jMFGTQoysR9jZc3wQPvWh"
+# GateIO API (서브 계정 1)
+GateIO_api_key_sub1 = simpleEnDecrypt.decrypt(my_key.gateio_access_S1)
+GateIO_api_secret_sub1 = simpleEnDecrypt.decrypt(my_key.gateio_secret_S1)
 
-# 비트겟 API 키, 비밀 키, 패스프레이즈 입력
-Bitget_api_key = 'bg_d889b4731194d8ee2c0ad6f4f282bb51'
-Bitget_api_secret = 'dd16406741024149b9767a6c973d9f170761abfe8433da5e867cc3d55eb42b15'
-Bitget_api_passphrase = 'namcong86'
+# Bitget API (메인 계정)
+Bitget_api_key = simpleEnDecrypt.decrypt(my_key.bitget_access_M)
+Bitget_api_secret = simpleEnDecrypt.decrypt(my_key.bitget_secret_M)
+Bitget_api_passphrase = simpleEnDecrypt.decrypt(my_key.bitget_passphrase_M)
 
-# MEXC API 인증 정보
-MEXC_api_key = "mx0vglCI5rwMRRjnJK"
-MEXC_api_secret = "0668415a7f3948a4ae39497a2ab6b39e"
+# Bitget API (서브 계정 1)
+Bitget_api_key_sub1 = simpleEnDecrypt.decrypt(my_key.bitget_access_S1)
+Bitget_api_secret_sub1 = simpleEnDecrypt.decrypt(my_key.bitget_secret_S1)
+Bitget_api_passphrase_sub1 = simpleEnDecrypt.decrypt(my_key.bitget_passphrase_S1)
+
+# OKX API (비활성화 상태)
+OKX_api_key = simpleEnDecrypt.decrypt(my_key.okx_access_M)
+OKX_api_secret = simpleEnDecrypt.decrypt(my_key.okx_secret_M)
+OKX_passphrase = simpleEnDecrypt.decrypt(my_key.okx_passphrase_M)
+
+# Bybit API (비활성화 상태)
+Bybit_api_key = simpleEnDecrypt.decrypt(my_key.bybit_access_M)
+Bybit_api_secret = simpleEnDecrypt.decrypt(my_key.bybit_secret_M)
+
+# MEXC API (비활성화 상태)
+MEXC_api_key = simpleEnDecrypt.decrypt(my_key.mexc_access_M)
+MEXC_api_secret = simpleEnDecrypt.decrypt(my_key.mexc_secret_M)
 
 # ==============================================================================
 # 거래소 객체 생성
@@ -100,14 +125,23 @@ all_exchanges = {
     "Binance_sub3": ccxt.binance({
         "apiKey": Binance_api_key_sub3, "secret": Binance_api_secret_sub3, "enableRateLimit": True,
     }),
+    "GateIO": ccxt.gateio({
+        "apiKey": GateIO_api_key, "secret": GateIO_api_secret, "enableRateLimit": True,
+    }),
+    "GateIO_sub1": ccxt.gateio({
+        "apiKey": GateIO_api_key_sub1, "secret": GateIO_api_secret_sub1, "enableRateLimit": True,
+    }),
+    "Bitget": ccxt.bitget({
+        'apiKey': Bitget_api_key, 'secret': Bitget_api_secret, 'password': Bitget_api_passphrase, "enableRateLimit": True,
+    }),
+    "Bitget_sub1": ccxt.bitget({
+        'apiKey': Bitget_api_key_sub1, 'secret': Bitget_api_secret_sub1, 'password': Bitget_api_passphrase_sub1, "enableRateLimit": True,
+    }),
     "OKX": ccxt.okx({
         "apiKey": OKX_api_key, "secret": OKX_api_secret, "password": OKX_passphrase, "enableRateLimit": True,
     }),
     "Bybit": ccxt.bybit({
         "apiKey": Bybit_api_key, "secret": Bybit_api_secret, "enableRateLimit": True,
-    }),
-    "Bitget": ccxt.bitget({
-        'apiKey': Bitget_api_key, 'secret': Bitget_api_secret, 'password': Bitget_api_passphrase,
     }),
     "MEXC": ccxt.mexc({
         "apiKey": MEXC_api_key, "secret": MEXC_api_secret, "enableRateLimit": True,
@@ -150,6 +184,7 @@ def get_spot_balance(exchange, name):
                         total_in_usdt = total_wallet_balance
                         
                         # 개별 코인 정보 출력 (옵션)
+                        
                         if 'coin' in wallet and isinstance(wallet['coin'], list):
                             for coin in wallet['coin']:
                                 if float(coin.get('free', 0)) > 0:
@@ -157,8 +192,14 @@ def get_spot_balance(exchange, name):
                                     
             return total_in_usdt
             
-        elif name == "Bitget":
+        elif name in ["GateIO", "GateIO_sub1"]:
             balance = exchange.fetch_balance(params={"type": "spot"})
+        elif name in ["Bitget", "Bitget_sub1"]:
+            try:
+                balance = exchange.fetch_balance(params={"type": "spot"})
+            except Exception as spot_err:
+                print(f"{name}: 현물 조회 오류 (권한 없음?) - 스킵. {spot_err}")
+                return 0
         elif name == "MEXC":
             balance = exchange.fetch_balance(params={"type": "spot"})
         else:
@@ -208,8 +249,10 @@ def get_futures_balance(exchange, name):
             balance = exchange.fetch_balance(params={"type": "future"})
         elif name == "OKX":
             balance = exchange.fetch_balance(params={"type": "future"})
-        elif name == "Bitget":
-            balance = exchange.fetch_balance(params={"type": "future"})
+        elif name in ["GateIO", "GateIO_sub1"]:
+            balance = exchange.fetch_balance(params={"type": "swap"})
+        elif name in ["Bitget", "Bitget_sub1"]:
+            balance = exchange.fetch_balance(params={"type": "swap"})
         elif name == "MEXC":
             balance = exchange.fetch_balance(params={"type": "future"})
         else:
@@ -379,14 +422,37 @@ if EXCHANGE_CONFIG.get("Upbit"):
     print(f"현물(업비트): {round(TotalRealMoney):,} KRW")
 print(f"TOTAL잔액: {total_JAN:,} KRW")
 
-# --- 텔레그램 알림 (동적) ---
+# --- 텔레그램 알림 ---
 try:
-    # 메시지 헤더
-    telegram_message = f"{now.strftime('%Y-%m-%d %H:%M')}"
-    # 활성화된 거래소별 잔액 추가
-    telegram_message += "".join(telegram_report_lines)
-    # 총 금액 추가
-    telegram_message += f"\n\n 총금액=> {total_JAN:,} 원"
+    # 거래소별 최대 금액 길이 계산
+    max_balance_str = f"{round(total_JAN):,}"  # 가장 큰 금액 기준
+    max_balance_len = len(max_balance_str)
+    
+    # 깔끔한 리스트 형식 (오른쪽 정렬)
+    telegram_message = f"📊 {now.strftime('%Y-%m-%d %H:%M')} 자산 현황\n"
+    telegram_message += "=" * 35 + "\n"
+    
+    # 거래소별 잔액
+    for name, balance in exchange_balances.items():
+        bal = round(balance)
+        # sub 계정 이름 변환 (Binance_sub1 → Binance1)
+        display_name = name.replace("_sub", "")
+        
+        # 고정 너비로 정렬 (거래소명: 10자, 금액: 오른쪽 정렬)
+        bal_str = f"{bal:,}" if bal > 0 else "0"
+        telegram_message += f"• {display_name:<10} {bal_str:>15}\n"
+    
+    telegram_message += "=" * 35 + "\n"
+    exchange_total_str = f"{round(exchange_total_usdt):,}"
+    telegram_message += f"💰 해외 합계    {exchange_total_str:>15} $\n"
+    
+    if EXCHANGE_CONFIG.get("Upbit") and TotalRealMoney > 0:
+        upbit_str = f"{round(TotalRealMoney):,}"
+        telegram_message += f"🇰🇷 업비트      {upbit_str:>15} 원\n"
+    
+    telegram_message += "=" * 35 + "\n"
+    total_str = f"{total_JAN:,}"
+    telegram_message += f"🏆 총자산      {total_str:>15} 원"
 
     telegram_alert.SendMessage(telegram_message)
     print("텔레그램 알림 전송 완료")
@@ -407,9 +473,10 @@ print("\n⛳ 현물 코인별 합산 잔액 (콘솔 출력) - 내림차순")
 for coin, amt in sorted_balances:
     print(f"{coin} {int(amt)}")
 
-lines = [f"{coin} {int(amt)}" for coin, amt in sorted_balances]
-message = "⛳ 현물 코인별 합산 잔액\n" + "\n".join(lines)
-telegram_alert.SendMessage(message)
+# 텔레그램 알림 제거 (콘솔만 출력)
+# lines = [f"{coin} {int(amt)}" for coin, amt in sorted_balances]
+# message = "⛳ 현물 코인별 합산 잔액\n" + "\n".join(lines)
+# telegram_alert.SendMessage(message)
 
 # 스프레드시트 데이터 갱신
 try:
