@@ -170,26 +170,39 @@ def check_dead_cross(df, short_ma, long_ma):
 
 def get_daily_ma_direction(exchange, ticker, daily_ma_period):
     """일봉 이동평균 기준 방향 필터
-    Returns: 'long' (현재가 > 일봉MA), 'short' (현재가 < 일봉MA), 'both' (데이터 부족)
+    두 난 일봉(마감된)의 종가 기준
+    Returns: 'UP' (종가 > 일봉MA, 롱대기), 'DOWN' (종가 < 일봉MA, 숏대기)
     """
     try:
         df_daily = GetOhlcv(exchange, ticker, '1d', target_rows=daily_ma_period + 10)
         if df_daily.empty or len(df_daily) < daily_ma_period:
-            return 'both'
+            # 데이터 부족 시는 현재 시세로 판단
+            df_1h = GetOhlcv(exchange, ticker, '1h', target_rows=150)
+            if df_1h.empty or len(df_1h) < 20:
+                return 'UP'  # 기본으로 UP
+            df_1h['ma_20'] = df_1h['close'].rolling(20).mean()
+            df_1h['ma_120'] = df_1h['close'].rolling(120).mean()
+            df_1h.dropna(inplace=True)
+            if df_1h.empty:
+                return 'UP'
+            last_ma20 = df_1h['ma_20'].iloc[-1]
+            last_ma120 = df_1h['ma_120'].iloc[-1]
+            return 'UP' if last_ma20 > last_ma120 else 'DOWN'
         
         df_daily[f'ma_{daily_ma_period}'] = df_daily['close'].rolling(daily_ma_period).mean()
         df_daily.dropna(inplace=True)
         
         if df_daily.empty:
-            return 'both'
+            return 'UP'
         
-        last_close = df_daily['close'].iloc[-1]
-        last_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        # 두 난 난 일봉 (마감된) 종가 기준
+        yesterday_close = df_daily['close'].iloc[-2] if len(df_daily) >= 2 else df_daily['close'].iloc[-1]
+        yesterday_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-2] if len(df_daily) >= 2 else df_daily[f'ma_{daily_ma_period}'].iloc[-1]
         
-        return 'long' if last_close > last_ma else 'short'
+        return 'UP' if yesterday_close > yesterday_ma else 'DOWN'
     except Exception as e:
         print(f"일봉 MA 조회 오류 ({ticker}): {e}")
-        return 'both'
+        return 'UP'
 
 
 # ==============================================================================
@@ -248,7 +261,8 @@ def execute_trading_logic(account_info):
     # 마지막 일일 요약 알림 시간 확인
     last_daily_alert_day = BotDataDict.get('LAST_DAILY_ALERT_DAY', 0)
 
-    if min_n <= 2:
+    # 시작 알림 (오전 9시 한국 기준에만)
+    if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
         start_msg = f"{first_String} 시작"
         telegram_alert.SendMessage(start_msg)
 
@@ -410,19 +424,15 @@ def execute_trading_logic(account_info):
         # 데드크로스 확인
         is_dead = check_dead_cross(df, SHORT_MA, LONG_MA)
         
-        # 크로스 형태 통합
-        if is_golden and is_dead:
-            cross_status = "방향 전환중"
-        elif is_golden:
+        # 총른 로직 (현재 시세 기준)
+        if df[f'ma_{SHORT_MA}'].iloc[-1] > df[f'ma_{LONG_MA}'].iloc[-1]:
             cross_status = "🟢 골든"
-        elif is_dead:
-            cross_status = "🔴 데드"
         else:
-            cross_status = "⚪ 보합"
+            cross_status = "🔴 데드"
         
-        # 일봉 MA 방향
+        # 일봉 MA 방향 (UP: 롱 대기, DOWN: 숏 대기)
         daily_direction = get_daily_ma_direction(bitgetX, coin_ticker, DAILY_MA)
-        daily_direction_emoji = "📈" if daily_direction == "UP" else "📉" if daily_direction == "DOWN" else "➡️"
+        daily_direction_emoji = "📈" if daily_direction == "UP" else "📉"
         daily_direction_text = f"{daily_direction_emoji} {daily_direction}"
         
         # 현재 포지션 정보
@@ -440,8 +450,8 @@ def execute_trading_logic(account_info):
             else:
                 position_text = "🔴 숏"
         
-        # 아침 9시(UTC 기준)에만 일일 요약 알림 전송
-        if hour_n == 9 and min_n <= 2 and last_daily_alert_day != day_n:
+        # 아침 9시(한국 기준)에만 일일 요약 알림 전송
+        if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
             alert_msg = (
                 f"<{first_String} {coin_ticker}>\n"
                 f"- 현재가: ${now_price:.6f}\n"
@@ -480,8 +490,8 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 숏 청산 실패: {e}")
 
-            # 롱 진입 (분할) - 일봉 MA 위에 있을 때만
-            if (actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT)) and daily_direction == 'long':
+            # 롱 진입 (분할) - 일봉 115MA 위에 있을 때만
+            if (actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT)) and daily_direction == 'UP':
                 try:
                     # 투자 금액 계산 (분할)
                     total_invest = current_usdt_balance * INVEST_RATE * coin_rate
@@ -540,8 +550,8 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 롱 청산 실패: {e}")
 
-            # 숏 진입 (분할) - 일봉 MA 아래에 있을 때만
-            if (actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT)) and daily_direction == 'short':
+            # 숏 진입 (분할) - 일봉 115MA 아래에 있을 때만
+            if (actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT)) and daily_direction == 'DOWN':
                 try:
                     # 투자 금액 계산 (분할)
                     total_invest = current_usdt_balance * INVEST_RATE * coin_rate
@@ -574,11 +584,12 @@ def execute_trading_logic(account_info):
                     print(f"[{account_name}] {coin_ticker} 숏 진입 실패: {e}")
                     telegram_alert.SendMessage(f"{first_String} {coin_ticker} 숏 진입 실패: {e}")
 
-        # 봇 데이터 저장
+        # 보트 데이터 저장
         with open(botdata_file_path, 'w') as f:
             json.dump(BotDataDict, f, indent=4)
 
-    if min_n <= 2:
+    # 종료 알림 (오전 9시 한국 기준에만)
+    if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
         end_msg = f"{first_String} 종료"
         telegram_alert.SendMessage(end_msg)
 
