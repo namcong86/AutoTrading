@@ -77,7 +77,7 @@ day_n = t.tm_mday
 day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
 if hour_n == 0 and min_n <= 2:
-    start_msg = f"{first_String}시작"
+    start_msg = f"📢 {first_String} 시작"
     telegram_alert.SendMessage(start_msg)
 
 # 투자 종목: BTC- 100 비중
@@ -157,16 +157,22 @@ for coin_data in InvestCoinList:
         cond_open_close = (df['open'].iloc[-2] > df['close'].iloc[-2] and df['open'].iloc[-3] > df['close'].iloc[-3])
         cond_revenue = (unrealizedProfit < 0)
         cond_cancel = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2] and df['3ma'].iloc[-3] < df['3ma'].iloc[-2])
-        analysis_msg = (f"{first_String} 매도조건 분석: high_low={cond_high_low}, "
-                         f"open_close={cond_open_close}, revenue<0={cond_revenue}, "
-                         f"cancel_by_rsi_ma={cond_cancel}")
+        analysis_msg = f"📉 매도 조건 분석 ({coin_ticker})\n"
+        analysis_msg += f"• 고점저점하락: {'✅' if cond_high_low else '⚪'}\n"
+        analysis_msg += f"• 시가종가하락: {'✅' if cond_open_close else '⚪'}\n"
+        analysis_msg += f"• 손실상태: {'✅' if cond_revenue else '⚪'}\n"
+        analysis_msg += f"• RSI취소조건: {'❗' if cond_cancel else '⚪'}"
         telegram_alert.SendMessage(analysis_msg)
         sell = (cond_high_low or cond_open_close or cond_revenue) and not cond_cancel
         if BotDataDict[coin_ticker + '_DATE_CHECK'] == day_n:
             sell = False
         if sell:
             binanceX.create_order(coin_ticker, 'market', 'sell', abs(amt_b), None, params)
-            exec_msg = f"{first_String}: 조건 만족하여 매도!! (수익금: {unrealizedProfit:.2f}%)"
+            
+            exec_msg = f"🔴 매도 체결 알림 ({coin_ticker})\n"
+            exec_msg += f"• 사유: 매도 조건 만족\n"
+            exec_msg += f"• 수익률: {unrealizedProfit:.2f}%"
+            
             print(exec_msg)
             telegram_alert.SendMessage(exec_msg)
             BotDataDict[coin_ticker + '_SELL_DATE'] = day_str
@@ -196,11 +202,16 @@ for coin_data in InvestCoinList:
         cond_rsi_inc = (df['rsi_ma'].iloc[-3] < df['rsi_ma'].iloc[-2])
         cond_MACD = (macd_positive and macd_condition)
 
-        analysis_msg = (f"{first_String} 매수조건 분석: 연속양봉={cond_o1 and cond_o2}, "
-                        f"종가증가={cond_close_inc},"
-                        f"5이평증가={cond_5ma}, 5이평전전일증가={cond_5ma_bf}, "
-                        f"20이평종가업={cond_20ma}, 60이평종가업={cond_60ma}, RSI증가={cond_rsi_inc}, "
-                        f"MACD={cond_MACD}, 30이평기울기={cond_slope}")
+        analysis_msg = f"📈 매수 조건 분석 ({coin_ticker})\n"
+        analysis_msg += f"• 연속양봉: {'✅' if cond_o1 and cond_o2 else '⚪'}\n"
+        analysis_msg += f"• 종가상승: {'✅' if cond_close_inc else '⚪'}\n"
+        analysis_msg += f"• 5이평상승: {'✅' if cond_5ma else '⚪'}\n"
+        analysis_msg += f"• 5이평전전일: {'✅' if cond_5ma_bf else '⚪'}\n"
+        analysis_msg += f"• 20이평위: {'✅' if cond_20ma else '⚪'}\n"
+        analysis_msg += f"• 60이평위: {'✅' if cond_60ma else '⚪'}\n"
+        analysis_msg += f"• 30이평기울기: {'✅' if cond_slope else '⚪'}\n"
+        analysis_msg += f"• RSI증가: {'✅' if cond_rsi_inc else '⚪'}\n"
+        analysis_msg += f"• MACD조건: {'✅' if cond_MACD else '⚪'}"
         
         telegram_alert.SendMessage(analysis_msg)
         buy = cond_o1 and cond_o2 and cond_close_inc and cond_5ma and cond_5ma_bf and cond_20ma and cond_60ma and cond_slope and cond_rsi_inc and cond_MACD
@@ -233,12 +244,14 @@ for coin_data in InvestCoinList:
                 BotDataDict[coin_ticker + '_BUY_DATE'] = day_str
                 with open(botdata_file_path, 'w') as f:
                     json.dump(BotDataDict, f)
-                exec_msg = f"{first_String}: 조건 만족하여 매수!!"
+                exec_msg = f"🟢 매수 체결 알림 ({coin_ticker})\n"
+                exec_msg += f"• 매수금액: {BuyMoney:.2f} $\n"
+                exec_msg += f"• 레버리지: {set_leverage}배"
                 print(exec_msg)
                 telegram_alert.SendMessage(exec_msg)
         else:
             if hour_n == 0 and min_n == 0 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                warn_msg = f"{first_String}: 조건 만족하지 않아 현금 보유 합니다!"
+                warn_msg = f"💤 관망 모드 ({coin_ticker})\n• 매수 조건을 만족하지 않아 현금을 보유합니다."
                 print(warn_msg)
                 telegram_alert.SendMessage(warn_msg)
                 BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
@@ -246,5 +259,5 @@ for coin_data in InvestCoinList:
                     json.dump(BotDataDict, f)
 
 if hour_n == 0 and min_n <= 2:
-    end_msg = f"{first_String} 종료"
+    end_msg = f"🏁 {first_String} 종료"
     telegram_alert.SendMessage(end_msg)

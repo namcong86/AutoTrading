@@ -78,7 +78,7 @@ print("min_n:", min_n)
 first_String = "1.Upbit BTC 안전매매"
 
 if hour_n == 0 and min_n < 5:
-    telegram_alert.SendMessage(first_String +" 시작")
+    telegram_alert.SendMessage(f"📢 {first_String} 시작")
     time.sleep(0.04)
 
 # 수익금과 수익률 계산 함수
@@ -200,7 +200,10 @@ for coin_data in InvestCoinList:
         revenue_data = GetRevenueMoneyAndRate(balances, coin_ticker)
 
         if BotDataDict[coin_ticker + "_DATE_CHECK"] != day_n:
-            msg = first_String + " 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
+            # 현재 수익률 알림 (깔끔하게)
+            msg = f"📊 {coin_ticker} 현재 상태\n"
+            msg += f"• 수익률: {revenue_data['revenue_rate']:.2f}%\n"
+            msg += f"• 평가손익: {round(revenue_data['revenue_money']):,}원"
             print(msg)
             telegram_alert.SendMessage(msg)
             time.sleep(1.0)
@@ -212,10 +215,10 @@ for coin_data in InvestCoinList:
             #수익률 마이너스 진입
             cond_rev_minus = (revenue_data['revenue_rate'] < -0.7)
 
-            analysis_msg = (f"{first_String} 매도조건 분석:" 
-                            f"고점저점하락={cond_hdown_ldown}, "
-                            f"2일음봉={cond_2down}," 
-                            f"손실여부={cond_rev_minus}")
+            analysis_msg = f"📉 매도 조건 분석 ({coin_ticker})\n"
+            analysis_msg += f"• 고점저점하락: {'✅' if cond_hdown_ldown else '⚪'}\n"
+            analysis_msg += f"• 2일연속음봉: {'✅' if cond_2down else '⚪'}\n"
+            analysis_msg += f"• 손실방어(-0.7%): {'✅' if cond_rev_minus else '⚪'}"
 
             sell = cond_hdown_ldown or cond_2down or cond_rev_minus
 
@@ -241,7 +244,12 @@ for coin_data in InvestCoinList:
             if IsSellGo:
                 AllAmt = upbit.get_balance(coin_ticker)
                 balances = myUpbit.SellCoinMarket(upbit, coin_ticker, AllAmt)
-                msg = first_String + " 업비트 안전 전략 봇: 조건 불만족하여 모두 매도!! 현재 수익률: 약 " + str(round(revenue_data['revenue_rate'], 2)) + "% 수익금: 약 " + str(format(round(revenue_data['revenue_money']), ',')) + "원"
+                
+                msg = f"🔴 매도 체결 알림 ({coin_ticker})\n"
+                msg += f"• 사유: 매도 조건 만족\n"
+                msg += f"• 수익률: {revenue_data['revenue_rate']:.2f}%\n"
+                msg += f"• 실현손익: {round(revenue_data['revenue_money']):,}원"
+                
                 print(msg)
                 telegram_alert.SendMessage(msg)
                 BotDataDict[coin_ticker + "_HAS"] = False
@@ -274,14 +282,20 @@ for coin_data in InvestCoinList:
                 cond_16ma = (df_day['16ma'].iloc[-2] < df_day['close'].iloc[-2])
                 cond_73ma = (df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2])
 
-                analysis_msg = (f"{first_String} 매수조건 분석: 연속양봉={cond_up1 and cond_up2}, "
-                                f"종가증가={cond_close_inc}, 고점증가={cond_high_inc}, "
-                                f"7이평증가={cond_7ma}, 16이평증가={cond_16ma}, 73이평증가={cond_73ma}")
+                cond_73ma = (df_day['73ma'].iloc[-2] < df_day['close'].iloc[-2])
+
+                analysis_msg = f"📈 매수 조건 분석 ({coin_ticker})\n"
+                analysis_msg += f"• 연속양봉: {'✅' if cond_up1 and cond_up2 else '⚪'}\n"
+                analysis_msg += f"• 종가상승: {'✅' if cond_close_inc else '⚪'}\n"
+                analysis_msg += f"• 고점상승: {'✅' if cond_high_inc else '⚪'}\n"
+                analysis_msg += f"• 7이평상승: {'✅' if cond_7ma else '⚪'}\n"
+                analysis_msg += f"• 16이평상승: {'✅' if cond_16ma else '⚪'}\n"
+                analysis_msg += f"• 73이평상승: {'✅' if cond_73ma else '⚪'}"
 
                 buy = cond_up1 and cond_up2 and cond_close_inc and cond_high_inc and cond_7ma and cond_16ma and cond_73ma
 
                 #매수조건 알림
-                if hour_n == 0 and min_n <= 4:
+                if True:#hour_n == 0 and min_n <= 4:
                     print(analysis_msg)
                     telegram_alert.SendMessage(analysis_msg)
 
@@ -330,14 +344,17 @@ for coin_data in InvestCoinList:
                 BotDataDict[coin_ticker + "_BUY_DATE"] = day_str
                 with open(botdata_file_path, 'w') as outfile:
                     json.dump(BotDataDict, outfile)
-                msg = first_String + ": 조건 만족하여 매수!! " + str(BuyMoney) + "원어치 매수! (돌파:" + str(IsDolpaDay) + ")"
+                msg = f"🟢 매수 체결 알림 ({coin_ticker})\n"
+                msg += f"• 매수금액: {BuyMoney:,}원\n"
+                msg += f"• 돌파매수여부: {'✅' if IsDolpaDay else '❌'}"
+                
                 print(msg)
                 telegram_alert.SendMessage(msg)
         else:
             if hour_n == 0 and min_n <5:
-                msg = first_String + " 조건 만족하지 않아 현금 보유 합니다!"
+                msg = f"💤 관망 모드 ({coin_ticker})\n• 매수 조건을 만족하지 않아 현금을 보유합니다."
                 print(msg)
                 telegram_alert.SendMessage(msg)
 
 if hour_n == 0 and min_n < 5:
-    telegram_alert.SendMessage(first_String +" 종료")
+    telegram_alert.SendMessage(f"🏁 {first_String} 종료")
