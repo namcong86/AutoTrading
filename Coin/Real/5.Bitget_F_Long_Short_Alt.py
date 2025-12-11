@@ -87,32 +87,43 @@ TAKE_PROFIT_LEVELS = [
     {'profit_pct': 20, 'sell_pct': 20},  # 20% 수익 시 20% 익절
 ]
 
+# ==============================================================================
+# 테스트 모드 설정
+# ==============================================================================
+# True: 시작/종료/일일요약 알림을 항상 발송 (테스트용)
+# False: 오전 9시(한국 기준)에만 알림 발송 (운영용)
+TEST_MODE = True
 
 # ==============================================================================
 # 헬퍼 함수
 # ==============================================================================
 def GetOhlcv(exchange, ticker, timeframe='1h', target_rows=150):
-    """Bitget: OHLCV 데이터 가져오기"""
+    """Bitget: OHLCV 데이터 가져오기 (여러 번 호출하여 충분한 데이터 수집)"""
     try:
-        limit = 100
+        limit = 90  # Bitget은 한번에 90개까지만 반환
         all_ohlcv = []
         end_ms = None
         attempts = 0
+        max_attempts = 10  # 최대 10번 시도 (90 * 10 = 900개까지 수집 가능)
 
-        while len(all_ohlcv) < target_rows and attempts < 5:
+        while len(all_ohlcv) < target_rows and attempts < max_attempts:
             params = {'limit': limit}
             if end_ms is not None:
                 params['endTime'] = end_ms
 
             batch = exchange.fetch_ohlcv(ticker, timeframe, limit=limit, params=params)
             if not batch:
+                print(f"[{ticker}] GetOhlcv: 배치 데이터 없음 (attempt {attempts})")
                 break
 
             all_ohlcv = batch + all_ohlcv
             end_ms = batch[0][0] - 1
             attempts += 1
+            
+            print(f"[{ticker}] GetOhlcv: 배치 {attempts}번째, 받은 데이터 {len(batch)}개, 총 누적 {len(all_ohlcv)}개")
 
             if len(batch) < limit:
+                print(f"[{ticker}] GetOhlcv: 더 이상 데이터 없음 (받은 개수 {len(batch)} < limit {limit})")
                 break
 
             time.sleep(0.2)
@@ -125,6 +136,7 @@ def GetOhlcv(exchange, ticker, timeframe='1h', target_rows=150):
         df.sort_values('datetime', inplace=True)
         df['datetime'] = pd.to_datetime(df['datetime'], unit='ms')
         df.set_index('datetime', inplace=True)
+        print(f"[{ticker}] GetOhlcv: 최종 데이터 {len(df)}개 반환")
         return df
     except Exception as e:
         print(f"GetOhlcv 오류 ({ticker}): {e}")
@@ -170,36 +182,44 @@ def check_dead_cross(df, short_ma, long_ma):
 
 def get_daily_ma_direction(exchange, ticker, daily_ma_period):
     """일봉 이동평균 기준 방향 필터
-    두 난 일봉(마감된)의 종가 기준
+    - 오늘 캔들(미완성)은 제외
+    - 어제부터 115일간의 데이터로 115MA 계산
+    - 어제 종가와 115MA를 비교
     Returns: 'UP' (종가 > 일봉MA, 롱대기), 'DOWN' (종가 < 일봉MA, 숏대기)
     """
     try:
-        df_daily = GetOhlcv(exchange, ticker, '1d', target_rows=daily_ma_period + 10)
-        if df_daily.empty or len(df_daily) < daily_ma_period:
-            # 데이터 부족 시는 현재 시세로 판단
-            df_1h = GetOhlcv(exchange, ticker, '1h', target_rows=150)
-            if df_1h.empty or len(df_1h) < 20:
-                return 'UP'  # 기본으로 UP
-            df_1h['ma_20'] = df_1h['close'].rolling(20).mean()
-            df_1h['ma_120'] = df_1h['close'].rolling(120).mean()
-            df_1h.dropna(inplace=True)
-            if df_1h.empty:
-                return 'UP'
-            last_ma20 = df_1h['ma_20'].iloc[-1]
-            last_ma120 = df_1h['ma_120'].iloc[-1]
-            return 'UP' if last_ma20 > last_ma120 else 'DOWN'
+        # 일봉 데이터를 충분히 가져오기 (MA 계산 + 오늘 캔들 제외 + 여유분)
+        df_daily = GetOhlcv(exchange, ticker, '1d', target_rows=daily_ma_period + 30)
         
-        df_daily[f'ma_{daily_ma_period}'] = df_daily['close'].rolling(daily_ma_period).mean()
-        df_daily.dropna(inplace=True)
+        print(f"[{ticker}] 일봉 데이터 수집: {len(df_daily)}개")
         
         if df_daily.empty:
+            print(f"[{ticker}] 일봉 데이터 없음 - 기본값 UP 반환")
             return 'UP'
         
-        # 두 난 난 일봉 (마감된) 종가 기준
-        yesterday_close = df_daily['close'].iloc[-2] if len(df_daily) >= 2 else df_daily['close'].iloc[-1]
-        yesterday_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-2] if len(df_daily) >= 2 else df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        # 오늘 캔들(미완성) 제외 - 마지막 행 삭제
+        df_daily = df_daily.iloc[:-1]
+        print(f"[{ticker}] 오늘 캔들 제외 후: {len(df_daily)}개")
         
-        return 'UP' if yesterday_close > yesterday_ma else 'DOWN'
+        if len(df_daily) < daily_ma_period:
+            print(f"[{ticker}] MA 계산을 위한 데이터 부족 ({len(df_daily)} < {daily_ma_period}) - 기본값 UP 반환")
+            return 'UP'
+        
+        # 어제(마감된 캔들)부터 115일간의 MA 계산
+        df_daily[f'ma_{daily_ma_period}'] = df_daily['close'].rolling(daily_ma_period).mean()
+        
+        # 어제(마감된 캔들, 이제는 마지막 인덱스) 종가와 MA 비교
+        yesterday_close = df_daily['close'].iloc[-1]
+        yesterday_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        
+        if pd.isna(yesterday_ma):
+            print(f"[{ticker}] MA 값이 NaN - 기본값 UP 반환")
+            return 'UP'
+        
+        direction = 'UP' if yesterday_close > yesterday_ma else 'DOWN'
+        print(f"[{ticker}] 어제 종가: {yesterday_close:.4f}, {daily_ma_period}MA: {yesterday_ma:.4f} -> {direction}")
+        
+        return direction
     except Exception as e:
         print(f"일봉 MA 조회 오류 ({ticker}): {e}")
         return 'UP'
@@ -261,8 +281,8 @@ def execute_trading_logic(account_info):
     # 마지막 일일 요약 알림 시간 확인
     last_daily_alert_day = BotDataDict.get('LAST_DAILY_ALERT_DAY', 0)
 
-    # 시작 알림 (오전 9시 한국 기준에만)
-    if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
+    # 시작 알림 (TEST_MODE=True 또는 오전 9시 한국 기준)
+    if TEST_MODE or (hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n):
         start_msg = f"{first_String} 시작"
         telegram_alert.SendMessage(start_msg)
 
@@ -383,15 +403,15 @@ def execute_trading_logic(account_info):
                     sell_amount = actual_size * (tp_sell_pct / 100)
                     if sell_amount > 0:
                         try:
-                            if actual_position == 1:  # 롱 익절
+                            if actual_position == 1:  # 롱 익절 (Hedge Mode: holdSide='long', tradeSide='close')
                                 bitgetX.create_order(
                                     coin_ticker, 'market', 'sell', sell_amount,
-                                    None, {'reduceOnly': True}
+                                    None, {'holdSide': 'long', 'tradeSide': 'close'}
                                 )
-                            else:  # 숏 익절
+                            else:  # 숏 익절 (Hedge Mode: holdSide='short', tradeSide='close')
                                 bitgetX.create_order(
                                     coin_ticker, 'market', 'buy', sell_amount,
-                                    None, {'reduceOnly': True}
+                                    None, {'holdSide': 'short', 'tradeSide': 'close'}
                                 )
                             
                             # TP 레벨 기록 (profit_pct를 저장)
@@ -450,8 +470,8 @@ def execute_trading_logic(account_info):
             else:
                 position_text = "🔴 숏"
         
-        # 아침 9시(한국 기준)에만 일일 요약 알림 전송
-        if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
+        # 일일 요약 알림 (TEST_MODE=True 또는 아침 9시 한국 기준)
+        if TEST_MODE or (hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n):
             alert_msg = (
                 f"<{first_String} {coin_ticker}>\n"
                 f"- 현재가: ${now_price:.6f}\n"
@@ -472,9 +492,10 @@ def execute_trading_logic(account_info):
             # 숏 포지션이면 청산
             if actual_position == -1:
                 try:
+                    # 숏 청산 (Hedge Mode: holdSide='short', tradeSide='close')
                     bitgetX.create_order(
                         coin_ticker, 'market', 'buy', actual_size,
-                        None, {'reduceOnly': True}
+                        None, {'holdSide': 'short', 'tradeSide': 'close'}
                     )
                     msg = f"{first_String} {coin_ticker} 숏 청산 (골든크로스)"
                     print(msg)
@@ -498,9 +519,10 @@ def execute_trading_logic(account_info):
                     split_invest = total_invest / SPLIT_COUNT
                     amount = (split_invest * effective_leverage) / now_price
 
-                    # 롱 진입
+                    # 롱 진입 (Hedge Mode: holdSide='long', tradeSide='open')
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'buy', amount
+                        coin_ticker, 'market', 'buy', amount,
+                        None, {'holdSide': 'long', 'tradeSide': 'open'}
                     )
 
                     entry_count += 1
@@ -532,9 +554,10 @@ def execute_trading_logic(account_info):
             # 롱 포지션이면 청산
             if actual_position == 1:
                 try:
+                    # 롱 청산 (Hedge Mode: holdSide='long', tradeSide='close')
                     bitgetX.create_order(
                         coin_ticker, 'market', 'sell', actual_size,
-                        None, {'reduceOnly': True}
+                        None, {'holdSide': 'long', 'tradeSide': 'close'}
                     )
                     msg = f"{first_String} {coin_ticker} 롱 청산 (데드크로스)"
                     print(msg)
@@ -558,9 +581,10 @@ def execute_trading_logic(account_info):
                     split_invest = total_invest / SPLIT_COUNT
                     amount = (split_invest * effective_leverage) / now_price
 
-                    # 숏 진입
+                    # 숏 진입 (Hedge Mode: holdSide='short', tradeSide='open')
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'sell', amount
+                        coin_ticker, 'market', 'sell', amount,
+                        None, {'holdSide': 'short', 'tradeSide': 'open'}
                     )
 
                     entry_count += 1
@@ -588,8 +612,8 @@ def execute_trading_logic(account_info):
         with open(botdata_file_path, 'w') as f:
             json.dump(BotDataDict, f, indent=4)
 
-    # 종료 알림 (오전 9시 한국 기준에만)
-    if hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n:
+    # 종료 알림 (TEST_MODE=True 또는 오전 9시 한국 기준)
+    if TEST_MODE or (hour_n == 0 and min_n <= 2 and last_daily_alert_day != day_n):
         end_msg = f"{first_String} 종료"
         telegram_alert.SendMessage(end_msg)
 

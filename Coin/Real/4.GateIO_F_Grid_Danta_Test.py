@@ -651,12 +651,28 @@ def run_backtest(data_frames):
         previous_time = current_time
         total_long_entries = sum(p['long'].get('current_entry_count', 0) for p in positions.values())
         total_short_entries = sum(p['short'].get('current_entry_count', 0) for p in positions.values())
+        
+        # 롱/숏 평단가 계산 (모든 코인의 가중평균)
+        total_long_qty = sum(p['long'].get('total_quantity', 0) for p in positions.values())
+        total_short_qty = sum(p['short'].get('total_quantity', 0) for p in positions.values())
+        
+        if total_long_qty > 0:
+            avg_long_price = sum(p['long'].get('average_price', 0) * p['long'].get('total_quantity', 0) for p in positions.values()) / total_long_qty
+        else:
+            avg_long_price = 0.0
+        
+        if total_short_qty > 0:
+            avg_short_price = sum(p['short'].get('average_price', 0) * p['short'].get('total_quantity', 0) for p in positions.values()) / total_short_qty
+        else:
+            avg_short_price = 0.0
 
         portfolio_history.append({
             'timestamp': current_time,
             'value': current_portfolio_value,
             'long_entry_count': total_long_entries,
-            'short_entry_count': total_short_entries
+            'short_entry_count': total_short_entries,
+            'long_avg_price': avg_long_price,
+            'short_avg_price': avg_short_price
         })
 
     return (pd.DataFrame(portfolio_history).set_index('timestamp'), daily_realized_pnl, new_cycle_dates,
@@ -740,7 +756,7 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     mdd_perf_str = format_mdd_string(mdd_performance, prefix="성과")
     mdd_equity_str = format_mdd_string(mdd_equity, prefix="실제잔고")
 
-    daily_summary = portfolio_df[['value', 'adjusted_value', 'long_entry_count', 'short_entry_count']].resample('D').last().ffill()
+    daily_summary = portfolio_df[['value', 'adjusted_value', 'long_entry_count', 'short_entry_count', 'long_avg_price', 'short_avg_price']].resample('D').last().ffill()
     realized_pnl_series = pd.Series(realized_pnl_data, name="Realized PNL")
 
     if not realized_pnl_series.empty:
@@ -778,13 +794,16 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     monthly_summary['Withdrawal'] = monthly_summary['Withdrawal'].fillna(0)
 
     # (이하 출력 및 시각화 부분은 동일)
-    print("\n" + "="*110 + "\n" + " " * 35 + "일별 요약 (실현 손익 기준)\n" + "="*110)
+    print("\n" + "="*155 + "\n" + " " * 50 + "일별 요약 (실현 손익 기준)\n" + "="*155)
     for index, row in daily_summary.iterrows():
         new_cycle_marker = " « 신규 포지션" if index.date() in new_cycle_dates else ""
         long_entry_count = int(row.get('long_entry_count', 0)); short_entry_count = int(row.get('short_entry_count', 0))
-        position_str = f"롱:{long_entry_count}개, 숏:{short_entry_count}개"
-        print(f"{index.strftime('%Y-%m-%d')}: 총잔액:{row['value']:>12,.2f} USDT,  일일 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,  누적 실현 Net PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT,  포지션: {position_str:<15}" + new_cycle_marker)
-    print("="*110)
+        long_avg_price = row.get('long_avg_price', 0); short_avg_price = row.get('short_avg_price', 0)
+        position_str = f"롱:{long_entry_count}개"
+        long_price_str = f"(평단:{long_avg_price:,.5f})" if long_entry_count > 0 else ""
+        short_price_str = f"(평단:{short_avg_price:,.5f})" if short_entry_count > 0 else ""
+        print(f"{index.strftime('%Y-%m-%d')}: 총잔액:{row['value']:>12,.2f} USDT,  일일 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,  누적 실현 Net PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT,  롱:{long_entry_count}개{long_price_str}, 숏:{short_entry_count}개{short_price_str}" + new_cycle_marker)
+    print("="*155)
 
     print("\n" + "="*125 + "\n" + " " * 45 + "월별 요약 (실현 손익 기준)\n" + "="*125)
     for index, row in monthly_summary.iterrows():

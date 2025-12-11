@@ -10,8 +10,10 @@ import os
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
     sys.path.insert(0, "/var/AutoBot/Common")
+    sys.path.insert(0, "/var/AutoBot/Stock/Common")  # 주식 Common 경로 추가
 else:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'Common'))
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'Stock', 'Common'))  # 주식 Common 경로 추가
 import telegram_alert
 import myUpbit  # 우리가 만든 함수들이 들어있는 모듈
 import myBinance
@@ -21,6 +23,16 @@ from datetime import datetime
 from collections import defaultdict
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
+# 주식 계좌 관련 모듈 import
+try:
+    import KIS_Common as KisCommon
+    import KIS_API_Helper_KR as KisKR
+    import KIS_API_Helper_US as KisUS
+    STOCK_MODULES_AVAILABLE = True
+except ImportError as e:
+    print(f"주식 모듈 임포트 실패 (주식 잔액 조회 비활성화): {e}")
+    STOCK_MODULES_AVAILABLE = False
 
 # ==============================================================================
 # 암복호화 클래스 객체 생성
@@ -47,6 +59,20 @@ EXCHANGE_CONFIG = {
     "OKX":          False,  # OKX (비활성화)
     "Bybit":        False,  # Bybit (비활성화)
     "MEXC":         False,  # MEXC (비활성화)
+}
+
+# ==============================================================================
+#  주식 계좌 활성화 설정 (Control Panel) - 전략 6,7,8,9번 대응
+# ==============================================================================
+# True로 설정된 계좌만 조회합니다.
+# 현재 모든 주식 전략(6,7,8,9번)이 동일한 REAL 계좌를 공유합니다.
+#   - 전략 6번, 8번: 한국 주식 실제 계좌 (Stock_KR)
+#   - 전략 7번, 9번: 미국 주식 실제 계좌 (Stock_US)
+# 추후 REAL2 계좌 분리 시 설정 추가 예정
+# ------------------------------------------------------------------------------
+STOCK_ACCOUNT_CONFIG = {
+    "Stock_KR":   True,    # 한국 주식 계좌 (전략 6번, 8번 공용)
+    "Stock_US":   True,    # 미국 주식 계좌 (전략 7번, 9번 공용)
 }
 
 # ==============================================================================
@@ -366,6 +392,85 @@ def aggregate_spot_balances():
     return total
 
 # ==============================================================================
+# 주식 계좌 잔액 조회 함수 (한국투자증권 API)
+# ==============================================================================
+def get_stock_balance_kr(mode="REAL"):
+    """
+    한국 주식 계좌 잔액 조회
+    mode: "REAL" (실제 계좌) 또는 "VIRTUAL" (모의 계좌)
+    반환값: 총 평가금액 (KRW)
+    """
+    if not STOCK_MODULES_AVAILABLE:
+        print("주식 모듈이 로드되지 않아 한국 주식 잔액 조회 불가")
+        return 0
+    
+    try:
+        print(f"Fetching Korea Stock ({mode}) balance...")
+        KisCommon.SetChangeMode(mode)
+        time.sleep(1)  # API 레이트 리밋 방지
+        
+        balance = KisKR.GetBalance()
+        if isinstance(balance, dict):
+            total_money = float(balance.get('TotalMoney', 0))
+            print(f"Korea Stock ({mode}) Total: {total_money:,.0f} KRW")
+            return total_money
+        else:
+            print(f"Korea Stock ({mode}) Balance Error: {balance}")
+            return 0
+    except Exception as e:
+        print(f"Korea Stock ({mode}) Balance Error: {e}")
+        return 0
+
+def get_stock_balance_us(mode="REAL"):
+    """
+    미국 주식 계좌 잔액 조회
+    mode: "REAL" (실제 계좌) 또는 "VIRTUAL" (모의 계좌)
+    반환값: 총 평가금액 (USD)
+    """
+    if not STOCK_MODULES_AVAILABLE:
+        print("주식 모듈이 로드되지 않아 미국 주식 잔액 조회 불가")
+        return 0
+    
+    try:
+        print(f"Fetching US Stock ({mode}) balance...")
+        KisCommon.SetChangeMode(mode)
+        time.sleep(1)  # API 레이트 리밋 방지
+        
+        balance = KisUS.GetBalance("USD")
+        if isinstance(balance, dict):
+            total_money = float(balance.get('TotalMoney', 0))
+            print(f"US Stock ({mode}) Total: {total_money:,.2f} USD")
+            return total_money
+        else:
+            print(f"US Stock ({mode}) Balance Error: {balance}")
+            return 0
+    except Exception as e:
+        print(f"US Stock ({mode}) Balance Error: {e}")
+        return 0
+
+def get_all_stock_balances():
+    """
+    활성화된 모든 주식 계좌의 잔액을 조회
+    반환값: {계좌명: 금액} 딕셔너리
+    """
+    stock_balances = {}
+    
+    # 한국 주식 계좌 (전략 6번, 8번 공용)
+    if STOCK_ACCOUNT_CONFIG.get("Stock_KR"):
+        kr_balance = get_stock_balance_kr("REAL")
+        if kr_balance > 0:
+            stock_balances["Stock_KR"] = {"amount": kr_balance, "currency": "KRW"}
+        time.sleep(1)
+    
+    # 미국 주식 계좌 (전략 7번, 9번 공용)
+    if STOCK_ACCOUNT_CONFIG.get("Stock_US"):
+        us_balance = get_stock_balance_us("REAL")
+        if us_balance > 0:
+            stock_balances["Stock_US"] = {"amount": us_balance, "currency": "USD"}
+    
+    return stock_balances
+
+# ==============================================================================
 # 메인 로직 시작
 # ==============================================================================
 
@@ -397,13 +502,36 @@ else:
 
 time.sleep(1)
 
+# ==============================================================================
+# 주식 계좌 잔액 조회 (전략 6,7,8,9번)
+# ==============================================================================
+stock_balances = {}
+stock_total_krw = 0
+
+if STOCK_MODULES_AVAILABLE and any(STOCK_ACCOUNT_CONFIG.values()):
+    print("\n----- 주식 계좌 조회 시작 -----")
+    stock_balances = get_all_stock_balances()
+    print("----- 주식 계좌 조회 완료 -----\n")
+else:
+    print("주식 계좌 조회가 비활성화되었거나 모듈을 사용할 수 없습니다.")
+
 # 환율 조회
 exchange_rate = get_exchange_rate()
 print(f"Exchange Rate (USD to KRW): {exchange_rate}")
 
-# 총 자산 계산
+# 주식 잔액 KRW 환산
+for account_name, info in stock_balances.items():
+    if info['currency'] == 'USD':
+        krw_value = info['amount'] * exchange_rate
+    else:  # KRW
+        krw_value = info['amount']
+    stock_total_krw += krw_value
+    stock_balances[account_name]['krw_value'] = krw_value
+
+# 총 자산 계산 (코인 + 주식)
 exchange_total_usdt = sum(exchange_balances.values())
-total_JAN = round(exchange_total_usdt * exchange_rate) + round(TotalRealMoney)
+coin_total_krw = round(exchange_total_usdt * exchange_rate) + round(TotalRealMoney)
+total_JAN = coin_total_krw + round(stock_total_krw)
 now = datetime.now()
 
 # --- 최종 결과 출력 (동적) ---
@@ -420,7 +548,21 @@ print("-" * 20)
 print(f"\n선물+현물(해외거래소): {round(exchange_total_usdt)} USDT ({round(exchange_total_usdt * exchange_rate):,} KRW)")
 if EXCHANGE_CONFIG.get("Upbit"):
     print(f"현물(업비트): {round(TotalRealMoney):,} KRW")
-print(f"TOTAL잔액: {total_JAN:,} KRW")
+
+# 주식 잔액 출력
+if stock_balances:
+    print("-" * 20)
+    print("주식 계좌:")
+    for account_name, info in stock_balances.items():
+        if info['currency'] == 'USD':
+            print(f"  {account_name}: {info['amount']:,.2f} USD (≈ {round(info['krw_value']):,} KRW)")
+        else:
+            print(f"  {account_name}: {round(info['amount']):,} KRW")
+    print(f"주식 총합: {round(stock_total_krw):,} KRW")
+
+print("-" * 20)
+print(f"코인 총합: {coin_total_krw:,} KRW")
+print(f"TOTAL잔액 (코인+주식): {total_JAN:,} KRW")
 
 # --- 텔레그램 알림 ---
 try:
@@ -431,6 +573,7 @@ try:
     # 깔끔한 리스트 형식 (오른쪽 정렬)
     telegram_message = f"📊 {now.strftime('%Y-%m-%d %H:%M')} 자산 현황\n"
     telegram_message += "=" * 35 + "\n"
+    telegram_message += "💎 코인\n"
     
     # 거래소별 잔액
     for name, balance in exchange_balances.items():
@@ -442,13 +585,41 @@ try:
         bal_str = f"{bal:,}" if bal > 0 else "0"
         telegram_message += f"• {display_name:<10} {bal_str:>15}\n"
     
-    telegram_message += "=" * 35 + "\n"
+    telegram_message += "-" * 35 + "\n"
     exchange_total_str = f"{round(exchange_total_usdt):,}"
     telegram_message += f"💰 해외 합계    {exchange_total_str:>15} $\n"
     
     if EXCHANGE_CONFIG.get("Upbit") and TotalRealMoney > 0:
         upbit_str = f"{round(TotalRealMoney):,}"
         telegram_message += f"🇰🇷 업비트      {upbit_str:>15} 원\n"
+    
+    coin_total_str = f"{coin_total_krw:,}"
+    telegram_message += f"📈 코인 합계    {coin_total_str:>15} 원\n"
+    
+    # 주식 계좌 섹션
+    if stock_balances:
+        telegram_message += "=" * 35 + "\n"
+        telegram_message += "📊 주식\n"
+        
+        for account_name, info in stock_balances.items():
+            # 표시 이름 간소화
+            if account_name == "Stock_KR":
+                display_name = "한국 주식"
+            elif account_name == "Stock_US":
+                display_name = "미국 주식"
+            else:
+                display_name = account_name
+            
+            if info['currency'] == 'USD':
+                amt_str = f"{round(info['amount']):,} $"
+            else:
+                amt_str = f"{round(info['amount']):,}"
+            
+            telegram_message += f"• {display_name:<10} {amt_str:>15}\n"
+        
+        telegram_message += "-" * 35 + "\n"
+        stock_total_str = f"{round(stock_total_krw):,}"
+        telegram_message += f"📊 주식 합계    {stock_total_str:>15} 원\n"
     
     telegram_message += "=" * 35 + "\n"
     total_str = f"{total_JAN:,}"
