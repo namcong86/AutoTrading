@@ -313,7 +313,12 @@ if IsMarketOpen == True:
                     InfinityUpgradeDataList.append(InfinityDataDict) #데이터를 추가 한다!
 
 
-                msg = stock_code + " 양방향3배전략봇 첫 시작!!!!"
+                msg = f"""🚀 ━━━━━━━━━━━━━━━━━━━━
+📌 양방향3배전략봇 첫 시작
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📊 상태: 신규 진입 대기
+━━━━━━━━━━━━━━━━━━━━"""
                 print(msg) 
                 telegram_alert.SendMessage(msg) 
                 
@@ -391,7 +396,14 @@ if IsMarketOpen == True:
                     InfinityUpgradeDataList.append(InfinityDataDict) #데이터를 추가 한다!
 
 
-                msg = stock_code + " 기존에 매수한 종목을 양방향3배전략봇으로 변경해서 트레이딩 첫 시작!!!! " + str(InfinityDataDict['Round']) + "회차로 세팅 완료!"
+                msg = f"""🔄 ━━━━━━━━━━━━━━━━━━━━
+📌 기존 종목 → 봇 전환
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📈 현재 회차: {InfinityDataDict['Round']}회차
+📊 최대 분할: {InfinityDataDict['MaxRound']}회
+✅ 상태: 세팅 완료
+━━━━━━━━━━━━━━━━━━━━"""
                 print(msg) 
                 telegram_alert.SendMessage(msg) 
 
@@ -411,7 +423,15 @@ if IsMarketOpen == True:
                 if stock_amt == 0 and StockInfo['Round'] > 0 :
                     StockInfo['Round'] = 0
 
-                    msg = stock_code + " 양방향3배전략봇 " + str(StockInfo['Round']) + "회차 매수 되었다고 되어있지만 매수수량이 1개도 없는 것으로 파악!!! 매수시 로그 확인 필요! 봇에서는 매수 안되었다고 셋!"
+                    msg = f"""⚠️ ━━━━━━━━━━━━━━━━━━━━
+📌 수량 불일치 감지
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+❌ 문제: 보유수량 0개
+📋 기록된 회차: {StockInfo['Round']}회차
+🔧 조치: 0회차로 리셋
+⚡ 확인 필요: 매수 로그 점검
+━━━━━━━━━━━━━━━━━━━━"""
                     print(msg) 
                     telegram_alert.SendMessage(msg) 
 
@@ -494,7 +514,15 @@ if IsMarketOpen == True:
                                     pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,stock_amt,CurrentPrice*0.99))
 
 
-                                    msg = stock_code + " 양방향3배전략봇 모두 팔아서 수익확정!!!!  [" + str(stock_revenue_money) + "] 수익 조으다! (현재 [" + str(StockInfo['Round']) + "] 라운드까지 진행되었고 모든 수량 매도 처리! )"
+                                    profit_emoji = "📈" if stock_revenue_money >= 0 else "📉"
+                                    msg = f"""🎉 ━━━━━━━━━━━━━━━━━━━━
+📌 수익 확정 매도
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+{profit_emoji} 실현손익: ${stock_revenue_money:,.2f}
+📊 진행 회차: {StockInfo['Round']}회차
+✅ 상태: 전량 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg) 
                                     telegram_alert.SendMessage(msg) 
 
@@ -524,7 +552,15 @@ if IsMarketOpen == True:
                                         pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,CutAmt,CurrentPrice*0.99))
 
 
-                                        msg = stock_code + " 양방향3배전략봇 일부 손절!!!!  [" + str(stock_revenue_money/CutR) + "] 손익 확정! (현재 [" + str(StockInfo['Round']) + "] 라운드로 셋!)"
+                                        cut_amount = stock_revenue_money / CutR
+                                        msg = f"""⚡ ━━━━━━━━━━━━━━━━━━━━
+📌 분할 손절 실행
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📉 손익 확정: ${cut_amount:,.2f}
+📊 남은 회차: {StockInfo['Round']}회차
+🔄 상태: 일부 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                         print(msg) 
                                         telegram_alert.SendMessage(msg) 
 
@@ -576,7 +612,15 @@ if IsMarketOpen == True:
                                         pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,stock_amt,CurrentPrice*0.99))
 
 
-                                        msg = stock_code + " 양방향3배전략봇 하락장 진입!!!!!  [" + str(stock_revenue_money) + "] 손익 확정!! (현재 [" + str(StockInfo['Round']) + "] 라운드까지 진행되었고 모든 수량 매도 처리! )"
+                                        profit_emoji = "📈" if stock_revenue_money >= 0 else "📉"
+                                        msg = f"""🔻 ━━━━━━━━━━━━━━━━━━━━
+📌 하락장 진입 - 전량 매도
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+{profit_emoji} 실현손익: ${stock_revenue_money:,.2f}
+📊 진행 회차: {StockInfo['Round']}회차
+⚠️ 상태: 하락 대비 청산
+━━━━━━━━━━━━━━━━━━━━"""
                                         print(msg) 
                                         telegram_alert.SendMessage(msg) 
 
@@ -616,7 +660,16 @@ if IsMarketOpen == True:
                                         pprint.pprint(KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice*1.01))
 
 
-                                        msg = stock_code + " 양방향3배전략봇 " + str(StockInfo['Round']) + "회차 매수 완료!"
+                                        buy_amount = BuyAmt * CurrentPrice
+                                        msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 분할 매수 완료
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📊 현재 회차: {StockInfo['Round']}/{StockInfo['MaxRound']}
+💵 매수금액: ${buy_amount:,.2f}
+📈 매수수량: {BuyAmt}주
+💲 매수가격: ${CurrentPrice:,.2f}
+━━━━━━━━━━━━━━━━━━━━"""
                                         print(msg) 
                                         telegram_alert.SendMessage(msg) 
         
@@ -638,7 +691,15 @@ if IsMarketOpen == True:
                                 pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,stock_amt,CurrentPrice*0.99))
 
 
-                                msg = stock_code + " 양방향3배전략봇 모두 정리!!!!!  [" + str(stock_revenue_money) + "] 손익 확정!! (현재 [" + str(StockInfo['Round']) + "] 라운드까지 진행되었고 모든 수량 매도 처리! )"
+                                profit_emoji = "📈" if stock_revenue_money >= 0 else "📉"
+                                msg = f"""🔄 ━━━━━━━━━━━━━━━━━━━━
+📌 인버스 청산 완료
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+{profit_emoji} 실현손익: ${stock_revenue_money:,.2f}
+📊 진행 회차: {StockInfo['Round']}회차
+✅ 상태: 전량 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg) 
                                 telegram_alert.SendMessage(msg) 
 
@@ -709,7 +770,16 @@ if IsMarketOpen == True:
                             pprint.pprint(KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice*1.01))
 
 
-                            msg = stock_code + " 양방향3배전략봇 " + str(StockInfo['Round']) + "회차 매수 완료!"
+                            buy_amount = BuyAmt * CurrentPrice
+                            msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 첫 매수 완료 (레버리지)
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📊 현재 회차: {StockInfo['Round']}/{StockInfo['MaxRound']}
+💵 매수금액: ${buy_amount:,.2f}
+📈 매수수량: {BuyAmt}주
+💲 매수가격: ${CurrentPrice:,.2f}
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg) 
                             telegram_alert.SendMessage(msg) 
 
@@ -758,7 +828,16 @@ if IsMarketOpen == True:
                             data = KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice*1.01)
 
 
-                            msg = stock_code + " 양방향3배전략봇 " + str(StockInfo['Round']) + "회차 매수 완료! \n" + str(data)
+                            buy_amount = BuyAmt * CurrentPrice
+                            msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 인버스 매수 완료
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_code}
+📊 현재 회차: {StockInfo['Round']}회차
+💵 매수금액: ${buy_amount:,.2f}
+📈 매수수량: {BuyAmt}주
+💲 매수가격: ${CurrentPrice:,.2f}
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg) 
                             telegram_alert.SendMessage(msg) 
 

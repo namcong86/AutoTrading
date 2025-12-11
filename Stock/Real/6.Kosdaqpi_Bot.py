@@ -508,7 +508,12 @@ if IsMarketOpen == True and IsLP_OK == True:
     if day_str != DateData['Date']:
             
             
-        telegram_alert.SendMessage(PortfolioName + "  장이 열려서 매매 가능!!")
+        telegram_alert.SendMessage(f"""🔔 ━━━━━━━━━━━━━━━━━━━━
+📌 {PortfolioName}
+━━━━━━━━━━━━━━━━━━━━
+🏛️ 장 상태: 개장
+✅ 매매 가능
+━━━━━━━━━━━━━━━━━━━━""")
 
 
 
@@ -561,7 +566,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                 if KospidaqStrategyData['Status'] == "INVESTING":
                     KospidaqStrategyData['DayStatus'] = "SELL_DAY"
 
-                    msg = KospidaqStrategyData['StockName'] + "  투자중 상태에요! 조건을 만족하면 매도로 트레이딩 종료 합니다.!!"
+                    msg = f"""📊 ━━━━━━━━━━━━━━━━━━━━
+📌 투자 상태 알림
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {KospidaqStrategyData['StockName']}
+💼 상태: 투자중
+📈 조건 충족시 매도 예정
+━━━━━━━━━━━━━━━━━━━━"""
                     print(msg)
                     telegram_alert.SendMessage(msg)
 
@@ -693,7 +704,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                             KospidaqStrategyData['DayStatus'] = "BUY_DAY"
 
 
-                            msg = KospidaqStrategyData['StockName'] + " 돌파하면 매수합니다!!!"
+                            msg = f"""🎯 ━━━━━━━━━━━━━━━━━━━━
+📌 돌파 매수 대기
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+💰 돌파가격: {KospidaqStrategyData['TargetPrice']:,.0f}원
+⏳ 상태: 조건 대기중
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
 
@@ -705,7 +722,12 @@ if IsMarketOpen == True and IsLP_OK == True:
                             KospidaqStrategyData['DayStatus'] = "NONE"
 
 
-                            msg = KospidaqStrategyData['StockName'] + "  조건을 불만족하여 오늘 돌파매수는 쉽니다!!!"
+                            msg = f"""⏸️ ━━━━━━━━━━━━━━━━━━━━
+📌 매수 조건 불충족
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+❌ 상태: 오늘 매수 스킵
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
                         
@@ -736,7 +758,12 @@ if IsMarketOpen == True and IsLP_OK == True:
                         KospidaqStrategyData['DayStatus'] = "BUY_DAY"
 
 
-                        msg = KospidaqStrategyData['StockName'] + " 조건을 만족했다면 매수합니다!!!"
+                        msg = f"""🎯 ━━━━━━━━━━━━━━━━━━━━
+📌 시가 매수 대기
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+⏳ 상태: 조건 충족시 매수
+━━━━━━━━━━━━━━━━━━━━"""
                         print(msg)
                         telegram_alert.SendMessage(msg)
 
@@ -797,7 +824,12 @@ if IsMarketOpen == True and IsLP_OK == True:
                             KospidaqStrategyData['Status'] = "REST" 
                             KospidaqStrategyData['DayStatus'] = "NONE"
 
-                            msg = KospidaqStrategyData['StockName']  + " 모두 매도된 것이 확인 되었습니다!"
+                            msg = f"""✅ ━━━━━━━━━━━━━━━━━━━━
+📌 매도 완료 확인
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+🔄 상태: 전량 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
 
@@ -814,7 +846,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                             data = KisKR.MakeSellMarketOrder(KospidaqStrategyData['StockCode'],stock_amt)
 
 
-                            msg = KospidaqStrategyData['StockName']  + " 모두 매도한 줄 알았는데 실패했나봐요 다시 시도합니다.\n" + str(data)
+                            msg = f"""⚠️ ━━━━━━━━━━━━━━━━━━━━
+📌 매도 재시도
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+❗ 상태: 이전 매도 실패
+🔄 액션: 재시도 중
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
 
@@ -879,7 +917,15 @@ if IsMarketOpen == True and IsLP_OK == True:
                                     
                                     KospidaqStrategyData['Status'] = "SELL_DONE_CHECK" 
 
-                                    msg = KospidaqStrategyData['StockName']  + " 모두 시장가 매도!!! " + str(stock_revenue_money) + " 수익 확정!! 수익률:" + str(stock_revenue_rate) + "%"
+                                    profit_emoji = "📈" if stock_revenue_money >= 0 else "📉"
+                                    msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 매도 체결 (코스닥)
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+{profit_emoji} 손익: {stock_revenue_money:,.0f}원
+📊 수익률: {stock_revenue_rate:.2f}%
+✅ 상태: 전량 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg)
                                     telegram_alert.SendMessage(msg)
 
@@ -917,7 +963,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                                 KospidaqStrategyData['DayStatus'] = "NONE"
 
 
-                                msg = KospidaqStrategyData['StockName']  + " 매수했다고 기록되었는데 물량이 없네요? 암튼 초기화 했어요 다음날 다시 전략 시작합니다!"
+                                msg = f"""⚠️ ━━━━━━━━━━━━━━━━━━━━
+📌 데이터 불일치 감지
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+❌ 문제: 기록O, 보유량0
+🔧 조치: 상태 초기화
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg)
                                 telegram_alert.SendMessage(msg)
                         #코스피
@@ -966,7 +1018,15 @@ if IsMarketOpen == True and IsLP_OK == True:
                                     
                                     KospidaqStrategyData['Status'] = "SELL_DONE_CHECK" 
 
-                                    msg = KospidaqStrategyData['StockName']  + " 모두 시장가 매도!!! " + str(stock_revenue_money) + " 수익 확정!! 수익률:" + str(stock_revenue_rate) + "%"
+                                    profit_emoji = "📈" if stock_revenue_money >= 0 else "📉"
+                                    msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 매도 체결 (코스피)
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+{profit_emoji} 손익: {stock_revenue_money:,.0f}원
+📊 수익률: {stock_revenue_rate:.2f}%
+✅ 상태: 전량 매도 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg)
                                     telegram_alert.SendMessage(msg)
 
@@ -1004,7 +1064,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                                 KospidaqStrategyData['DayStatus'] = "NONE"
 
 
-                                msg = KospidaqStrategyData['StockName']  + " 매수했다고 기록되었는데 물량이 없네요? 암튼 초기화 했어요 다음날 다시 전략 시작합니다!"
+                                msg = f"""⚠️ ━━━━━━━━━━━━━━━━━━━━
+📌 데이터 불일치 감지
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+❌ 문제: 기록O, 보유량0
+🔧 조치: 상태 초기화
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg)
                                 telegram_alert.SendMessage(msg)
 
@@ -1050,7 +1116,12 @@ if IsMarketOpen == True and IsLP_OK == True:
                             KospidaqStrategyData['Status'] = "INVESTING"
                             KospidaqStrategyData['DayStatus'] = "NONE"
                             
-                            msg = KospidaqStrategyData['StockName'] + " 투자중이에요!!"
+                            msg = f"""💼 ━━━━━━━━━━━━━━━━━━━━
+📌 투자 상태 확인
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+✅ 상태: 투자중
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
 
@@ -1058,7 +1129,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                         #아니라면 알림으로 알려준다!!
                         else:
                     
-                            msg = KospidaqStrategyData['StockName'] + "  조건을 만족하여 매수 시도했는데 아직 1주도 매수되지 않았어요! 감산해서 매수시도 합니다! "
+                            msg = f"""⚠️ ━━━━━━━━━━━━━━━━━━━━
+📌 매수 재시도
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+❗ 상태: 매수 미체결
+🔄 액션: 감산 재시도
+━━━━━━━━━━━━━━━━━━━━"""
                             print(msg)
                             telegram_alert.SendMessage(msg)
 
@@ -1072,7 +1149,13 @@ if IsMarketOpen == True and IsLP_OK == True:
                             if KospidaqStrategyData['TryBuyCnt'] > 1:
                                 returnData = KisKR.MakeBuyMarketOrder(KospidaqStrategyData['StockCode'],KospidaqStrategyData['TryBuyCnt'],True) #30%감소된 수량으로 매수 시도!!
 
-                                msg = KospidaqStrategyData['StockName'] + "  매수 시도!!! " + str(returnData)
+                                msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 매수 재시도 진행
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+📉 수량: {KospidaqStrategyData['TryBuyCnt']}주
+🔄 상태: 30% 감산 재시도
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg)
                                 telegram_alert.SendMessage(msg)
 
@@ -1082,7 +1165,12 @@ if IsMarketOpen == True and IsLP_OK == True:
                                 KospidaqStrategyData['DayStatus'] = "NONE"
                                 
 
-                                msg = KospidaqStrategyData['StockName'] + "  매수 실패!!! "
+                                msg = f"""❌ ━━━━━━━━━━━━━━━━━━━━
+📌 매수 실패
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+⛔ 상태: 매수 실패
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg)
                                 telegram_alert.SendMessage(msg)
 
@@ -1258,13 +1346,25 @@ if IsMarketOpen == True and IsLP_OK == True:
                         
 
 
-                                    msg = KospidaqStrategyData['StockName'] + "  조건을 만족하여 매수!!! 투자 시작!! "
+                                    msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 돌파 매수 체결
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+💵 투자금: {InvestMoneyCell:,.0f}원
+📈 수량: {BuyAmt}주
+✅ 상태: 매수 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg)
                                     telegram_alert.SendMessage(msg)
                                 else:
 
 
-                                    msg = KospidaqStrategyData['StockName'] + "  돌파했지만 추세가 안좋아 매수 안함! "
+                                    msg = f"""⏸️ ━━━━━━━━━━━━━━━━━━━━
+📌 돌파 매수 스킵
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+⚠️ 상태: 추세 불리 판단
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg)
                                     telegram_alert.SendMessage(msg)
                 
@@ -1368,13 +1468,25 @@ if IsMarketOpen == True and IsLP_OK == True:
                         
 
 
-                                    msg = KospidaqStrategyData['StockName'] + "  조건을 만족하여 매수!!! 투자 시작!! "
+                                    msg = f"""💰 ━━━━━━━━━━━━━━━━━━━━
+📌 돌파 매수 체결
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+💵 투자금: {InvestMoneyCell:,.0f}원
+📈 수량: {BuyAmt}주
+✅ 상태: 매수 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                     print(msg)
                                     telegram_alert.SendMessage(msg)
 
 
 
-                                msg = KospidaqStrategyData['StockName'] + " 오늘 매수여부 체크 완료!"
+                                msg = f"""✅ ━━━━━━━━━━━━━━━━━━━━
+📌 시가 매수 체크
+━━━━━━━━━━━━━━━━━━━━
+🏷️ 종목: {KospidaqStrategyData['StockName']}
+✅ 상태: 오늘 매수 여부 확인 완료
+━━━━━━━━━━━━━━━━━━━━"""
                                 print(msg)
                                 telegram_alert.SendMessage(msg)
 
