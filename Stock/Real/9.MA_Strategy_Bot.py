@@ -59,7 +59,7 @@ import telegram_alert
 
 
 #계좌 선택.. "VIRTUAL" 는 모의 계좌!
-Common.SetChangeMode("VIRTUAL") #REAL or VIRTUAL
+Common.SetChangeMode("REAL") #REAL or VIRTUAL
 
 
 #포트폴리오 이름
@@ -85,6 +85,14 @@ print("--------------내 보유 잔고---------------------")
 pprint.pprint(Balance)
 
 print("--------------------------------------------")
+
+# Balance가 None인 경우 처리 (토큰 발급 실패 등)
+if Balance is None:
+    err_msg = "[9.MA_Strategy] ❌ 잔고 조회 실패! 토큰 발급 오류 가능성이 있습니다. 서버 및 API 키를 확인하세요."
+    print(err_msg)
+    telegram_alert.SendMessage(err_msg)
+    sys.exit(1)
+
 #총 평가금액에서 해당 봇에게 할당할 총 금액비율 1.0 = 100%  0.5 = 50%
 InvestRate = 0.5
 
