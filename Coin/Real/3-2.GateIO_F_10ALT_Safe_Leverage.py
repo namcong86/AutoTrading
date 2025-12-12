@@ -41,9 +41,21 @@ import my_key
 # 암복호화 클래스 객체 생성
 simpleEnDecrypt = myBinance.SimpleEnDecrypt(ende_key.ende_key)
 
-# 암호화된 액세스키와 시크릿키 복호화 (Sub1 계정)
-GateIO_AccessKey = simpleEnDecrypt.decrypt(my_key.gateio_access_S1)
-GateIO_SecretKey = simpleEnDecrypt.decrypt(my_key.gateio_secret_S1)
+# --- 계정 정보 설정 (Bitget과 동일한 구조) ---
+ACCOUNT_LIST = [
+    {
+        "name": "Sub1",
+        "access_key": simpleEnDecrypt.decrypt(my_key.gateio_access_S1),
+        "secret_key": simpleEnDecrypt.decrypt(my_key.gateio_secret_S1),
+        "leverage": 6
+    }
+]
+
+# 현재 실행할 계정 (기본값: 첫 번째 계정)
+current_account = ACCOUNT_LIST[0]
+account_name = current_account["name"]
+GateIO_AccessKey = current_account["access_key"]
+GateIO_SecretKey = current_account["secret_key"]
 
 # Gate.io Futures API 클래스 (2.Gateio_F_BTC_New.py 에서 복사)
 class GateioFuturesAPI:
@@ -96,9 +108,9 @@ gateio_api = GateioFuturesAPI(GateIO_AccessKey, GateIO_SecretKey)
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/3-2.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json"
+    botdata_file_path = f"/var/AutoBot/json/3-2.GateIO_F_10ALT_Safe_Leverage_Data_{account_name}.json"
 else:
-    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3-2.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json')
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3-2.GateIO_F_10ALT_Safe_Leverage_Data_{account_name}.json')
 
 try:
     with open(botdata_file_path, 'r') as f:
@@ -118,13 +130,13 @@ except json.JSONDecodeError:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = 6
+    set_leverage = current_account.get("leverage", 6)
 
 InvestRate = 1
 fee = 0.001
 
 #알림 첫문구
-first_String = f"3-2.GateIO Sub1 DOGE+PEPE {set_leverage}배 "
+first_String = f"[3-2.GateIO {account_name}] 10ALT {set_leverage}배 "
 
 t = time.gmtime()
 hour_n = t.tm_hour
@@ -621,7 +633,7 @@ for coin_data in InvestCoinList:
 # --- 루프 종료 후 작업 ---
 # ===== 거래 결과 요약 알림 =====
 if trading_summary:
-    summary_msg = f"📊 3-2.Gateio Sub1 거래 조건 검사 결과\n" + "="*35 + "\n"
+    summary_msg = f"📊 3-2.GateIO [{account_name}] 거래 조건 검사 결과\n" + "="*35 + "\n"
     for ticker, status in trading_summary.items():
         summary_msg += f"{ticker}: {status}\n"
     telegram_alert.SendMessage(summary_msg)

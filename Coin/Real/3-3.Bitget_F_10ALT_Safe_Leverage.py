@@ -1,4 +1,4 @@
-# -*- coding:utf-8 -*-
+﻿# -*- coding:utf-8 -*-
 '''
 Bitget 선물 다계정 운영 봇 (DOGE + 1000PEPE 등 포트폴리오, 매수/매도 조건 동일) - Bitget 버전
 '''
@@ -140,7 +140,7 @@ def execute_trading_logic(account_info):
     passphrase = account_info['passphrase']
     set_leverage = account_info['leverage']
 
-    first_String = f"[3-3.Bitget {account_name}] {set_leverage}배 "
+    first_String = f"[3-3.Bitget {account_name}] 10ALT {set_leverage}배 "
 
     # 비트겟 객체 생성
     try:
@@ -161,9 +161,9 @@ def execute_trading_logic(account_info):
 
     pcServerGb = socket.gethostname()
     if pcServerGb == "AutoBotCong":
-        botdata_file_path = f"/var/AutoBot/json/3-3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json"
+        botdata_file_path = f"/var/AutoBot/json/3-3.Bitget_F_10ALT_Safe_Leverage_Data_{account_name}.json"
     else:
-        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3-3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json')
+        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3-3.Bitget_F_10ALT_Safe_Leverage_Data_{account_name}.json')
 
     try:
         with open(botdata_file_path, 'r') as f:
