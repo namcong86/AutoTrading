@@ -235,7 +235,7 @@ DateData = dict()
 if pcServerGb == "AutoBotCong":
     date_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + "_Date.json"
 else:
-    date_file_path = "./json/KrStock_" + BOT_NAME + "_Date.json"
+    date_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', 'KrStock_' + BOT_NAME + '_Date.json')
 
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 
@@ -265,7 +265,7 @@ DateSiGaLogicDoneDict = dict()
 if pcServerGb == "AutoBotCong":
     siga_logic_file_path = "/var/AutoBot/json/KrStock_" + BOT_NAME + "_TodaySigaLogicDoneDate.json"
 else:
-    siga_logic_file_path = "./json/KrStock_" + BOT_NAME + "_TodaySigaLogicDoneDate.json"
+    siga_logic_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', 'KrStock_' + BOT_NAME + '_TodaySigaLogicDoneDate.json')
 try:
     #이 부분이 파일을 읽어서 리스트에 넣어주는 로직입니다. 
     with open(siga_logic_file_path, 'r') as json_file:

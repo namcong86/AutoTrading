@@ -460,13 +460,13 @@ def execute_trading_logic(account_info):
         if actual_position == 1:
             if entry_price > 0 and now_price > 0:
                 position_profit = ((now_price - entry_price) / entry_price) * 100
-                position_text = f"🟢 롱 (+{position_profit:.2f}%)"
+                position_text = f"🟢 롱 ({position_profit:+.2f}%)"
             else:
                 position_text = "🟢 롱"
         elif actual_position == -1:
             if entry_price > 0 and now_price > 0:
                 position_profit = ((entry_price - now_price) / entry_price) * 100
-                position_text = f"🔴 숏 (+{position_profit:.2f}%)"
+                position_text = f"🔴 숏 ({position_profit:+.2f}%)"
             else:
                 position_text = "🔴 숏"
         
@@ -534,11 +534,15 @@ def execute_trading_logic(account_info):
 
                     # 상세 진입 알림
                     entry_msg = (
-                        f"🟢 {first_String} {coin_ticker} 롱 진입\\n"
-                        f"- 진입가격: ${now_price:.6f}\\n"
-                        f"- 진입량(코인): {amount:.6f}\\n"
-                        f"- 진입량(USDT): ${split_invest:.2f}\\n"
-                        f"- 포지션방향: 🟢 LONG"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🟢 {first_String}\n"
+                        f"📌 {coin_ticker} 롱 진입\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💵 진입가격: ${now_price:.6f}\n"
+                        f"📊 진입량(코인): {amount:.6f}\n"
+                        f"💰 진입량(USDT): ${split_invest:.2f}\n"
+                        f"📍 포지션방향: 🟢 LONG\n"
+                        f"━━━━━━━━━━━━━━━━━━━━"
                     )
                     print(entry_msg)
                     telegram_alert.SendMessage(entry_msg)
@@ -596,11 +600,15 @@ def execute_trading_logic(account_info):
 
                     # 상세 진입 알림
                     entry_msg = (
-                        f"🔴 {first_String} {coin_ticker} 숏 진입\\n"
-                        f"- 진입가격: ${now_price:.6f}\\n"
-                        f"- 진입량(코인): {amount:.6f}\\n"
-                        f"- 진입량(USDT): ${split_invest:.2f}\\n"
-                        f"- 포지션방향: 🔴 SHORT"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"🔴 {first_String}\n"
+                        f"📌 {coin_ticker} 숏 진입\n"
+                        f"━━━━━━━━━━━━━━━━━━━━\n"
+                        f"💵 진입가격: ${now_price:.6f}\n"
+                        f"📊 진입량(코인): {amount:.6f}\n"
+                        f"💰 진입량(USDT): ${split_invest:.2f}\n"
+                        f"📍 포지션방향: 🔴 SHORT\n"
+                        f"━━━━━━━━━━━━━━━━━━━━"
                     )
                     print(entry_msg)
                     telegram_alert.SendMessage(entry_msg)

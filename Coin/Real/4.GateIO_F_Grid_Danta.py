@@ -292,12 +292,36 @@ def calculate_order_amount(ticker, usdt_amount, price, leverage):
     return contract_amount
 
 def set_margin_mode_cross(ticker):
-    """포지션의 마진 모드를 CROSS로 설정합니다."""
+    """포지션의 마진 모드를 CROSS로 설정합니다.
+    NOTE: GateIO ccxt에서 set_margin_mode가 지원되지 않음.
+    레버리지 설정 시 params={'marginMode': 'cross'}로 대체됨.
+    """
+    # GateIO는 set_margin_mode를 지원하지 않음
+    # 대신 set_leverage 호출 시 marginMode 파라미터로 설정
+    pass
+
+def get_actual_position(ticker):
+    """거래소에서 실제 포지션 정보를 조회합니다.
+    Returns: {'long': 계약수량, 'short': 계약수량} 또는 None (오류 시)
+    """
     try:
-        exchange.set_margin_mode('cross', ticker, params={'settle': 'usdt'})
-        print(f"[{ticker}] 마진 모드를 CROSS로 설정했습니다.")
+        positions = exchange.fetch_positions([ticker])
+        result = {'long': 0, 'short': 0}
+        for pos in positions:
+            if pos['symbol'] == ticker:
+                contracts = abs(float(pos.get('contracts', 0) or 0))
+                if pos.get('side') == 'long':
+                    result['long'] = contracts
+                elif pos.get('side') == 'short':
+                    result['short'] = contracts
+        return result
     except Exception as e:
-        print("[WARNING] " + f"[{ticker}] 마진 모드 설정 오류 (이미 CROSS일 수 있음): {e}")
+        print(f"[WARNING] [{ticker}] 실제 포지션 조회 실패: {e}")
+        return None
+
+def record_profit(ticker, side, profit_usdt, count):
+    """수익을 기록합니다 (로그용)."""
+    print(f"[수익 기록] {ticker} {side}: {profit_usdt:.4f} USDT ({count}회차)")
 
 # ==============================================================================
 # 6. 메인 실행 로직 (최종 수정 로직 적용)
@@ -445,17 +469,37 @@ def run_bot():
                 entries_to_sell_indices = [i for i, e in enumerate(long_pos_data['entries']) if e['price'] < prev_candle['ma30']]
                 if entries_to_sell_indices: sell_reason = "30MA 상향 돌파 (부분 익절)"
             elif is_bb_upper_break:
-                if current_price > long_avg_price:
+                # <<< [수정] BB 상단 돌파 시, 수익성 판단 기준을 prev_candle['close']로 통일 >>>
+                if prev_candle['close'] > long_avg_price:
                     entries_to_sell_indices = list(range(len(long_pos_data['entries'])))
                     sell_reason = "BB 상단 돌파 (전체 익절)"
                 else: 
-                    entries_to_sell_indices = [i for i, e in enumerate(long_pos_data['entries']) if current_price > e['price']]
+                    entries_to_sell_indices = [i for i, e in enumerate(long_pos_data['entries']) if prev_candle['close'] > e['price']]
                     if entries_to_sell_indices: sell_reason = "BB 상단 돌파 (부분 익절)"
 
             if entries_to_sell_indices:
                 try:
+                    # 실제 포지션 확인
+                    actual_pos = get_actual_position(coin_ticker)
+                    if actual_pos is None or actual_pos['long'] == 0:
+                        print(f"[WARNING] [{coin_ticker}] 실제 롱 포지션이 없습니다. JSON 데이터를 초기화합니다.")
+                        long_pos_data['entries'] = []
+                        save_bot_data()
+                        continue
+                    
                     sold_entries = [long_pos_data['entries'][i] for i in entries_to_sell_indices]
                     total_contracts_to_sell = sum(e['quantity'] for e in sold_entries)
+                    
+                    # 실제 포지션보다 많이 청산하려고 하면 조정
+                    if total_contracts_to_sell > actual_pos['long']:
+                        print(f"[WARNING] [{coin_ticker}] 청산 수량({total_contracts_to_sell})이 실제 포지션({actual_pos['long']})보다 큽니다. 조정합니다.")
+                        total_contracts_to_sell = actual_pos['long']
+                    
+                    if total_contracts_to_sell <= 0:
+                        print(f"[WARNING] [{coin_ticker}] 청산할 수량이 없습니다.")
+                        long_pos_data['entries'] = []
+                        save_bot_data()
+                        continue
                     
                     exchange.create_market_sell_order(coin_ticker, total_contracts_to_sell, {'reduceOnly': True})
                     
@@ -526,38 +570,54 @@ def run_bot():
                     entries_to_close_s_indices = [i for i, e in enumerate(short_pos_data['entries']) if e['price'] > current_price]
                     if entries_to_close_s_indices:
                         try:
-                            closing_shorts = [short_pos_data['entries'][i] for i in entries_to_close_s_indices]
-                            total_s_contracts_to_buy = sum(e['quantity'] for e in closing_shorts)
-                            exchange.create_market_buy_order(coin_ticker, total_s_contracts_to_buy, {'reduceOnly': True})
+                            # 실제 숏 포지션 확인
+                            actual_pos = get_actual_position(coin_ticker)
+                            if actual_pos is None or actual_pos['short'] == 0:
+                                print(f"[WARNING] [{coin_ticker}] 실제 숏 포지션이 없습니다. JSON 데이터를 초기화합니다.")
+                                short_pos_data['entries'] = []
+                                save_bot_data()
+                            else:
+                                closing_shorts = [short_pos_data['entries'][i] for i in entries_to_close_s_indices]
+                                total_s_contracts_to_buy = sum(e['quantity'] for e in closing_shorts)
+                                
+                                # 실제 포지션보다 많이 청산하려고 하면 조정
+                                if total_s_contracts_to_buy > actual_pos['short']:
+                                    print(f"[WARNING] [{coin_ticker}] 숏 청산 수량({total_s_contracts_to_buy})이 실제 포지션({actual_pos['short']})보다 큽니다. 조정합니다.")
+                                    total_s_contracts_to_buy = actual_pos['short']
+                                
+                                if total_s_contracts_to_buy > 0:
+                                    exchange.create_market_buy_order(coin_ticker, total_s_contracts_to_buy, {'reduceOnly': True})
 
-                            # 수익 계산 및 기록
-                            profit_usdt = sum((e['price'] - current_price) * e['quantity'] for e in closing_shorts)
-                            record_profit(coin_ticker, 'SHORT', profit_usdt, len(closing_shorts))
+                                    # 수익 계산 및 기록
+                                    profit_usdt = sum((e['price'] - current_price) * e['quantity'] for e in closing_shorts)
+                                    record_profit(coin_ticker, 'SHORT', profit_usdt, len(closing_shorts))
                             
-                            # 남은 포지션 정보
-                            remaining_short = len(short_pos_data['entries']) - len(entries_to_close_s_indices)
-                            remaining_long = len(long_pos_data['entries'])
-                            remaining_short_avg = get_average_price([e for i, e in enumerate(short_pos_data['entries']) if i not in entries_to_close_s_indices])
-                            
-                            msg = f"✅ [숏 익절] {coin_ticker}\n"
-                            msg += f"• 사유: 롱 진입 전 숏 정리\n"
-                            msg += f"• 익절 회차: {len(closing_shorts)}개\n"
-                            msg += f"• 예상 수익: {profit_usdt:.2f} USDT\n"
-                            msg += f"• 남은 롱: {remaining_long}회차\n"
-                            msg += f"• 남은 숏: {remaining_short}회차"
-                            if remaining_short > 0:
-                                msg += f" (평단: {remaining_short_avg:.5f})"
-                            print(msg)
-                            telegram_alert.SendMessage(msg)
+                                    # 남은 포지션 정보
+                                    remaining_short = len(short_pos_data['entries']) - len(entries_to_close_s_indices)
+                                    remaining_long = len(long_pos_data['entries'])
+                                    remaining_short_avg = get_average_price([e for i, e in enumerate(short_pos_data['entries']) if i not in entries_to_close_s_indices])
+                                    
+                                    msg = f"✅ [숏 익절] {coin_ticker}\n"
+                                    msg += f"• 사유: 롱 진입 전 숏 정리\n"
+                                    msg += f"• 익절 회차: {len(closing_shorts)}개\n"
+                                    msg += f"• 예상 수익: {profit_usdt:.2f} USDT\n"
+                                    msg += f"• 남은 롱: {remaining_long}회차\n"
+                                    msg += f"• 남은 숏: {remaining_short}회차"
+                                    if remaining_short > 0:
+                                        msg += f" (평단: {remaining_short_avg:.5f})"
+                                    print(msg)
+                                    telegram_alert.SendMessage(msg)
 
-                            for i in sorted(entries_to_close_s_indices, reverse=True):
-                                del short_pos_data['entries'][i]
+                                    for i in sorted(entries_to_close_s_indices, reverse=True):
+                                        del short_pos_data['entries'][i]
+                                    save_bot_data()
                         except Exception as e:
                             print("[ERROR] " + f"[{coin_ticker}] 롱 진입 전 숏 포지션 정리 주문 실패: {e}")
 
                 try:
-                    # 레버리지 및 마진 모드 설정
-                    exchange.set_leverage(LEVERAGE, coin_ticker)
+                    # 레버리지 및 마진 모드 설정 (cross 모드 강제 적용)
+                    leverage_params = {'settle': 'usdt', 'marginMode': 'cross'}
+                    exchange.set_leverage(LEVERAGE, coin_ticker, params=leverage_params)
                     set_margin_mode_cross(coin_ticker)
                     
                     base_amount = cash * BASE_BUY_RATE
@@ -631,8 +691,9 @@ def run_bot():
 
             if should_short and not short_pos_data.get('sell_blocked_by_macd', False):
                 try:
-                    # 레버리지 및 마진 모드 설정
-                    exchange.set_leverage(LEVERAGE, coin_ticker)
+                    # 레버리지 및 마진 모드 설정 (cross 모드 강제 적용)
+                    leverage_params = {'settle': 'usdt', 'marginMode': 'cross'}
+                    exchange.set_leverage(LEVERAGE, coin_ticker, params=leverage_params)
                     set_margin_mode_cross(coin_ticker)
                     
                     sell_collateral = cash * BASE_BUY_RATE
