@@ -128,9 +128,6 @@ def execute_trading_logic(account_info):
     day_n = t.tm_mday
     day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
-    if hour_n == 0 and min_n <= 2:
-        start_msg = f"{first_String} 시작"
-        telegram_alert.SendMessage(start_msg)
 
     # 모든 코인의 거래 결과를 요약할 딕셔너리
     trading_summary = {}
@@ -436,11 +433,6 @@ def execute_trading_logic(account_info):
                         print(f"[{account_name}] 매수 주문 실패 for {coin_ticker}: {e}")
             else:
                 if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                    if account_name == "Main": # 조건 불만족 메시지는 Main 계정에서만 발송
-                        warn_msg = f"{first_String} {coin_ticker} : 조건 만족하지 않아 현금 보유 합니다!"
-                        print(warn_msg)
-                        telegram_alert.SendMessage(warn_msg)
-
                     # 날짜 체크는 모든 계정에서 수행
                     BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                     with open(botdata_file_path, 'w') as f:
@@ -453,9 +445,6 @@ def execute_trading_logic(account_info):
             summary_msg += f"{ticker}: {status}\n"
         telegram_alert.SendMessage(summary_msg)
 
-    if hour_n == 0 and min_n <= 2:
-        end_msg = f"{first_String} 종료"
-        telegram_alert.SendMessage(end_msg)
 
 # --- [추가] 메인 실행부 ---
 if __name__ == '__main__':

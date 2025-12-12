@@ -180,9 +180,6 @@ def execute_trading_logic(account_info):
     day_n = t.tm_mday
     day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
-    if hour_n == 0 and min_n <= 2:
-        start_msg = f"{first_String} 시작"
-        telegram_alert.SendMessage(start_msg)
 
     cycle_investment_base = 0
     all_positions = []
@@ -523,11 +520,6 @@ def execute_trading_logic(account_info):
                         telegram_alert.SendMessage(f"[{account_name}] {coin_ticker} 매수 실패: {e}")
             else:
                 if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                    if "Main" in account_name:
-                        warn_msg = f"{first_String} {coin_ticker} : 조건 만족하지 않아 현금 보유 합니다!"
-                        print(warn_msg)
-                        telegram_alert.SendMessage(warn_msg)
-
                     BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n
                     with open(botdata_file_path, 'w') as f:
                         json.dump(BotDataDict, f, indent=4)
@@ -539,9 +531,7 @@ def execute_trading_logic(account_info):
             summary_msg += f"{ticker}: {status}\n"
         telegram_alert.SendMessage(summary_msg)
     
-    if hour_n == 0 and min_n <= 2:
-        end_msg = f"{first_String} 종료"
-        telegram_alert.SendMessage(end_msg)
+
 
 # --- 메인 실행부 ---
 if __name__ == '__main__':

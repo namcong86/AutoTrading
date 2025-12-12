@@ -144,10 +144,6 @@ min_n = t.tm_min
 day_n = t.tm_mday
 day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 
-if hour_n == 0 and min_n <= 2:
-    start_msg = f"{first_String} 시작"
-    telegram_alert.SendMessage(start_msg)
-    print(start_msg)
 
 
 # 투자 코인 리스트 (Bitget과 동일 10종) - Gate.io 심볼 형식에 맞춰 기입
@@ -622,10 +618,6 @@ for coin_data in InvestCoinList:
 
         else:
             if hour_n == 0 and min_n <= 2 and BotDataDict.get(coin_ticker + '_DATE_CHECK') != day_n:
-                warn_msg = f"{first_String} 조건 만족하지 않아 현금 보유 합니다({coin_ticker})"
-                print(warn_msg)
-                telegram_alert.SendMessage(warn_msg)
-                
                 BotDataDict[coin_ticker + '_DATE_CHECK'] = day_n 
                 with open(botdata_file_path, 'w') as f:
                     json.dump(BotDataDict, f)
@@ -638,7 +630,3 @@ if trading_summary:
         summary_msg += f"{ticker}: {status}\n"
     telegram_alert.SendMessage(summary_msg)
 
-if hour_n == 0 and min_n <= 2:
-    end_msg = f"{first_String} 종료 "
-    telegram_alert.SendMessage(end_msg)
-    print(end_msg)
