@@ -9,5 +9,7 @@ my_key.py
 ende_key.py
 my_Stock_key.py
 ende_Stock_key.py
+암호화_도구.py
+telegram_alert.py
 *.pyc
 __pycache__/
