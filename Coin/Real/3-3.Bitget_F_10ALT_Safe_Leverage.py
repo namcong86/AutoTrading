@@ -140,7 +140,7 @@ def execute_trading_logic(account_info):
     passphrase = account_info['passphrase']
     set_leverage = account_info['leverage']
 
-    first_String = f"[3.Bitget {account_name}] {set_leverage}배 "
+    first_String = f"[3-3.Bitget {account_name}] {set_leverage}배 "
 
     # 비트겟 객체 생성
     try:
@@ -161,9 +161,9 @@ def execute_trading_logic(account_info):
 
     pcServerGb = socket.gethostname()
     if pcServerGb == "AutoBotCong":
-        botdata_file_path = f"/var/AutoBot/json/3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json"
+        botdata_file_path = f"/var/AutoBot/json/3-3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json"
     else:
-        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json')
+        botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', f'3-3.Bitget_F_DOGE_PEPE_Leverage_Data_{account_name}.json')
 
     try:
         with open(botdata_file_path, 'r') as f:
@@ -534,7 +534,7 @@ def execute_trading_logic(account_info):
     
     # ===== 거래 결과 요약 알림 =====
     if trading_summary:
-        summary_msg = f"📊Bitget_[{account_name}] 거래 조건 검사 결과\n" + "="*35 + "\n"
+        summary_msg = f"📊 3-3.Bitget_[{account_name}] 거래 조건 검사 결과\n" + "="*35 + "\n"
         for ticker, status in trading_summary.items():
             summary_msg += f"{ticker}: {status}\n"
         telegram_alert.SendMessage(summary_msg)

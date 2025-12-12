@@ -96,9 +96,9 @@ gateio_api = GateioFuturesAPI(GateIO_AccessKey, GateIO_SecretKey)
 
 pcServerGb = socket.gethostname()
 if pcServerGb == "AutoBotCong":
-    botdata_file_path = "/var/AutoBot/json/3.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json"
+    botdata_file_path = "/var/AutoBot/json/3-2.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json"
 else:
-    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json')
+    botdata_file_path = os.path.join(os.path.dirname(__file__), '..', 'json', '3-2.GateIO_F_DOGE_PEPE_Leverage_Data_Sub1.json')
 
 try:
     with open(botdata_file_path, 'r') as f:
@@ -124,7 +124,7 @@ InvestRate = 1
 fee = 0.001
 
 #알림 첫문구
-first_String = f"3.GateIO Sub1 DOGE+PEPE {set_leverage}배 "
+first_String = f"3-2.GateIO Sub1 DOGE+PEPE {set_leverage}배 "
 
 t = time.gmtime()
 hour_n = t.tm_hour
@@ -621,7 +621,7 @@ for coin_data in InvestCoinList:
 # --- 루프 종료 후 작업 ---
 # ===== 거래 결과 요약 알림 =====
 if trading_summary:
-    summary_msg = f"📊 Gateio Sub1 거래 조건 검사 결과\n" + "="*35 + "\n"
+    summary_msg = f"📊 3-2.Gateio Sub1 거래 조건 검사 결과\n" + "="*35 + "\n"
     for ticker, status in trading_summary.items():
         summary_msg += f"{ticker}: {status}\n"
     telegram_alert.SendMessage(summary_msg)
