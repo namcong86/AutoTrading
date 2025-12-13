@@ -117,7 +117,10 @@ print("--------------------------------------------")
 ##########################################################
 
 
-
+# 포트폴리오 종합 현황 리포트용 리스트
+portfolio_summary = []
+total_eval_money = 0  # 전체 평가금액
+total_revenue_money = 0  # 전체 수익금
 
 for stock_info in InvestStockList:
     
@@ -171,10 +174,27 @@ for stock_info in InvestStockList:
     print("---stock_code---", stock_code , " len ",len(df))
     #pprint.pprint(df)
     
+    # 현재 추세 상태 확인 (보유 여부와 관계없이)
+    is_uptrend = df[str(small_ma) + 'ma'].iloc[-2] > df[str(big_ma) + 'ma'].iloc[-2]
+    trend_status = "📈 상승추세" if is_uptrend else "📉 하락추세"
+    
     #보유중이 아니다
     if stock_amt == 0:
         
         msg = stock_name + "("+stock_code + ") 현재 매수하지 않고 현금 보유 상태! 목표할당비중:" + str(stock_target_rate*100) + "%"
+        
+        # 종합 리포트용 정보 추가 (미보유)
+        portfolio_summary.append({
+            'code': stock_code,
+            'name': stock_name,
+            'amt': 0,
+            'avg_price': 0,
+            'eval_money': 0,
+            'revenue_rate': 0,
+            'revenue_money': 0,
+            'trend': trend_status,
+            'action': '현금 보유'
+        })
         print(msg) 
         
         if df[str(small_ma) + 'ma'].iloc[-2] > df[str(big_ma) + 'ma'].iloc[-2] and df[str(small_ma) + 'ma'].iloc[-3] < df[str(small_ma) + 'ma'].iloc[-2]:
@@ -195,11 +215,41 @@ for stock_info in InvestStockList:
                 BuyMoney = TotalMoney * stock_target_rate
 
                 CurrentPrice = KisUS.GetCurrentPrice(stock_code)
+                
+                # 현재가 조회 실패 체크
+                if CurrentPrice is None or CurrentPrice <= 0:
+                    err_msg = f"❌ [{stock_code}] 현재가 조회 실패! CurrentPrice: {CurrentPrice}"
+                    print(err_msg)
+                    telegram_alert.SendMessage(err_msg)
+                    continue
+                
                 #매수할 수량을 계산한다!
                 BuyAmt = int(BuyMoney / CurrentPrice)
                 
+                # 매수 수량이 0 이하면 주문하지 않음 (APBK1153 오류 방지)
+                if BuyAmt <= 0:
+                    err_msg = f"❌ [{stock_code}] 매수 수량 부족! BuyMoney: ${BuyMoney:.2f}, CurrentPrice: ${CurrentPrice:.2f}, BuyAmt: {BuyAmt}"
+                    print(err_msg)
+                    telegram_alert.SendMessage(err_msg)
+                    continue
+                
                 CurrentPrice *= 1.01 #현재가의 1%위의 가격으로 지정가 매수.. (그럼 1% 위 가격보다 작은 가격의 호가들은 모두 체결되기에 제한있는 시장가 매수 효과)
-                pprint.pprint(KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice))
+                order_result = KisUS.MakeBuyLimitOrder(stock_code,BuyAmt,CurrentPrice)
+                pprint.pprint(order_result)
+                
+                # 주문 API 오류 체크 및 알림
+                if order_result and 'msg_cd' in order_result and order_result.get('rt_cd') != '0':
+                    err_msg = f"""❌ ━━━━━━━━━━━━━━━━━━━━
+📌 매수 주문 오류
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_name} ({stock_code})
+📊 주문수량: {BuyAmt}주
+💵 주문가격: ${CurrentPrice:.2f}
+⚠️ 오류코드: {order_result.get('msg_cd')}
+📝 오류내용: {order_result.get('msg1')}
+━━━━━━━━━━━━━━━━━━━━"""
+                    print(err_msg)
+                    telegram_alert.SendMessage(err_msg)
                 
                 
                 
@@ -210,6 +260,25 @@ for stock_info in InvestStockList:
         
         msg = stock_name + "("+stock_code + ") 현재 매수하여 보유 상태! 목표할당비중:" + str(stock_target_rate*100) + "%"
         print(msg) 
+        
+        # 현재 추세 상태 확인
+        is_uptrend = df[str(small_ma) + 'ma'].iloc[-2] > df[str(big_ma) + 'ma'].iloc[-2]
+        trend_status = "📈 상승추세" if is_uptrend else "📉 하락추세"
+        
+        # 종합 리포트용 정보 추가
+        portfolio_summary.append({
+            'code': stock_code,
+            'name': stock_name,
+            'amt': stock_amt,
+            'avg_price': stock_avg_price,
+            'eval_money': stock_eval_totalmoney,
+            'revenue_rate': stock_revenue_rate,
+            'revenue_money': stock_revenue_money,
+            'trend': trend_status,
+            'action': '보유 유지'
+        })
+        total_eval_money += stock_eval_totalmoney
+        total_revenue_money += stock_revenue_money
         
         if df[str(small_ma) + 'ma'].iloc[-2] < df[str(big_ma) + 'ma'].iloc[-2] and df[str(small_ma) + 'ma'].iloc[-3] > df[str(small_ma) + 'ma'].iloc[-2]:
             print("보유 수량 만큼 매도!!")
@@ -229,5 +298,71 @@ for stock_info in InvestStockList:
 
                 CurrentPrice = KisUS.GetCurrentPrice(stock_code)
                 CurrentPrice *= 0.99 #현재가의 1%아래의 가격으로 지정가 매도.. (그럼 1%아래 가격보다 큰 가격의 호가들은 모두 체결되기에 제한있는 시장가 매도 효과)
-                pprint.pprint(KisUS.MakeSellLimitOrder(stock_code,abs(stock_amt),CurrentPrice))
+                order_result = KisUS.MakeSellLimitOrder(stock_code,abs(stock_amt),CurrentPrice)
+                pprint.pprint(order_result)
                 
+                # 주문 API 오류 체크 및 알림
+                if order_result and 'msg_cd' in order_result and order_result.get('rt_cd') != '0':
+                    err_msg = f"""❌ ━━━━━━━━━━━━━━━━━━━━
+📌 매도 주문 오류
+━━━━━━━━━━━━━━━━━━━━
+🎯 종목: {stock_name} ({stock_code})
+📊 주문수량: {abs(stock_amt)}주
+💵 주문가격: ${CurrentPrice:.2f}
+⚠️ 오류코드: {order_result.get('msg_cd')}
+📝 오류내용: {order_result.get('msg1')}
+━━━━━━━━━━━━━━━━━━━━"""
+                    print(err_msg)
+                    telegram_alert.SendMessage(err_msg)
+                
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📊 포트폴리오 종합 현황 리포트 발송
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+import datetime
+now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+# 종목별 상세 현황 문자열 생성
+stock_details = ""
+for item in portfolio_summary:
+    if item['amt'] > 0:
+        # 보유 중인 종목
+        profit_emoji = "🟢" if item['revenue_rate'] >= 0 else "🔴"
+        stock_details += f"""
+┌ {item['code']} ({item['name']})
+│ 보유: {item['amt']}주 | 평단: ${item['avg_price']:.2f}
+│ 평가: ${item['eval_money']:.2f} | {profit_emoji} {item['revenue_rate']:.2f}% (${item['revenue_money']:.2f})
+│ {item['trend']} | {item['action']}
+└────────────────────"""
+    else:
+        # 미보유 종목
+        stock_details += f"""
+┌ {item['code']}
+│ 미보유 (현금 보유 중)
+│ {item['trend']}
+└────────────────────"""
+
+# 전체 수익률 계산
+if total_eval_money > 0:
+    total_revenue_rate = (total_revenue_money / (total_eval_money - total_revenue_money)) * 100
+else:
+    total_revenue_rate = 0
+
+profit_emoji_total = "🟢" if total_revenue_money >= 0 else "🔴"
+
+summary_msg = f"""📊 ━━━━━━━━━━━━━━━━━━━━
+📌 {PortfolioName} 현황
+🕐 {now}
+━━━━━━━━━━━━━━━━━━━━
+
+💰 할당금액: ${TotalMoney:,.2f}
+📈 총평가금: ${total_eval_money:,.2f}
+{profit_emoji_total} 총수익금: ${total_revenue_money:,.2f} ({total_revenue_rate:.2f}%)
+
+━━━━ 종목별 현황 ━━━━{stock_details}
+
+📍 마켓상태: {'🟢 개장' if IsMarketOpen else '🔴 휴장'}
+━━━━━━━━━━━━━━━━━━━━"""
+
+print(summary_msg)
+telegram_alert.SendMessage(summary_msg)
