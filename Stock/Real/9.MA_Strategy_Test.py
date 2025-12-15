@@ -85,9 +85,9 @@ CutCount = 0     #최근 데이터 삭제! 200으로 세팅하면 200개의 최�
 InvestStockList = list()
 
 #'''
-InvestStockList.append({"stock_code":"QQQ", "small_ma":3 , "big_ma":132, "invest_rate":0.5}) 
+InvestStockList.append({"stock_code":"QQQ", "small_ma":3, "big_ma":132, "invest_rate":0.5}) 
 InvestStockList.append({"stock_code":"TLT", "small_ma":13 , "big_ma":53, "invest_rate":0.25}) 
-InvestStockList.append({"stock_code":"GLD", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
+InvestStockList.append({"stock_code":"GLDM", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
 #'''
 
 
@@ -374,7 +374,7 @@ if len(TotalMoneyList) > 0:
 
     
     #전략 성과 구하기
-    result_df = pd.DataFrame({ "Total_Money" : TotalMoneyList}, index = df.index)
+    result_df = pd.DataFrame({ "Total_Money" : TotalMoneyList}, index = combined_df.index.unique())
 
     result_df['Ror'] = result_df['Total_Money'].pct_change() + 1
     result_df['Cum_Ror'] = result_df['Ror'].cumprod()
