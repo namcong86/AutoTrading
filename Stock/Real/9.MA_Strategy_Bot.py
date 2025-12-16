@@ -54,6 +54,19 @@ import KIS_Common as Common
 import KIS_API_Helper_US as KisUS
 
 import pprint
+from datetime import datetime
+import builtins
+
+# 원본 print 함수 저장 및 타임스탬프 포함 print 함수 정의
+_original_print = builtins.print
+
+def timestamped_print(*args, **kwargs):
+    """타임스탬프가 포함된 로그 출력 함수"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    _original_print(f"[{timestamp}]", *args, **kwargs)
+
+# 전역 print 함수를 타임스탬프 버전으로 교체
+builtins.print = timestamped_print
 
 import telegram_alert
 
@@ -67,9 +80,9 @@ PortfolioName = "이동평균자산배분전략_US"
 
 InvestStockList = list()
 
-InvestStockList.append({"stock_code":"QQQ", "small_ma":3 , "big_ma":132, "invest_rate":0.5}) 
+InvestStockList.append({"stock_code":"QLD", "small_ma":3 , "big_ma":132, "invest_rate":0.5}) 
 InvestStockList.append({"stock_code":"TLT", "small_ma":13 , "big_ma":53, "invest_rate":0.25}) 
-InvestStockList.append({"stock_code":"GLD", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
+InvestStockList.append({"stock_code":"GLDM", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
 
 
 #마켓이 열렸는지 여부~!

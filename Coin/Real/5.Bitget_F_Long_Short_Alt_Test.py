@@ -53,9 +53,15 @@ INITIAL_CAPITAL = 100000      # 초기 자본금 (USDT)
 LEVERAGE = 1.2                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
-DAILY_MA = 115                # 일봉 이동평균 기간 (방향 필터용)
+DAILY_MA = 115                # 일봉 장기 이동평균 기간 (방향 필터용)
+DAILY_MA_SHORT = 20           # 일봉 단기 이동평균 기간 (듀얼 필터용)
 TIMEFRAME = '1h'              # 캔들 타임프레임 ('1h' 또는 '15m')
 FEE_RATE = 0.0006             # 거래 수수료 (0.06%)
+
+# 듀얼 이평선 필터 설정 (20일선 + 115일선)
+# True: 직전일 종가가 두 선 위 → 롱만, 두 선 아래 → 숏만, 사이 → 둘 다 가능
+# False: 기존 115일선만 사용
+DAILY_DUAL_MA_FILTER_ENABLED = True
 
 # 부분 익절 설정
 TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적용, False: 미적용)
@@ -71,18 +77,19 @@ TAKE_PROFIT_LEVELS = [
 START_DATE = '2021-07-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')  # 오늘 날짜까지
 
-# 반기별 출금 설정 (1월, 7월 1일에 6개월 수익의 일정 비율 출금)
-SEMI_ANNUAL_WITHDRAWAL_ENABLED = True   # 반기별 출금 활성화 여부
-SEMI_ANNUAL_WITHDRAWAL_RATE = 0.20       # 6개월 수익의 출금 비율 (20%)
-SEMI_ANNUAL_WITHDRAWAL_MONTHS = [1, 7]  # 출금 실행 월 (1일 기준)
+# 연간 출금 설정 (1월 1일에 전년도 수익의 일정 비율 출금)
+ANNUAL_WITHDRAWAL_ENABLED = True        # 연간 출금 활성화 여부
+ANNUAL_WITHDRAWAL_RATE = 0.20           # 1년 수익의 출금 비율 (20%)
+ANNUAL_WITHDRAWAL_MONTHS = [1]          # 출금 실행 월 (1월 1일만)
 
 # 코인 리스트 (JSON 파일 기준) - 자금은 사이클 시작 시 1/N 분배
 COIN_LIST = [
     'ADA/USDT:USDT',
     'DOGE/USDT:USDT',
     'SOL/USDT:USDT',
-    'BNB/USDT:USDT',
-
+    'AVAX/USDT:USDT',
+    # 'BNB/USDT:USDT',
+    # 'SHIB/USDT:USDT',
 ]
 
 # JSON 데이터 경로
@@ -353,16 +360,16 @@ class CycleManager:
             'active_positions': len(self.positions)
         })
     
-    def check_semi_annual_withdrawal(self, timestamp, current_prices, withdrawal_rate, withdrawal_months):
-        """반기별 출금 체크 및 실행 (1월, 7월 1일)
+    def check_annual_withdrawal(self, timestamp, current_prices, withdrawal_rate, withdrawal_months):
+        """연간 출금 체크 및 실행 (1월 1일)
         
         - 포지션은 그대로 유지
-        - 6개월간 수익이 있는 경우에만 수익의 일정 비율(기본 20%) 출금
+        - 1년간 수익이 있는 경우에만 수익의 일정 비율(기본 20%) 출금
         - 사용 가능한 잔액(available_balance)에서만 출금
         """
         current_date = timestamp.date() if hasattr(timestamp, 'date') else timestamp
         
-        # 출금일인지 확인 (1일이고, 출금 월인 경우)
+        # 출금일인지 확인 (1일이고, 출금 월인 경우 - 1월만)
         if current_date.day != 1 or current_date.month not in withdrawal_months:
             return False
         
@@ -373,16 +380,13 @@ class CycleManager:
         # 현재 총 자산 계산
         current_equity = self.get_total_equity(current_prices)
         
-        # 6개월간 수익 계산
-        half_year_profit = current_equity - self.last_quarter_balance
+        # 1년간 수익 계산
+        year_profit = current_equity - self.last_quarter_balance
         
         # 수익이 있는 경우에만 출금
-        if half_year_profit > 0:
-            # 출금액 = 수익의 일정 비율
-            withdrawal_amount = half_year_profit * withdrawal_rate
-            
-            # 사용 가능한 잔액 범위 내에서만 출금
-            actual_withdrawal = min(withdrawal_amount, self.available_balance * 0.9)  # 최대 90%까지만
+        if year_profit > 0:
+            # 출금액 = 수익의 일정 비율 (제한 없이 전액 출금)
+            actual_withdrawal = year_profit * withdrawal_rate
             
             if actual_withdrawal > 0:
                 self.available_balance -= actual_withdrawal
@@ -393,9 +397,9 @@ class CycleManager:
                 
                 self.withdrawal_history.append({
                     'date': str(current_date),
-                    'quarter_start_balance': self.last_quarter_balance,
+                    'year_start_balance': self.last_quarter_balance,
                     'current_equity': current_equity,
-                    'quarter_profit': half_year_profit,
+                    'year_profit': year_profit,
                     'withdrawal_amount': actual_withdrawal,
                     'remaining_equity': new_equity,
                     'remaining_balance': self.available_balance,
@@ -403,19 +407,19 @@ class CycleManager:
                 })
                 
                 print(f"\n{'='*70}")
-                print(f"[출금] 반기별 출금 실행 - {current_date}")
-                print(f"   이전 반기말 잔액: ${self.last_quarter_balance:,.2f}")
+                print(f"[출금] 연간 출금 실행 - {current_date}")
+                print(f"   이전 연말 잔액: ${self.last_quarter_balance:,.2f}")
                 print(f"   현재 총 자산: ${current_equity:,.2f}")
-                print(f"   6개월 수익: ${half_year_profit:+,.2f}")
+                print(f"   1년 수익: ${year_profit:+,.2f}")
                 print(f"   출금액 ({withdrawal_rate*100:.0f}%): ${actual_withdrawal:,.2f}")
                 print(f"   출금 후 총 자산: ${new_equity:,.2f}")
                 print(f"   (포지션: ${new_equity - self.available_balance:,.2f} + 현금: ${self.available_balance:,.2f})")
                 print(f"   누적 출금액: ${self.total_withdrawn:,.2f}")
                 print(f"{'='*70}\n")
         else:
-            print(f"\n[출금] {current_date}: 수익 없음 (${half_year_profit:+,.2f}), 출금 스킵\n")
+            print(f"\n[출금] {current_date}: 수익 없음 (${year_profit:+,.2f}), 출금 스킵\n")
         
-        # 반기 기준점 업데이트
+        # 연간 기준점 업데이트
         self.last_quarter_balance = self.get_total_equity(current_prices)
         self.last_withdrawal_date = current_date
         
@@ -537,8 +541,12 @@ class IntegratedBacktest:
             df_daily = self.fetch_latest_data(df_daily, symbol, daily_json_path, timeframe='1d')
             
             df_daily['daily_ma'] = df_daily['close'].rolling(window=self.daily_ma).mean()
+            df_daily['daily_ma_short'] = df_daily['close'].rolling(window=DAILY_MA_SHORT).mean()
             self.coin_daily[symbol] = df_daily
-            print(f"  {symbol}: {len(df)}개 캔들, 일봉 {self.daily_ma}MA 필터 적용")
+            if DAILY_DUAL_MA_FILTER_ENABLED:
+                print(f"  {symbol}: {len(df)}개 캔들, 일봉 {DAILY_MA_SHORT}/{self.daily_ma}MA 듀얼 필터 적용")
+            else:
+                print(f"  {symbol}: {len(df)}개 캔들, 일봉 {self.daily_ma}MA 필터 적용")
         except FileNotFoundError:
             self.coin_daily[symbol] = None
             print(f"  {symbol}: {len(df)}개 캔들, 일봉 데이터 없음 (양방향 허용)")
@@ -654,21 +662,56 @@ class IntegratedBacktest:
             print(f"    -> JSON 저장 실패: {e}")
     
     def get_daily_trend(self, symbol, timestamp):
-        """일봉 기준 추세 확인"""
+        """일봉 기준 추세 확인
+        
+        DAILY_DUAL_MA_FILTER_ENABLED = True인 경우:
+        - 직전일 종가 > 20MA AND 115MA → 'long' (롱만 가능)
+        - 직전일 종가 < 20MA AND 115MA → 'short' (숏만 가능)
+        - 직전일 종가가 두 선 사이 → 'both' (롱숏 모두 가능)
+        
+        DAILY_DUAL_MA_FILTER_ENABLED = False인 경우:
+        - 기존 로직: 115MA 위면 'long', 아래면 'short'
+        """
         if symbol not in self.coin_daily or self.coin_daily[symbol] is None:
             return 'both'
         
         df_daily = self.coin_daily[symbol]
         date_only = timestamp.date()
-        daily_data = df_daily[df_daily.index.date <= date_only]
+        daily_data = df_daily[df_daily.index.date < date_only]  # 직전일까지만 (당일 미포함)
         
-        if daily_data.empty or pd.isna(daily_data['daily_ma'].iloc[-1]):
+        if daily_data.empty:
             return 'both'
         
         last_close = daily_data['close'].iloc[-1]
-        last_ma = daily_data['daily_ma'].iloc[-1]
+        last_ma_115 = daily_data['daily_ma'].iloc[-1]
         
-        return 'long' if last_close > last_ma else 'short'
+        if pd.isna(last_ma_115):
+            return 'both'
+        
+        # 듀얼 필터 모드
+        if DAILY_DUAL_MA_FILTER_ENABLED:
+            last_ma_20 = daily_data['daily_ma_short'].iloc[-1]
+            
+            if pd.isna(last_ma_20):
+                # 20MA 없으면 기존 로직 사용
+                return 'long' if last_close > last_ma_115 else 'short'
+            
+            # 두 선 중 위/아래 값 구분
+            upper_ma = max(last_ma_20, last_ma_115)
+            lower_ma = min(last_ma_20, last_ma_115)
+            
+            if last_close > upper_ma:
+                # 종가가 두 선 모두 위에 → 롱만
+                return 'long'
+            elif last_close < lower_ma:
+                # 종가가 두 선 모두 아래 → 숏만
+                return 'short'
+            else:
+                # 종가가 두 선 사이 → 롱숏 모두 가능
+                return 'both'
+        else:
+            # 기존 로직: 115MA만 사용
+            return 'long' if last_close > last_ma_115 else 'short'
     
     def get_current_prices(self, timestamp):
         """특정 시점의 모든 코인 현재가 조회"""
@@ -761,12 +804,12 @@ class IntegratedBacktest:
                 if current_pos is None and daily_trend in ['short', 'both']:
                     self.cycle_mgr.open_position(symbol, 'short', entry_price, timestamp, self.leverage, current_prices)
             
-            # 반기별 출금 체크 (옵션 활성화 시)
-            if SEMI_ANNUAL_WITHDRAWAL_ENABLED:
-                self.cycle_mgr.check_semi_annual_withdrawal(
+            # 연간 출금 체크 (옵션 활성화 시 - 1월 1일)
+            if ANNUAL_WITHDRAWAL_ENABLED:
+                self.cycle_mgr.check_annual_withdrawal(
                     timestamp, current_prices, 
-                    SEMI_ANNUAL_WITHDRAWAL_RATE, 
-                    SEMI_ANNUAL_WITHDRAWAL_MONTHS
+                    ANNUAL_WITHDRAWAL_RATE, 
+                    ANNUAL_WITHDRAWAL_MONTHS
                 )
             
             # 일별 잔액 기록
@@ -936,8 +979,8 @@ def analyze_results(results):
     print(f"초기 자본금: ${initial_capital:,.2f} USDT")
     print(f"최종 잔액: ${results['final_balance']:,.2f} USDT")
     
-    # 반기별 출금 정보 표시
-    if SEMI_ANNUAL_WITHDRAWAL_ENABLED and results.get('total_withdrawn', 0) > 0:
+    # 연간 출금 정보 표시
+    if ANNUAL_WITHDRAWAL_ENABLED and results.get('total_withdrawn', 0) > 0:
         total_withdrawn = results['total_withdrawn']
         total_equity = results.get('total_equity', results['final_balance'])
         print(f"누적 출금액: ${total_withdrawn:,.2f} USDT")
@@ -953,12 +996,13 @@ def analyze_results(results):
     print(f"승률: {win_rate:.2f}% (승: {win_trades}회, 패: {lose_trades}회)")
     
     # 출금 내역 표시
-    if SEMI_ANNUAL_WITHDRAWAL_ENABLED and results.get('withdrawal_history'):
+    if ANNUAL_WITHDRAWAL_ENABLED and results.get('withdrawal_history'):
         print("\n" + "=" * 70)
-        print("[출금] 반기별 출금 내역")
+        print("[출금] 연간 출금 내역")
         print("=" * 70)
         for w in results['withdrawal_history']:
-            print(f"{w['date']}: 출금 ${w['withdrawal_amount']:,.2f} (6개월 수익: ${w['quarter_profit']:+,.2f})")
+            year_profit = w.get('year_profit', w.get('quarter_profit', 0))  # 호환성 유지
+            print(f"{w['date']}: 출금 ${w['withdrawal_amount']:,.2f} (1년 수익: ${year_profit:+,.2f})")
         print(f"총 출금액: ${results['total_withdrawn']:,.2f}")
     
     print("\n" + "=" * 70)

@@ -35,6 +35,18 @@ import time
 import json
 import pprint
 from datetime import datetime, timedelta
+import builtins
+
+# 원본 print 함수 저장 및 타임스탬프 포함 print 함수 정의
+_original_print = builtins.print
+
+def timestamped_print(*args, **kwargs):
+    """타임스탬프가 포함된 로그 출력 함수"""
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    _original_print(f"[{timestamp}]", *args, **kwargs)
+
+# 전역 print 함수를 타임스탬프 버전으로 교체
+builtins.print = timestamped_print
 
 import telegram_alert
 

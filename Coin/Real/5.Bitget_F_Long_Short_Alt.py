@@ -65,7 +65,7 @@ INVEST_COIN_LIST = [
     {'ticker': 'ADA/USDT:USDT', 'rate': 0.25},
     {'ticker': 'DOGE/USDT:USDT', 'rate': 0.25},
     {'ticker': 'SOL/USDT:USDT', 'rate': 0.25},
-    {'ticker': 'BNB/USDT:USDT', 'rate': 0.25},
+    {'ticker': 'AVAX/USDT:USDT', 'rate': 0.25},
 ]
 
 # 전략 설정
@@ -370,16 +370,32 @@ def execute_trading_logic(account_info):
                         actual_position = 1
                     elif pos['side'] == 'short':
                         actual_position = -1
-            # 진입가 업데이트
-            if actual_entry_price > 0 and entry_price == 0:
-                BotDataDict[coin_ticker + '_ENTRY_PRICE'] = actual_entry_price
-                entry_price = actual_entry_price
+            
+            # 디버그: 실제 포지션 상태 출력
+            print(f"[{account_name}] {coin_ticker} 포지션 조회: actual_position={actual_position}, actual_size={actual_size}, actual_entry_price={actual_entry_price}")
+            
+            # 실제 포지션이 없으면 JSON 데이터 동기화 (entry_price 포함)
+            if actual_position == 0 or actual_size == 0:
+                if current_position != 0 or entry_price != 0:
+                    print(f"[{account_name}] {coin_ticker} 포지션 없음 감지 - JSON 데이터 동기화")
+                    BotDataDict[coin_ticker + '_POSITION'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_COUNT'] = 0
+                    BotDataDict[coin_ticker + '_POSITION_SIZE'] = 0
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = 0
+                    BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []
+                    entry_price = 0
+            else:
+                # 진입가 업데이트 (실제 진입가로 덮어쓰기)
+                if actual_entry_price > 0:
+                    BotDataDict[coin_ticker + '_ENTRY_PRICE'] = actual_entry_price
+                    entry_price = actual_entry_price
         except Exception as e:
             print(f"[{account_name}] {coin_ticker} 포지션 조회 오류: {e}")
             actual_position = current_position
             actual_size = BotDataDict.get(coin_ticker + '_POSITION_SIZE', 0)
 
         # === 익절 체크 (전 캔들 종가 기준) - TAKE_PROFIT_ENABLED 옵션 확인 ===
+        # 실제 포지션이 있는 경우에만 익절 체크 (actual_size가 0이면 스킵)
         if TAKE_PROFIT_ENABLED and actual_position != 0 and actual_size > 0 and entry_price > 0:
             prev_close = df['close'].iloc[-2]  # 전 캔들 종가
             
@@ -398,21 +414,57 @@ def execute_trading_logic(account_info):
                 if tp_profit in tp_triggered:
                     continue
                 
+                # 남은 물량이 없으면 스킵
+                if actual_size <= 0:
+                    print(f"[{account_name}] {coin_ticker} 익절 스킵: 남은 물량 없음")
+                    break
+                
                 # 수익률 도달 시 익절 실행
                 if profit_pct >= tp_profit:
                     sell_amount = actual_size * (tp_sell_pct / 100)
                     if sell_amount > 0:
                         try:
-                            if actual_position == 1:  # 롱 익절 (Hedge Mode: holdSide='long', tradeSide='close')
-                                bitgetX.create_order(
-                                    coin_ticker, 'market', 'sell', sell_amount,
-                                    None, {'holdSide': 'long', 'tradeSide': 'close'}
-                                )
-                            else:  # 숏 익절 (Hedge Mode: holdSide='short', tradeSide='close')
-                                bitgetX.create_order(
-                                    coin_ticker, 'market', 'buy', sell_amount,
-                                    None, {'holdSide': 'short', 'tradeSide': 'close'}
-                                )
+                            # 익절 전 실제 포지션 재확인
+                            positions_check = bitgetX.fetch_positions([coin_ticker])
+                            real_size = 0
+                            real_position = 0
+                            for pos in positions_check:
+                                if pos['symbol'] == coin_ticker and float(pos.get('contracts', 0)) != 0:
+                                    real_size = abs(float(pos['contracts']))
+                                    if pos['side'] == 'long':
+                                        real_position = 1
+                                    elif pos['side'] == 'short':
+                                        real_position = -1
+                            
+                            # 실제 포지션이 없으면 BotDataDict 동기화 후 스킵
+                            if real_size == 0 or real_position == 0:
+                                print(f"[{account_name}] {coin_ticker} 익절 스킵: 실제 포지션 없음 (BotDataDict 동기화)")
+                                BotDataDict[coin_ticker + '_POSITION'] = 0
+                                BotDataDict[coin_ticker + '_ENTRY_COUNT'] = 0
+                                BotDataDict[coin_ticker + '_POSITION_SIZE'] = 0
+                                BotDataDict[coin_ticker + '_ENTRY_PRICE'] = 0
+                                BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []
+                                actual_size = 0
+                                actual_position = 0
+                                break
+                            
+                            # 실제 물량에 맞게 sell_amount 조정
+                            sell_amount = min(sell_amount, real_size)
+                            
+                            # 3-3 파일과 동일한 Hedge Mode 청산 로직
+                            # Long 청산: side='buy', holdSide='long'
+                            # Short 청산: side='sell', holdSide='short'
+                            hold_side = 'long' if real_position == 1 else 'short'
+                            close_side = 'buy' if real_position == 1 else 'sell'
+                            
+                            bitgetX.create_order(
+                                coin_ticker, 
+                                'market', 
+                                close_side, 
+                                sell_amount, 
+                                None, 
+                                {'holdSide': hold_side, 'tradeSide': 'close'}
+                            )
                             
                             # TP 레벨 기록 (profit_pct를 저장)
                             tp_triggered.append(tp_profit)
@@ -436,8 +488,24 @@ def execute_trading_logic(account_info):
                             actual_size -= sell_amount
                             time.sleep(0.2)
                         except Exception as e:
+                            error_str = str(e)
                             print(f"[{account_name}] {coin_ticker} {tp_profit}% 익절 실패: {e}")
-                            telegram_alert.SendMessage(f"{first_String} {coin_ticker} {tp_profit}% 익절 실패: {e}")
+                            
+                            # 22002 에러 (No position to close) 발생 시 BotDataDict 동기화
+                            if '22002' in error_str or 'No position to close' in error_str:
+                                print(f"[{account_name}] {coin_ticker} 포지션 없음 감지 - BotDataDict 동기화")
+                                BotDataDict[coin_ticker + '_POSITION'] = 0
+                                BotDataDict[coin_ticker + '_ENTRY_COUNT'] = 0
+                                BotDataDict[coin_ticker + '_POSITION_SIZE'] = 0
+                                BotDataDict[coin_ticker + '_ENTRY_PRICE'] = 0
+                                BotDataDict[coin_ticker + '_TP_TRIGGERED'] = []
+                                actual_size = 0
+                                actual_position = 0
+                                # 에러 알림은 동기화 메시지로 대체
+                                telegram_alert.SendMessage(f"{first_String} {coin_ticker} {tp_profit}% 익절 실패 - 포지션 없음 (동기화 완료)")
+                                break
+                            else:
+                                telegram_alert.SendMessage(f"{first_String} {coin_ticker} {tp_profit}% 익절 실패: {e}")
 
         # 골든크로스 확인
         is_golden = check_golden_cross(df, SHORT_MA, LONG_MA)
@@ -492,9 +560,9 @@ def execute_trading_logic(account_info):
             # 숏 포지션이면 청산
             if actual_position == -1:
                 try:
-                    # 숏 청산 (Hedge Mode: holdSide='short', tradeSide='close')
+                    # 숏 청산 (3-3과 동일: side='sell', holdSide='short')
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'buy', actual_size,
+                        coin_ticker, 'market', 'sell', actual_size,
                         None, {'holdSide': 'short', 'tradeSide': 'close'}
                     )
                     msg = f"{first_String} {coin_ticker} 숏 청산 (골든크로스)"
@@ -558,9 +626,9 @@ def execute_trading_logic(account_info):
             # 롱 포지션이면 청산
             if actual_position == 1:
                 try:
-                    # 롱 청산 (Hedge Mode: holdSide='long', tradeSide='close')
+                    # 롱 청산 (3-3과 동일: side='buy', holdSide='long')
                     bitgetX.create_order(
-                        coin_ticker, 'market', 'sell', actual_size,
+                        coin_ticker, 'market', 'buy', actual_size,
                         None, {'holdSide': 'long', 'tradeSide': 'close'}
                     )
                     msg = f"{first_String} {coin_ticker} 롱 청산 (데드크로스)"
