@@ -49,8 +49,8 @@ set_korean_font()
 # ==============================================================================
 # 백테스트 설정
 # ==============================================================================
-INITIAL_CAPITAL = 100000      # 초기 자본금 (USDT)
-LEVERAGE = 1.2                  # 레버리지 배수
+INITIAL_CAPITAL = 10000      # 초기 자본금 (USDT)
+LEVERAGE = 1.5                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
 DAILY_MA = 115                # 일봉 장기 이동평균 기간 (방향 필터용)
@@ -68,9 +68,9 @@ TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적
 
 # 익절 설정 (전캔들 기준, 각 조건당 한번씩만 적용) - TAKE_PROFIT_ENABLED = True일 때만 적용
 TAKE_PROFIT_LEVELS = [
-    {'profit_pct': 5, 'sell_pct': 5},   # 3% 수익 시 10% 익절
-    {'profit_pct': 10, 'sell_pct': 10},   # 5% 수익 시 나머지의 20% 익절
-    {'profit_pct': 20, 'sell_pct': 20},  # 10% 수익 시 나머지의 30% 익절
+    {'profit_pct': 5, 'sell_pct': 10},   # 3% 수익 시 10% 익절
+    {'profit_pct': 10, 'sell_pct': 20},   # 5% 수익 시 나머지의 20% 익절
+    {'profit_pct': 20, 'sell_pct': 30},  # 10% 수익 시 나머지의 30% 익절
 ]
 
 # 테스트 기간
@@ -203,7 +203,12 @@ class CycleManager:
         if not self.in_cycle:
             self.start_new_cycle(timestamp, current_prices)
         
-        invest_amount = self.cycle_allocation * leverage
+        # 진입 시점의 현재 총 자산 기준으로 할당금액 동적 계산
+        # (가용잔액 + 포지션 평가금액) / N으로 계산하여 손실/이익 반영
+        current_equity = self.get_total_equity(current_prices)
+        dynamic_allocation = current_equity / self.n_coins
+        
+        invest_amount = dynamic_allocation * leverage
         qty = invest_amount / price
         fee = invest_amount * FEE_RATE
         
@@ -221,7 +226,7 @@ class CycleManager:
         
         active_count = len(self.positions)
         print(f"[{timestamp}] {symbol} {'롱' if direction == 'long' else '숏'} 진입: "
-              f"진입가 ${price:.6f}, 할당금액 ${self.cycle_allocation:.2f} USDT "
+              f"진입가 ${price:.6f}, 할당금액 ${dynamic_allocation:.2f} USDT (총자산 ${current_equity:.2f} / {self.n_coins}) "
               f"(사이클 #{self.cycle_num}, 활성 {active_count}/{self.n_coins})")
     
     def partial_close_position(self, symbol, price, timestamp, leverage, sell_pct, tp_level):
@@ -878,6 +883,7 @@ def analyze_results(results):
     if len(cycle_end_balances) > 1:
         peak_balance = 0
         peak_cycle = 0
+        peak_total_withdrawal_at_peak = 0  # balance로 peak 갱신 시에만 업데이트되는 출금액 기준점
         
         for i, cycle_data in enumerate(cycle_end_balances):
             balance = cycle_data['balance']
@@ -891,25 +897,29 @@ def analyze_results(results):
                     current_total_withdrawal = w_amount
             
             if balance > peak_balance:
-                # 새로운 peak 갱신
+                # 실제 잔액이 peak을 넘은 경우 → 새로운 peak (출금 보정 리셋)
                 peak_balance = balance
                 peak_cycle = cycle_num
+                peak_total_withdrawal_at_peak = current_total_withdrawal  # 출금 기준점도 갱신!
                 cycle_end_drawdowns[cycle_num] = 0  # peak일 때는 drawdown 0
             else:
-                # peak 이후 출금액 계산 (peak 시점 출금액과 현재 출금액의 차이)
-                peak_total_withdrawal = 0
-                peak_end_date = cycle_end_balances[peak_cycle - 1]['end_time'][:10] if peak_cycle > 0 else ''
-                for w_date, w_amount in withdrawal_by_date.items():
-                    if w_date <= peak_end_date:
-                        peak_total_withdrawal = w_amount
-                
-                withdrawal_after_peak = current_total_withdrawal - peak_total_withdrawal
+                # peak 이후 출금액 계산 (balance peak 시점 출금액과 현재 출금액의 차이)
+                withdrawal_after_peak = current_total_withdrawal - peak_total_withdrawal_at_peak
                 
                 # 실질 잔액 = 현재 잔액 + peak 이후 출금액
                 adjusted_balance = balance + withdrawal_after_peak
                 
-                # MDD 계산
-                if peak_balance > 0:
+                # 출금 보정 후 잔액이 peak 이상인 경우
+                if adjusted_balance >= peak_balance:
+                    # MDD가 양수가 되면 안 되므로 drawdown = 0
+                    # peak은 adjusted로 갱신하지만, peak_total_withdrawal_at_peak은 유지!
+                    # 이렇게 해야 다음 사이클에서도 출금 보정이 계속 적용됨
+                    peak_balance = adjusted_balance
+                    peak_cycle = cycle_num
+                    # peak_total_withdrawal_at_peak은 갱신하지 않음 (중요!)
+                    cycle_end_drawdowns[cycle_num] = 0
+                elif peak_balance > 0:
+                    # MDD 계산 (drawdown은 항상 0 이하)
                     dd = (adjusted_balance - peak_balance) / peak_balance * 100
                     cycle_end_drawdowns[cycle_num] = dd  # 각 사이클의 drawdown 저장
                     if dd < cycle_end_mdd:

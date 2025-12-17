@@ -71,10 +71,16 @@ INVEST_COIN_LIST = [
 # 전략 설정
 SHORT_MA = 20            # 단기 이동평균
 LONG_MA = 120            # 장기 이동평균
-DAILY_MA = 115           # 일봉 이동평균 (방향 필터용)
+DAILY_MA = 115           # 일봉 장기 이동평균 (방향 필터용)
+DAILY_MA_SHORT = 20      # 일봉 단기 이동평균 (듀얼 필터용)
 SPLIT_COUNT = 1          # 분할 진입 횟수 (1=일괄진입, 2~5=분할진입)
 INVEST_RATE = 0.99       # 전체 자금 중 투자 비율
 FEE = 0.0006             # 수수료율 (0.06%)
+
+# 듀얼 이평선 필터 설정 (20일선 + 115일선)
+# True: 직전일 종가가 두 선 위 → 롱만, 두 선 아래 → 숏만, 사이 → 둘 다 가능
+# False: 기존 115일선만 사용
+DAILY_DUAL_MA_FILTER_ENABLED = True
 
 # 부분 익절 설정
 TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적용, False: 미적용)
@@ -82,9 +88,9 @@ TAKE_PROFIT_ENABLED = True    # 부분 익절 로직 활성화 여부 (True: 적
 # 익절 레벨 설정 (전 캔들 종가 기준) - TAKE_PROFIT_ENABLED = True일 때만 적용
 # profit_pct: 수익률 도달 시, sell_pct: 해당 시점 물량의 몇 %를 익절
 TAKE_PROFIT_LEVELS = [
-    {'profit_pct': 5, 'sell_pct': 5},    # 5% 수익 시 5% 익절
-    {'profit_pct': 10, 'sell_pct': 10},  # 10% 수익 시 10% 익절
-    {'profit_pct': 20, 'sell_pct': 20},  # 20% 수익 시 20% 익절
+    {'profit_pct': 5, 'sell_pct': 10},   # 5% 수익 시 10% 익절
+    {'profit_pct': 10, 'sell_pct': 20},  # 10% 수익 시 20% 익절
+    {'profit_pct': 20, 'sell_pct': 30},  # 20% 수익 시 30% 익절
 ]
 
 # ==============================================================================
@@ -152,6 +158,25 @@ def GetCoinNowPrice(exchange, ticker):
         return 0.0
 
 
+def get_total_equity(exchange, coin_list):
+    """총 자산 계산 (가용잔액 + 포지션 평가금액)
+    
+    API에서 제공하는 총 자산 값을 직접 사용
+    """
+    try:
+        balance = exchange.fetch_balance(params={"type": "swap"})
+        # Bitget API에서 제공하는 총 자산 (가용 + 포지션 평가 포함)
+        # 'total'에 미실현 손익까지 포함된 값이 있음
+        total_equity = float(balance['USDT']['total'])
+        available = float(balance['USDT']['free'])
+        print(f"총 자산: ${total_equity:.2f} (가용: ${available:.2f}, 포지션: ${total_equity - available:.2f})")
+        return total_equity
+        
+    except Exception as e:
+        print(f"총 자산 조회 오류: {e}")
+        return 0
+
+
 def check_golden_cross(df, short_ma, long_ma):
     """골든크로스 확인 (전전봉 vs 전봉 비교 → 전봉 마감 시 크로스 확정)"""
     if len(df) < 3:
@@ -181,11 +206,15 @@ def check_dead_cross(df, short_ma, long_ma):
 
 
 def get_daily_ma_direction(exchange, ticker, daily_ma_period):
-    """일봉 이동평균 기준 방향 필터
-    - 오늘 캔들(미완성)은 제외
-    - 어제부터 115일간의 데이터로 115MA 계산
-    - 어제 종가와 115MA를 비교
-    Returns: 'UP' (종가 > 일봉MA, 롱대기), 'DOWN' (종가 < 일봉MA, 숏대기)
+    """일봉 이동평균 기준 방향 필터 (듀얼 필터 지원)
+    
+    DAILY_DUAL_MA_FILTER_ENABLED = True인 경우:
+    - 직전일 종가 > 20MA AND 115MA → 'UP' (롱만 가능)
+    - 직전일 종가 < 20MA AND 115MA → 'DOWN' (숏만 가능)
+    - 직전일 종가가 두 선 사이 → 'BOTH' (롱숏 모두 가능)
+    
+    DAILY_DUAL_MA_FILTER_ENABLED = False인 경우:
+    - 기존 로직: 115MA 위면 'UP', 아래면 'DOWN'
     """
     try:
         # 일봉 데이터를 충분히 가져오기 (MA 계산 + 오늘 캔들 제외 + 여유분)
@@ -208,18 +237,48 @@ def get_daily_ma_direction(exchange, ticker, daily_ma_period):
         # 어제(마감된 캔들)부터 115일간의 MA 계산
         df_daily[f'ma_{daily_ma_period}'] = df_daily['close'].rolling(daily_ma_period).mean()
         
+        # 20MA도 계산 (듀얼 필터용)
+        df_daily[f'ma_{DAILY_MA_SHORT}'] = df_daily['close'].rolling(DAILY_MA_SHORT).mean()
+        
         # 어제(마감된 캔들, 이제는 마지막 인덱스) 종가와 MA 비교
         yesterday_close = df_daily['close'].iloc[-1]
-        yesterday_ma = df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        yesterday_ma_115 = df_daily[f'ma_{daily_ma_period}'].iloc[-1]
+        yesterday_ma_20 = df_daily[f'ma_{DAILY_MA_SHORT}'].iloc[-1]
         
-        if pd.isna(yesterday_ma):
-            print(f"[{ticker}] MA 값이 NaN - 기본값 UP 반환")
+        if pd.isna(yesterday_ma_115):
+            print(f"[{ticker}] 115MA 값이 NaN - 기본값 UP 반환")
             return 'UP'
         
-        direction = 'UP' if yesterday_close > yesterday_ma else 'DOWN'
-        print(f"[{ticker}] 어제 종가: {yesterday_close:.4f}, {daily_ma_period}MA: {yesterday_ma:.4f} -> {direction}")
-        
-        return direction
+        # 듀얼 필터 모드
+        if DAILY_DUAL_MA_FILTER_ENABLED:
+            if pd.isna(yesterday_ma_20):
+                # 20MA 없으면 기존 로직 사용
+                direction = 'UP' if yesterday_close > yesterday_ma_115 else 'DOWN'
+                print(f"[{ticker}] 어제 종가: {yesterday_close:.4f}, 115MA: {yesterday_ma_115:.4f} -> {direction}")
+                return direction
+            
+            # 두 선 중 위/아래 값 구분
+            upper_ma = max(yesterday_ma_20, yesterday_ma_115)
+            lower_ma = min(yesterday_ma_20, yesterday_ma_115)
+            
+            if yesterday_close > upper_ma:
+                # 종가가 두 선 모두 위에 → 롱만
+                direction = 'UP'
+            elif yesterday_close < lower_ma:
+                # 종가가 두 선 모두 아래 → 숏만
+                direction = 'DOWN'
+            else:
+                # 종가가 두 선 사이 → 롱숏 모두 가능
+                direction = 'BOTH'
+            
+            print(f"[{ticker}] 어제 종가: {yesterday_close:.4f}, 20MA: {yesterday_ma_20:.4f}, 115MA: {yesterday_ma_115:.4f} -> {direction}")
+            return direction
+        else:
+            # 기존 로직: 115MA만 사용
+            direction = 'UP' if yesterday_close > yesterday_ma_115 else 'DOWN'
+            print(f"[{ticker}] 어제 종가: {yesterday_close:.4f}, {daily_ma_period}MA: {yesterday_ma_115:.4f} -> {direction}")
+            return direction
+            
     except Exception as e:
         print(f"일봉 MA 조회 오류 ({ticker}): {e}")
         return 'UP'
@@ -579,12 +638,15 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 숏 청산 실패: {e}")
 
-            # 롱 진입 (분할) - 일봉 115MA 위에 있을 때만
-            if (actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT)) and daily_direction == 'UP':
+            # 롱 진입 (분할) - 일봉 필터가 UP 또는 BOTH일 때
+            if (actual_position == 0 or (actual_position == 1 and entry_count < SPLIT_COUNT)) and daily_direction in ['UP', 'BOTH']:
                 try:
-                    # 투자 금액 계산 (분할)
-                    total_invest = current_usdt_balance * INVEST_RATE * coin_rate
-                    split_invest = total_invest / SPLIT_COUNT
+                    # 투자 금액 계산 (동적 할당: 현재 총 자산의 1/N)
+                    # 가용잔액 + 포지션 평가금액 기준으로 손실/이익 반영
+                    current_equity = get_total_equity(bitgetX, INVEST_COIN_LIST)
+                    n_coins = len(INVEST_COIN_LIST)
+                    dynamic_allocation = current_equity / n_coins
+                    split_invest = dynamic_allocation * INVEST_RATE / SPLIT_COUNT
                     amount = (split_invest * effective_leverage) / now_price
 
                     # 롱 진입 (Hedge Mode: holdSide='long', tradeSide='open')
@@ -645,12 +707,15 @@ def execute_trading_logic(account_info):
                 except Exception as e:
                     print(f"[{account_name}] {coin_ticker} 롱 청산 실패: {e}")
 
-            # 숏 진입 (분할) - 일봉 115MA 아래에 있을 때만
-            if (actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT)) and daily_direction == 'DOWN':
+            # 숏 진입 (분할) - 일봉 필터가 DOWN 또는 BOTH일 때
+            if (actual_position == 0 or (actual_position == -1 and entry_count < SPLIT_COUNT)) and daily_direction in ['DOWN', 'BOTH']:
                 try:
-                    # 투자 금액 계산 (분할)
-                    total_invest = current_usdt_balance * INVEST_RATE * coin_rate
-                    split_invest = total_invest / SPLIT_COUNT
+                    # 투자 금액 계산 (동적 할당: 현재 총 자산의 1/N)
+                    # 가용잔액 + 포지션 평가금액 기준으로 손실/이익 반영
+                    current_equity = get_total_equity(bitgetX, INVEST_COIN_LIST)
+                    n_coins = len(INVEST_COIN_LIST)
+                    dynamic_allocation = current_equity / n_coins
+                    split_invest = dynamic_allocation * INVEST_RATE / SPLIT_COUNT
                     amount = (split_invest * effective_leverage) / now_price
 
                     # 숏 진입 (Hedge Mode: holdSide='short', tradeSide='open')
