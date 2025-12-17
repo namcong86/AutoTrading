@@ -72,7 +72,7 @@ INVEST_COIN_LIST = [
 SHORT_MA = 20            # 단기 이동평균
 LONG_MA = 120            # 장기 이동평균
 DAILY_MA = 115           # 일봉 장기 이동평균 (방향 필터용)
-DAILY_MA_SHORT = 20      # 일봉 단기 이동평균 (듀얼 필터용)
+DAILY_MA_SHORT = 15      # 일봉 단기 이동평균 (듀얼 필터용)
 SPLIT_COUNT = 1          # 분할 진입 횟수 (1=일괄진입, 2~5=분할진입)
 INVEST_RATE = 0.99       # 전체 자금 중 투자 비율
 FEE = 0.0006             # 수수료율 (0.06%)
