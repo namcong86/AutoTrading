@@ -706,3 +706,49 @@ if Is_Rebalance_Go == True and IsMarketOpen == True:
 ━━━━━━━━━━━━━━━━━━━━""")
     print("------------------리밸런싱 끝---------------------")
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📊 매일 보유 종목 현황 알림 (리밸런싱 여부 무관)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+now_time = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+# 보유 종목만 필터링
+holding_stocks = []
+total_eval = 0
+total_profit = 0
+
+for my_stock in MyStockList:
+    stock_amt = int(my_stock['StockAmt'])
+    if stock_amt > 0:
+        stock_code = my_stock['StockCode']
+        stock_name = my_stock['StockName']
+        eval_money = float(my_stock['StockNowMoney'])
+        revenue_rate = float(my_stock['StockRevenueRate'])
+        revenue_money = float(my_stock['StockRevenueMoney'])
+        
+        total_eval += eval_money
+        total_profit += revenue_money
+        
+        profit_emoji = "🟢" if revenue_rate >= 0 else "🔴"
+        holding_stocks.append(f"{profit_emoji} {stock_name}: {revenue_rate:+.2f}% ({format(round(revenue_money), ',')}원)")
+
+# 보유 종목이 있을 때만 알림 발송
+if holding_stocks:
+    total_rate = (total_profit / (total_eval - total_profit)) * 100 if (total_eval - total_profit) > 0 else 0
+    total_emoji = "🟢" if total_profit >= 0 else "🔴"
+    
+    stocks_str = "\n".join(holding_stocks)
+    
+    daily_msg = f"""📊 {PortfolioName} 현황
+🕐 {now_time}
+━━━━━━━━━━━━━━━━━━
+{stocks_str}
+━━━━━━━━━━━━━━━━━━
+💰 총평가: {format(round(total_eval), ',')}원
+{total_emoji} 총수익: {format(round(total_profit), ',')}원 ({total_rate:+.2f}%)"""
+    
+    telegram_alert.SendMessage(daily_msg)
+    print(daily_msg)
+else:
+    print("보유 종목 없음 - 알림 생략")
+

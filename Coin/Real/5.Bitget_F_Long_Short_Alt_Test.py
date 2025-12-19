@@ -74,7 +74,7 @@ TAKE_PROFIT_LEVELS = [
 ]
 
 # 테스트 기간
-START_DATE = '2021-07-01'
+START_DATE = '2022-02-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')  # 오늘 날짜까지
 
 # 연간 출금 설정 (1월 1일에 전년도 수익의 일정 비율 출금)
@@ -88,13 +88,168 @@ COIN_LIST = [
     'DOGE/USDT:USDT',
     'SOL/USDT:USDT',
     'AVAX/USDT:USDT',
-    # 'BNB/USDT:USDT',
-    # 'SHIB/USDT:USDT',
 ]
 
 # JSON 데이터 경로
 DATA_PATH = r'C:\AutoTrading\Coin\json'
 CYCLE_STATE_FILE = os.path.join(DATA_PATH, 'cycle_state.json')
+
+
+# ==============================================================================
+# 데이터 가용성 검증 함수
+# ==============================================================================
+def validate_data_availability(coin_list, data_path, start_date, timeframe, required_ma_periods):
+    """
+    백테스트 시작 전 각 코인에 대해 이동평균 계산에 필요한 충분한 데이터가 있는지 검증합니다.
+    
+    Args:
+        coin_list: 코인 심볼 리스트
+        data_path: JSON 데이터 경로
+        start_date: 테스트 시작일 (YYYY-MM-DD 형식)
+        timeframe: 캔들 타임프레임 ('1h', '15m' 등)
+        required_ma_periods: 필요한 이동평균 기간들의 딕셔너리
+            {
+                'hourly': [20, 120],  # 시간봉 이동평균 기간들
+                'daily': [15, 115]    # 일봉 이동평균 기간들
+            }
+    
+    Returns:
+        True if all data is available, exits with error otherwise
+    """
+    print("\n" + "=" * 70)
+    print("[검증] 데이터 가용성 검사 중...")
+    print("=" * 70)
+    
+    start_dt = pd.to_datetime(start_date)
+    errors = []
+    warnings = []
+    
+    max_hourly_ma = max(required_ma_periods.get('hourly', [1]))
+    max_daily_ma = max(required_ma_periods.get('daily', [1]))
+    
+    # 일봉 기준으로 필요한 최소 데이터 시작일 계산 (여유분 포함)
+    # 115일선을 계산하려면 테스트 시작일 기준 최소 115 영업일 전 데이터가 필요
+    # 주말/공휴일 고려하여 약 1.5배 캘린더일 필요 (넉넉하게 계산)
+    required_daily_days = int(max_daily_ma * 1.5) + 10  # 여유분 10일 추가
+    required_daily_start = start_dt - pd.Timedelta(days=required_daily_days)
+    
+    # 시간봉 기준으로 필요한 데이터 시작일 계산
+    # 120시간봉 = 약 5일 (120 / 24)
+    required_hourly_hours = max_hourly_ma
+    required_hourly_start = start_dt - pd.Timedelta(hours=required_hourly_hours * 1.2)  # 20% 여유
+    
+    print(f"\n  테스트 시작일: {start_date}")
+    print(f"  필요한 시간봉 MA: {required_ma_periods.get('hourly', [])} → 최소 데이터 시작: {required_hourly_start.strftime('%Y-%m-%d %H:%M')}")
+    print(f"  필요한 일봉 MA: {required_ma_periods.get('daily', [])} → 최소 데이터 시작: {required_daily_start.strftime('%Y-%m-%d')}")
+    print()
+    
+    for symbol in coin_list:
+        safe_name = symbol.replace('/', '_').replace(':', '_').lower()
+        coin_name = safe_name.split('_')[0]
+        
+        # 시간봉/분봉 데이터 확인
+        hourly_json = f"{data_path}\\{coin_name}_usdt_bitget_{timeframe}.json"
+        daily_json = f"{data_path}\\{coin_name}_usdt_bitget_1d.json"
+        
+        symbol_errors = []
+        
+        # 시간봉 데이터 확인
+        try:
+            with open(hourly_json, 'r') as f:
+                hourly_data = json.load(f)
+            
+            if len(hourly_data) == 0:
+                symbol_errors.append(f"시간봉 데이터가 비어있습니다")
+            else:
+                hourly_df = pd.DataFrame(hourly_data)
+                hourly_df['datetime'] = pd.to_datetime(hourly_df['datetime'])
+                data_start = hourly_df['datetime'].min()
+                data_end = hourly_df['datetime'].max()
+                
+                # 테스트 시작일 기준으로 MA 계산에 충분한 데이터가 있는지 확인
+                data_before_start = hourly_df[hourly_df['datetime'] < start_dt]
+                
+                if len(data_before_start) < max_hourly_ma:
+                    symbol_errors.append(
+                        f"시간봉 데이터 부족: 테스트 시작일({start_date}) 이전 {len(data_before_start)}개 캔들만 존재, "
+                        f"{max_hourly_ma}이평선 계산에는 최소 {max_hourly_ma}개 필요\n"
+                        f"         데이터 시작: {data_start.strftime('%Y-%m-%d %H:%M')}, 끝: {data_end.strftime('%Y-%m-%d %H:%M')}"
+                    )
+                else:
+                    print(f"  [OK] {symbol} 시간봉: 데이터 시작 {data_start.strftime('%Y-%m-%d')} -> "
+                          f"테스트 시작일 이전 {len(data_before_start)}개 캔들 (필요: {max_hourly_ma}개)")
+                    
+        except FileNotFoundError:
+            symbol_errors.append(f"시간봉 파일 없음: {hourly_json}")
+        except Exception as e:
+            symbol_errors.append(f"시간봉 파일 읽기 오류: {e}")
+        
+        # 일봉 데이터 확인
+        try:
+            with open(daily_json, 'r') as f:
+                daily_data = json.load(f)
+            
+            if len(daily_data) == 0:
+                symbol_errors.append(f"일봉 데이터가 비어있습니다")
+            else:
+                daily_df = pd.DataFrame(daily_data)
+                daily_df['datetime'] = pd.to_datetime(daily_df['datetime'])
+                data_start = daily_df['datetime'].min()
+                data_end = daily_df['datetime'].max()
+                
+                # 테스트 시작일 기준으로 일봉 MA 계산에 충분한 데이터가 있는지 확인
+                data_before_start = daily_df[daily_df['datetime'] < start_dt]
+                
+                if len(data_before_start) < max_daily_ma:
+                    symbol_errors.append(
+                        f"일봉 데이터 부족: 테스트 시작일({start_date}) 이전 {len(data_before_start)}개 캔들만 존재, "
+                        f"{max_daily_ma}일선 계산에는 최소 {max_daily_ma}개 필요\n"
+                        f"         데이터 시작: {data_start.strftime('%Y-%m-%d')}, 끝: {data_end.strftime('%Y-%m-%d')}"
+                    )
+                else:
+                    print(f"  [OK] {symbol} 일봉: 데이터 시작 {data_start.strftime('%Y-%m-%d')} -> "
+                          f"테스트 시작일 이전 {len(data_before_start)}개 캔들 (필요: {max_daily_ma}개)")
+                    
+        except FileNotFoundError:
+            warnings.append(f"  [!] {symbol}: 일봉 파일 없음 ({daily_json}) - 양방향 허용 모드로 실행")
+        except Exception as e:
+            symbol_errors.append(f"일봉 파일 읽기 오류: {e}")
+        
+        if symbol_errors:
+            errors.append(f"\n  [X] {symbol}:")
+            for err in symbol_errors:
+                errors.append(f"      - {err}")
+    
+    # 경고 출력
+    if warnings:
+        print("\n" + "-" * 50)
+        print("[경고]")
+        for w in warnings:
+            print(w)
+    
+    # 에러가 있으면 종료
+    if errors:
+        print("\n" + "=" * 70)
+        print("[오류] 데이터 가용성 검증 실패!")
+        print("=" * 70)
+        for err in errors:
+            print(err)
+        print("\n" + "-" * 50)
+        print("[해결 방법]")
+        print(f"  1. 테스트 시작일({start_date})을 더 최근으로 변경하거나")
+        print(f"  2. 필요한 과거 데이터를 먼저 다운로드하세요")
+        print(f"     - 일봉: 최소 {max_daily_ma}일 이전 데이터 필요")
+        print(f"     - 시간봉: 최소 {max_hourly_ma}시간 이전 데이터 필요")
+        print("=" * 70 + "\n")
+        
+        import sys
+        sys.exit(1)
+    
+    print("\n" + "=" * 70)
+    print("[검증 완료] 모든 코인에 대해 충분한 데이터가 확인되었습니다.")
+    print("=" * 70 + "\n")
+    
+    return True
 
 
 # ==============================================================================
@@ -1329,6 +1484,13 @@ if __name__ == '__main__':
     print(f"  - 사이클 중 진입 시 할당된 금액으로 진입 (잔액 변동 무관)")
     print(f"  - 모든 포지션 청산 시 사이클 종료 → 새 사이클에서 재분배")
     print("=" * 70)
+    
+    # 데이터 가용성 검증 (이동평균 계산에 필요한 데이터가 있는지 확인)
+    required_ma_periods = {
+        'hourly': [SHORT_MA, LONG_MA],  # 시간봉: 20, 120
+        'daily': [DAILY_MA_SHORT, DAILY_MA]  # 일봉: 15, 115
+    }
+    validate_data_availability(COIN_LIST, DATA_PATH, START_DATE, TIMEFRAME, required_ma_periods)
     
     # 통합 백테스트 객체 생성
     backtest = IntegratedBacktest(
