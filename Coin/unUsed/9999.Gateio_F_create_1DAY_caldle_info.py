@@ -16,7 +16,9 @@ gateio = ccxt.gate({
     }
 })
 
-def fetch_ohlcv_to_csv(ticker, timeframe, start_year, start_month, start_day, end_year, end_month, end_day, output_file):
+
+
+def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, end_year, end_month, end_day, output_file):
     date_start = datetime.datetime(start_year, start_month, start_day)
     date_end = datetime.datetime(end_year, end_month, end_day)
     monthly_dfs = []
@@ -31,7 +33,7 @@ def fetch_ohlcv_to_csv(ticker, timeframe, start_year, start_month, start_day, en
         date_start_ms = int(current_date.timestamp() * 1000)
         date_end_ms = int(next_date.timestamp() * 1000)
 
-        print(f"{current_date}부터 {next_date}까지 데이터 가져오는 중...")
+        print(f"Fetching data from {current_date} to {next_date}...")
 
         month_data = []
         previous_timestamp = None
@@ -51,9 +53,9 @@ def fetch_ohlcv_to_csv(ticker, timeframe, start_year, start_month, start_day, en
                         limit=500,
                         params={'future': True}
                     )
-                    print(f"  {datetime.datetime.utcfromtimestamp(date_start_ms/1000)}부터 {len(ohlcv_data)}개의 캔들 데이터 가져옴")
+                    print(f"  Fetched {len(ohlcv_data)} raw candles starting from {datetime.datetime.utcfromtimestamp(date_start_ms/1000)}")
                     if not ohlcv_data:
-                        print("  더 이상 데이터가 없습니다.")
+                        print("  No more data available.")
                         break
 
                     filtered_data = []
@@ -62,25 +64,25 @@ def fetch_ohlcv_to_csv(ticker, timeframe, start_year, start_month, start_day, en
                             filtered_data.append(data)
                             previous_timestamp = data[0]
                         else:
-                            print(f"  오래된 데이터 스킵: {datetime.datetime.utcfromtimestamp(data[0]/1000)} <= {datetime.datetime.utcfromtimestamp(previous_timestamp/1000)}")
+                            print(f"  Skipping old data: {datetime.datetime.utcfromtimestamp(data[0]/1000)} <= {datetime.datetime.utcfromtimestamp(previous_timestamp/1000)}")
                     
                     if not filtered_data:
-                        print("  필터링 후 새로운 데이터 없음.")
+                        print("  No new data after filtering.")
                         no_new_data_count += 1
                         if no_new_data_count >= max_no_new_data:
-                            print(f"  {max_no_new_data}번 시도 후 새로운 데이터 없음. 이 기간 데이터 수집 중단.")
+                            print(f"  No new data after {max_no_new_data} attempts. Stopping fetch for this period.")
                             break
                         time.sleep(0.2)
                         continue
 
                     month_data.extend(filtered_data)
                     if len(filtered_data) < 500:
-                        print("  500개 미만의 캔들 데이터 가져옴. 데이터 끝일 가능성 높음.")
+                        print("  Less than 500 candles fetched. Possibly reached end of data.")
                         break
 
                     date_start_ms = filtered_data[-1][0] + (filtered_data[1][0] - filtered_data[0][0])
                     last_timestamp = filtered_data[-1][0]
-                    print(f"  데이터 가져오는 중... {datetime.datetime.utcfromtimestamp(date_start_ms/1000)}")
+                    print(f"  Get Data... {datetime.datetime.utcfromtimestamp(date_start_ms/1000)}")
                     no_new_data_count = 0
                     time.sleep(0.2)
                     break
@@ -98,48 +100,82 @@ def fetch_ohlcv_to_csv(ticker, timeframe, start_year, start_month, start_day, en
                 break
 
         if month_data:
-            print(f"{current_date.strftime('%Y-%m')}의 데이터를 DataFrame으로 변환 중...")
+            print(f"Converting month data to DataFrame for {current_date.strftime('%Y-%m')}...")
             try:
                 df_month = pd.DataFrame(month_data, columns=['datetime', 'open', 'high', 'low', 'close', 'volume'])
                 df_month['datetime'] = pd.to_datetime(df_month['datetime'], unit='ms')
                 df_month.set_index('datetime', inplace=True)
                 df_month = df_month.sort_index().drop_duplicates(keep='first')
                 monthly_dfs.append(df_month)
-                print(f"{current_date.strftime('%Y-%m')}에 대해 {len(month_data)}개의 캔들 데이터 가져옴")
+                print(f"Fetched {len(month_data)} candles for {current_date.strftime('%Y-%m')}")
             except Exception as e:
                 print(f"월별 DataFrame 생성 중 오류: {e}")
                 break
         else:
-            print(f"{current_date.strftime('%Y-%m')}에 대한 데이터 없음")
+            print(f"No data fetched for {current_date.strftime('%Y-%m')}")
             break
 
         if last_timestamp:
             last_date = datetime.datetime.utcfromtimestamp(last_timestamp / 1000)
             if last_date >= date_end:
-                print("마지막으로 가져온 데이터가 종료 날짜를 초과함. 데이터 가져오기 중단.")
+                print("Last fetched data exceeds end date. Stopping fetch.")
                 break
 
         current_date = next_date
         if current_date < date_end:
-            print("다음 요청 전 2초 대기...")
+            print("Waiting before next request...")
             time.sleep(0.1)
 
     if not monthly_dfs:
         print("가져온 데이터가 없습니다.")
         return
 
-    print("월별 DataFrame 병합 중...")
+    print("Merging monthly DataFrames...")
     try:
         df = pd.concat(monthly_dfs, axis=0)
         df = df.sort_index().drop_duplicates(keep='first')
-        print(f"데이터 가져오기 완료. 총 캔들 수: {len(df)}")
-        df.to_csv(output_file)
-        print(f"데이터를 {output_file}에 저장함")
+        print(f"Data fetching completed. Total candles: {len(df)}")
+        
+        # JSON 파일로 저장
+        df_reset = df.reset_index()
+        df_reset['datetime'] = df_reset['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        df_reset.to_json(output_file, orient='records', indent=2, force_ascii=False)
+        print(f"Data saved to {output_file}")
     except Exception as e:
         print(f"월별 데이터 병합 중 오류: {e}")
 
 # 실행
-ticker = 'BTC/USDT:USDT'
-timeframe = '1h'  # 일봉으로 변경
-output_file = 'btc_usdt_1h_2020_to_202505.csv'  # 파일 이름 변경
-fetch_ohlcv_to_csv(ticker, timeframe, 2020, 1, 1, 2025, 5, 31, output_file)
+# 여러 티커를 한번에 처리
+TICKER_LIST = [
+    'ADA/USDT:USDT',
+]
+
+timeframe = '15m'
+start_year, start_month, start_day = 2020, 12, 1
+end_year, end_month, end_day = 2025, 12, 22
+
+# 저장 경로
+output_path = r'C:\AutoTrading\Coin\json'
+
+for ticker in TICKER_LIST:
+    # 파일명 생성 (예: ada_usdt_gateio_1d.json)
+    coin_name = ticker.split('/')[0].lower()
+    output_file = f"{output_path}\\{coin_name}_usdt_gateio_{timeframe}.json"
+    
+    print(f"\n{'='*60}")
+    print(f"티커: {ticker}")
+    print(f"저장 파일: {output_file}")
+    print(f"{'='*60}")
+    
+    fetch_ohlcv_to_json(
+        ticker, 
+        timeframe, 
+        start_year, start_month, start_day, 
+        end_year, end_month, end_day, 
+        output_file
+    )
+    
+    print(f"{ticker} 완료!")
+    time.sleep(1)  # API 호출 간격
+
+print("\n모든 티커 데이터 다운로드 완료!")

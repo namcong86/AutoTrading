@@ -149,15 +149,15 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
 # 실행
 # 여러 티커를 한번에 처리
 TICKER_LIST = [
-    # 'ADA/USDT:USDT',
-     'DOGE/USDT:USDT',
-    #  'SOL/USDT:USDT',
-    #'BNB/USDT:USDT',
+    'DOGE/USDT:USDT',
+    'SOL/USDT:USDT',
+    'ADA/USDT:USDT',
+    'AVAX/USDT:USDT',
 ]
 
-timeframe = '1d'
-start_year, start_month, start_day = 2021,5, 1
-end_year, end_month, end_day = 2025, 11, 27
+timeframe = '30m'
+start_year, start_month, start_day = 2021,10, 1
+end_year, end_month, end_day = 2025, 12, 17
 
 # 저장 경로
 output_path = r'C:\AutoTrading\Coin\json'

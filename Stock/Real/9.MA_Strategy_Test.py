@@ -85,7 +85,7 @@ CutCount = 0     #최근 데이터 삭제! 200으로 세팅하면 200개의 최�
 InvestStockList = list()
 
 #'''
-InvestStockList.append({"stock_code":"QQQ", "small_ma":3, "big_ma":132, "invest_rate":0.5}) 
+InvestStockList.append({"stock_code":"QLD", "small_ma":3, "big_ma":132, "invest_rate":0.5}) 
 InvestStockList.append({"stock_code":"TLT", "small_ma":13 , "big_ma":53, "invest_rate":0.25}) 
 InvestStockList.append({"stock_code":"GLDM", "small_ma":17 , "big_ma":78, "invest_rate":0.25}) 
 #'''
