@@ -4,21 +4,115 @@ import pandas as pd
 import datetime
 import uuid
 
-# Bitget 객체 생성
-Bitget_AccessKey = "bg_b191c3cc69263a9993453a08acbde6f5"
-Bitget_SecretKey = "c2690dc2dadee98fd976d1c78f52e223dd6b98dfe6a45f24899d68a332481fd6"
-Bitget_Passphrase = "namcongMain"
-bitget = ccxt.bitget({
-    'apiKey': Bitget_AccessKey,
-    'secret': Bitget_SecretKey,
-    'password': Bitget_Passphrase,
+# Gate.io 객체 생성
+Gateio_AccessKey = "07a0ba2f6ed018fcb0fde7d08b58b40c"
+Gateio_SecretKey = "7fcd29026f6d7d73647981fe4f4b4f75f4569ad0262d0fada5db3a558b50072a"
+gateio = ccxt.gate({
+    'apiKey': Gateio_AccessKey,
+    'secret': Gateio_SecretKey,
     'enableRateLimit': True,
     'options': {
-        'defaultType': 'swap',
-        'defaultMarginMode': 'cross'
+        'defaultType': 'future',
     }
 })
 
+
+def check_data_availability(exchange, ticker_list, timeframe, start_date):
+    """
+    모든 코인의 데이터 가용성을 미리 체크 (GateIO 버전)
+    
+    GateIO API 특성: since 파라미터가 제대로 작동하지 않을 수 있어
+    limit을 크게 설정하여 전체 데이터를 가져온 후 첫 번째 캔들 날짜 확인
+    
+    Returns:
+        dict: {ticker: {'available': bool, 'first_date': datetime or None, 'error': str or None}}
+    """
+    print("\n" + "="*70)
+    print("[DATA CHECK] 데이터 가용성 검증 중...")
+    print(f"  요청 시작일: {start_date.strftime('%Y-%m-%d')}")
+    print("="*70)
+    
+    results = {}
+    all_available = True
+    
+    for ticker in ticker_list:
+        print(f"\n  [{ticker}] 검증 중...", end=" ")
+        
+        first_date_found = None
+        
+        try:
+            # GateIO는 since가 제대로 작동하지 않을 수 있어
+            # limit을 크게 설정하여 가능한 모든 과거 데이터 조회
+            ohlcv = exchange.fetch_ohlcv(
+                symbol=ticker,
+                timeframe=timeframe,
+                limit=2000  # 최대한 많이 가져오기
+            )
+            
+            if ohlcv and len(ohlcv) > 0:
+                # 첫 번째 캔들이 가장 오래된 데이터
+                first_timestamp = ohlcv[0][0]
+                first_date_found = datetime.datetime.utcfromtimestamp(first_timestamp / 1000)
+                
+                if first_date_found.date() <= start_date.date():
+                    print(f"[O] 사용 가능 (데이터 시작: {first_date_found.strftime('%Y-%m-%d')})")
+                    results[ticker] = {
+                        'available': True,
+                        'first_date': first_date_found,
+                        'error': None
+                    }
+                else:
+                    print(f"[!] 요청일 이후부터 데이터 존재")
+                    print(f"      요청: {start_date.strftime('%Y-%m-%d')} -> 실제 최초: {first_date_found.strftime('%Y-%m-%d')}")
+                    results[ticker] = {
+                        'available': False,
+                        'first_date': first_date_found,
+                        'error': None
+                    }
+                    all_available = False
+            else:
+                print(f"[X] 데이터 없음")
+                results[ticker] = {
+                    'available': False,
+                    'first_date': None,
+                    'error': "No data found"
+                }
+                all_available = False
+                
+        except Exception as e:
+            print(f"[X] 오류: {str(e)[:50]}")
+            results[ticker] = {
+                'available': False,
+                'first_date': None,
+                'error': str(e)
+            }
+            all_available = False
+        
+        time.sleep(0.3)
+    
+    # 결과 요약
+    print("\n" + "="*70)
+    print("[RESULT] 검증 결과 요약")
+    print("="*70)
+    
+    available_count = sum(1 for r in results.values() if r['available'])
+    print(f"  총 {len(ticker_list)}개 중 {available_count}개 사용 가능\n")
+    
+    if not all_available:
+        print("[!] 아래 코인들은 요청한 시작일({})부터 데이터가 없습니다:".format(
+            start_date.strftime('%Y-%m-%d')))
+        print("-"*70)
+        for ticker, info in results.items():
+            if not info['available']:
+                if info['first_date']:
+                    print(f"  - {ticker}: {info['first_date'].strftime('%Y-%m-%d')}부터 데이터 존재")
+                elif info['error']:
+                    print(f"  - {ticker}: 오류 - {info['error'][:40]}")
+                else:
+                    print(f"  - {ticker}: 데이터 없음")
+        print("-"*70)
+    
+    return results, all_available
 
 
 def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, end_year, end_month, end_day, output_file):
@@ -49,11 +143,12 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
             ohlcv_data = None
             while retry_count < max_retries:
                 try:
-                    ohlcv_data = bitget.fetch_ohlcv(
+                    ohlcv_data = gateio.fetch_ohlcv(
                         symbol=ticker,
                         timeframe=timeframe,
                         since=date_start_ms,
-                        limit=200  # Bitget은 최대 200개
+                        limit=500,
+                        params={'future': True}
                     )
                     print(f"  Fetched {len(ohlcv_data)} raw candles starting from {datetime.datetime.utcfromtimestamp(date_start_ms/1000)}")
                     if not ohlcv_data:
@@ -78,8 +173,8 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
                         continue
 
                     month_data.extend(filtered_data)
-                    if len(filtered_data) < 200:
-                        print("  Less than 200 candles fetched. Possibly reached end of data.")
+                    if len(filtered_data) < 500:
+                        print("  Less than 500 candles fetched. Possibly reached end of data.")
                         break
 
                     date_start_ms = filtered_data[-1][0] + (filtered_data[1][0] - filtered_data[0][0])
@@ -146,26 +241,44 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
     except Exception as e:
         print(f"월별 데이터 병합 중 오류: {e}")
 
-# 실행
-# 여러 티커를 한번에 처리
+
+# ==============================================================================
+# 실행 설정
+# ==============================================================================
 TICKER_LIST = [
-    'DOGE/USDT:USDT',
-    'SOL/USDT:USDT',
-    'ADA/USDT:USDT',
-    'AVAX/USDT:USDT',
+    'BTC/USDT:USDT',
 ]
 
-timeframe = '30m'
-start_year, start_month, start_day = 2021,10, 1
-end_year, end_month, end_day = 2025, 12, 17
+timeframe = '1d'
+start_year, start_month, start_day = 2020, 8, 1
+end_year, end_month, end_day = 2025, 12, 22
 
 # 저장 경로
 output_path = r'C:\AutoTrading\Coin\json'
 
+# ==============================================================================
+# 데이터 가용성 사전 검증
+# ==============================================================================
+start_date = datetime.datetime(start_year, start_month, start_day)
+availability_results, all_available = check_data_availability(
+    gateio, TICKER_LIST, timeframe, start_date
+)
+
+if not all_available:
+    print("\n[!] 일부 코인의 데이터가 요청 시작일부터 없습니다.")
+    user_input = input("계속 진행하시겠습니까? (y/n): ").strip().lower()
+    if user_input != 'y':
+        print("다운로드를 취소합니다.")
+        exit()
+    print("\n데이터가 있는 날짜부터 다운로드를 진행합니다...\n")
+
+# ==============================================================================
+# 다운로드 실행
+# ==============================================================================
 for ticker in TICKER_LIST:
-    # 파일명 생성 (예: ada_usdt_bitget_1h.json)
+    # 파일명 생성 (예: ada_usdt_gateio_1d.json)
     coin_name = ticker.split('/')[0].lower()
-    output_file = f"{output_path}\\{coin_name}_usdt_bitget_{timeframe}.json"
+    output_file = f"{output_path}\\{coin_name}_usdt_gateio_{timeframe}.json"
     
     print(f"\n{'='*60}")
     print(f"티커: {ticker}")

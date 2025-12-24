@@ -1,11 +1,12 @@
 # -*- coding:utf-8 -*-
 '''
-파일이름: 4-2.GateIO_F_Grid_Danta_Test.py
-설명: RSI 기반 롱숏 분할매매 전략 백테스트
+파일이름: 4.Binance_F_Grid_Danta_Test.py
+설명: RSI 기반 롱숏 분할매매 전략 백테스트 (바이난스 버전)
       - 일봉 이평선(120/20) 기준 3영역(LONG/MIDDLE/SHORT) 구분
       - RSI(14) 기반 진입 (25 이하 롱, 75 이상 숏)
       - 분할 익절 (5/10/20/30/50%)
       - 영역 변화에 따른 청산
+      - 바이난스는 더 오래된 과거 데이터 제공
 '''
 import ccxt
 import time
@@ -48,19 +49,20 @@ def set_korean_font():
 set_korean_font()
 
 # ==============================================================================
-# 1. 백테스트 환경 설정
+# 1. 백테스트 환경 설정 (바이난스 버전)
 # ==============================================================================
-COIN_EXCHANGE = "gateio"
-TEST_START_DATE = datetime.datetime(2021, 4, 1)
+COIN_EXCHANGE = "binance"
+TEST_START_DATE = datetime.datetime(2021, 4, 1)  # 바이난스는 더 많은 과거 데이터 제공
+#TEST_END_DATE = datetime.datetime(2021, 12, 1) 
 TEST_END_DATE = datetime.datetime.now()
 INITIAL_CAPITAL = 10000
-TIMEFRAME = '15m'                      # 1시간봉
+TIMEFRAME = '15m'                      # 15분봉
 LEVERAGE = 7
-FEE_RATE = 0.001                     # 거래 수수료 (0.1%)
+FEE_RATE = 0.001                    # 바이난스 선물 수수료 (0.04%)
 
-# 코인 리스트
+# 코인 리스트 (바이난스 지원 코인)
 COIN_LIST = ['BTC/USDT','ETH/USDT','XRP/USDT','DOGE/USDT','ADA/USDT']
-#COIN_LIST = ['ETH/USDT']
+#COIN_LIST = ['BTC/USDT']
 
 # RSI 설정
 RSI_LENGTH = 14
@@ -608,14 +610,64 @@ def calculate_rsi(df, period=14):
     return 100 - (100 / (1 + rs))
 
 # ==============================================================================
-# 6. 데이터 로딩
+# 6. 데이터 로딩 (바이난스 버전 - API 직접 다운로드 지원)
 # ==============================================================================
+def fetch_ohlcv_from_exchange(symbol, timeframe, start_date, end_date):
+    """바이난스 API에서 직접 OHLCV 데이터 가져오기"""
+    try:
+        exchange = ccxt.binance({
+            'enableRateLimit': True,
+            'options': {'defaultType': 'future'}
+        })
+        
+        all_data = []
+        since = int(start_date.timestamp() * 1000)
+        end = int(end_date.timestamp() * 1000)
+        
+        print(f"  [바이난스 API] {symbol} 데이터 다운로드 중...")
+        
+        while since < end:
+            try:
+                ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since, limit=1000)
+                if not ohlcv:
+                    break
+                all_data.extend(ohlcv)
+                since = ohlcv[-1][0] + 1
+                time.sleep(0.5)  # Rate limit 준수
+            except Exception as e:
+                print(f"  API 오류: {e}")
+                break
+        
+        if not all_data:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('datetime', inplace=True)
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+        df = df[~df.index.duplicated(keep='last')]
+        
+        print(f"  다운로드 완료: {len(df)}개 캔들")
+        return df
+    except Exception as e:
+        print(f"  API 연결 오류: {e}")
+        return pd.DataFrame()
+
 def load_data(symbol, timeframe, start_date, end_date):
-    """JSON 파일에서 데이터 로드"""
+    """JSON 파일에서 데이터 로드 (바이난스 버전)"""
     safe_name = symbol.replace('/', '_').replace(':', '_').lower()
     coin_name = safe_name.split('_')[0]
     
-    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_{timeframe}.json")
+    # 1. 바이난스 파일 확인
+    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_binance_{timeframe}.json")
+    
+    # 2. 없으면 gateio 확인
+    if not os.path.exists(json_file):
+        json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_gateio_{timeframe}.json")
+    
+    # 3. 없으면 bitget 확인
+    if not os.path.exists(json_file):
+        json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_{timeframe}.json")
     
     print(f"[{symbol}] 데이터 로드 중: {json_file}")
     
@@ -630,10 +682,16 @@ def load_data(symbol, timeframe, start_date, end_date):
             df = df[~df.index.duplicated(keep='last')]
         except Exception as e:
             print(f"  파일 로드 오류: {e}")
-            return pd.DataFrame()
+            # 파일 로드 실패 시 API에서 직접 다운로드 시도
+            df = fetch_ohlcv_from_exchange(symbol, timeframe, start_date, end_date)
+            if df.empty:
+                return pd.DataFrame()
     else:
-        # ... (API 다운로드 로직 생략 - 기존과 동일하게 유지하거나 필요시 추가)
-        return pd.DataFrame()
+        # 파일이 없으면 API에서 직접 다운로드
+        print(f"  로컬 파일 없음, 바이난스 API에서 다운로드 시도...")
+        df = fetch_ohlcv_from_exchange(symbol, timeframe, start_date, end_date)
+        if df.empty:
+            return pd.DataFrame()
     
     # RSI 계산 (기간 필터링 전에 전체 데이터로 계산해야 정확함!)
     df['rsi'] = calculate_rsi(df, RSI_LENGTH)
@@ -725,14 +783,19 @@ def analyze_results(results):
     return results
 
 def load_daily_data(symbol):
-    """일봉 데이터 로드"""
+    """일봉 데이터 로드 (바이난스 버전)"""
     safe_name = symbol.replace('/', '_').replace(':', '_').lower()
     coin_name = safe_name.split('_')[0]
     
-    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_1d.json")
+    # 1. 바이난스 파일 확인
+    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_binance_1d.json")
     
+    # 2. 없으면 gateio 확인
     if not os.path.exists(json_file):
-        # gateio 없으면 bitget 시도
+        json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_gateio_1d.json")
+    
+    # 3. 없으면 bitget 확인
+    if not os.path.exists(json_file):
         json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_1d.json")
     
     if os.path.exists(json_file):
@@ -748,15 +811,27 @@ def load_daily_data(symbol):
         
         return df
     else:
-        print(f"  경고: 일봉 데이터 없음 - {symbol}")
-        return None
+        # 파일이 없으면 API에서 직접 다운로드 시도
+        print(f"  [{symbol}] 일봉 파일 없음, 바이난스 API에서 다운로드 시도...")
+        df = fetch_ohlcv_from_exchange(symbol, '1d', 
+                                       datetime.datetime(2015, 1, 1), 
+                                       datetime.datetime.now())
+        if df.empty:
+            print(f"  경고: 일봉 데이터 없음 - {symbol}")
+            return None
+        
+        # 이평선 계산
+        df['ma_short'] = df['close'].rolling(window=DAILY_MA_SHORT).mean()
+        df['ma_long'] = df['close'].rolling(window=DAILY_MA_LONG).mean()
+        
+        return df
 
 # ==============================================================================
 # 7. 백테스트 실행
 # ==============================================================================
 def validate_data_availability(coin_list, start_date, timeframe):
     """
-    백테스트 시작 전 각 코인의 데이터 가용성 검증
+    백테스트 시작 전 각 코인의 데이터 가용성 검증 (바이난스 버전)
     
     - 분봉/일봉 데이터 존재 여부 확인
     - 120일 이평선 계산에 필요한 데이터가 테스트 시작일 이전에 충분히 있는지 확인
@@ -786,12 +861,14 @@ def validate_data_availability(coin_list, start_date, timeframe):
         # =======================================================================
         # 일봉 데이터 확인 (이평선 계산용)
         # =======================================================================
-        daily_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_1d.json")
-        if not os.path.exists(daily_file):
-            # gateio 없으면 bitget 확인
-            daily_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_1d.json")
+        daily_file = None
+        for exchange in ['binance', 'gateio', 'bitget']:
+            test_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{exchange}_1d.json")
+            if os.path.exists(test_file):
+                daily_file = test_file
+                break
         
-        if os.path.exists(daily_file):
+        if daily_file:
             try:
                 with open(daily_file, 'r') as f:
                     data = json.load(f)
@@ -832,13 +909,15 @@ def validate_data_availability(coin_list, start_date, timeframe):
         # =======================================================================
         # 분봉 데이터 확인
         # =======================================================================
-        hourly_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_{timeframe}.json")
-        if not os.path.exists(hourly_file):
-            # gateio 없으면 bitget 확인
-            hourly_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_{timeframe}.json")
+        hourly_file = None
+        for exchange in ['binance', 'gateio', 'bitget']:
+            test_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{exchange}_{timeframe}.json")
+            if os.path.exists(test_file):
+                hourly_file = test_file
+                break
         
-        if not os.path.exists(hourly_file):
-            warnings.append(f"[!] [{symbol}] 로컬 {timeframe} 파일 없음")
+        if not hourly_file:
+            warnings.append(f"[!] [{symbol}] 로컬 {timeframe} 파일 없음 - API에서 다운로드 필요")
         else:
             try:
                 with open(hourly_file, 'r') as f:
@@ -894,8 +973,8 @@ def validate_data_availability(coin_list, start_date, timeframe):
         if no_file_errors:
             print(f"\n[X] 아래 코인들은 일봉 데이터 파일이 없습니다:")
             for err in no_file_errors:
-                print(f"  - {err['symbol']}")
-            print("\n[TIP] Gateio_F_caldle_info.py를 사용하여 일봉 데이터를 먼저 다운로드하세요.")
+                print(f"  • {err['symbol']}")
+            print("\n[TIP] Binance_F_caldle_info.py를 사용하여 일봉 데이터를 먼저 다운로드하세요.")
         
         print("\n" + "="*70)
         return False, errors
@@ -904,11 +983,11 @@ def validate_data_availability(coin_list, start_date, timeframe):
     return True, []
 
 def run_backtest():
-    """백테스트 실행"""
+    """백테스트 실행 (바이난스 버전)"""
     print("\n" + "="*70)
-    print("RSI 롱숏 분할매매 전략 백테스트 [GATEIO]")
+    print("RSI 롱숏 분할매매 전략 백테스트 [BINANCE 버전]")
     print("="*70)
-    print(f"거래소: {COIN_EXCHANGE.upper()}")
+    print(f"거래소: {COIN_EXCHANGE.upper()} (더 긴 과거 데이터 지원)")
     print(f"테스트 기간: {TEST_START_DATE.date()} ~ {TEST_END_DATE.date()}")
     print(f"초기 자본: ${INITIAL_CAPITAL:,}")
     print(f"레버리지: {LEVERAGE}x")
@@ -1380,7 +1459,7 @@ class ChartApp(tk.Tk):
     
     def __init__(self, results, coin_list, daily_df, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.title("4-2 RSI 롱숏 분할매매 전략 - 백테스트 결과 분석")
+        self.title("4.Binance RSI 롱숏 분할매매 전략 - 백테스트 결과 분석")
         self.geometry("1800x1000")
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         

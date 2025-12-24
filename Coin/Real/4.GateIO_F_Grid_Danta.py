@@ -60,7 +60,7 @@ LEVERAGE = 7
 FEE_RATE = 0.001                      # 거래 수수료 (0.1%)
 
 # 코인 리스트
-COIN_LIST = ['ETH/USDT:USDT', 'DOGE/USDT:USDT', 'ADA/USDT:USDT', 'XRP/USDT:USDT', 'TRX/USDT:USDT']
+COIN_LIST = ['BTC/USDT:USDT','ETH/USDT:USDT', 'XRP/USDT:USDT', 'DOGE/USDT:USDT', 'ADA/USDT:USDT']
 
 # RSI 설정
 RSI_LENGTH = 14
@@ -126,10 +126,24 @@ except Exception as e:
 
 try:
     with open(BOT_DATA_FILE_PATH, 'r') as f:
-        BotDataDict = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
+        content = f.read().strip()
+        if content:
+            BotDataDict = json.loads(content)
+        else:
+            BotDataDict = {}
+            print(f"상태 파일이 비어있어 새로 생성합니다: {BOT_DATA_FILE_PATH}")
+except FileNotFoundError:
     BotDataDict = {}
-    print(f"상태 파일을 찾을 수 없거나 비어있어 새로 생성합니다: {BOT_DATA_FILE_PATH}")
+    print(f"상태 파일을 찾을 수 없어 새로 생성합니다: {BOT_DATA_FILE_PATH}")
+    # 파일이 없을 경우 디렉토리 생성 및 빈 파일 저장
+    os.makedirs(os.path.dirname(BOT_DATA_FILE_PATH), exist_ok=True)
+    with open(BOT_DATA_FILE_PATH, 'w') as f:
+        json.dump(BotDataDict, f, indent=4)
+except json.JSONDecodeError:
+    BotDataDict = {}
+    print(f"상태 파일 JSON 파싱 오류, 새로 생성합니다: {BOT_DATA_FILE_PATH}")
+    with open(BOT_DATA_FILE_PATH, 'w') as f:
+        json.dump(BotDataDict, f, indent=4)
 
 def save_bot_data():
     """상태 데이터를 JSON 파일에 저장합니다."""
