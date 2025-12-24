@@ -66,8 +66,8 @@ COIN_LIST = ['BTC/USDT','ETH/USDT','XRP/USDT','DOGE/USDT','ADA/USDT']
 RSI_LENGTH = 14
 RSI_LONG_ENTRY = 25                   # 롱 진입 RSI
 RSI_SHORT_ENTRY = 75                  # 숏 진입 RSI
-RSI_LONG_RESET = 35                   # 롱 리셋 RSI (이 값 위로 갔다가 다시 25 아래로)
-RSI_SHORT_RESET = 65                  # 숏 리셋 RSI (이 값 아래로 갔다가 다시 75 위로)
+RSI_LONG_RESET = 40                   # 롱 리셋 RSI (이 값 위로 갔다가 다시 25 아래로)
+RSI_SHORT_RESET = 60                  # 숏 리셋 RSI (이 값 아래로 갔다가 다시 75 위로)
 
 # 일봉 이평선 설정 (영역 구분용)
 DAILY_MA_LONG = 120                   # 장기 이평선
@@ -93,14 +93,14 @@ TAKE_PROFIT_LEVELS = [
 # 출금 설정
 # WITHDRAWAL_TYPE: 'NONE' = 출금 안함, 'ANNUAL' = 연간 출금, 'MONTHLY' = 월별 출금
 # ==============================================================================
-WITHDRAWAL_TYPE = 'NONE'              # 'NONE', 'ANNUAL', 'MONTHLY' 중 선택
+WITHDRAWAL_TYPE = 'MONTHLY'              # 'NONE', 'ANNUAL', 'MONTHLY' 중 선택
 
 # 연간 출금 설정 (WITHDRAWAL_TYPE = 'ANNUAL' 일 때 사용)
 ANNUAL_WITHDRAWAL_RATE = 0.20         # 연간 수익의 20% 출금
 ANNUAL_WITHDRAWAL_MONTHS = [1]        # 1월에 출금
 
 # 월별 출금 설정 (WITHDRAWAL_TYPE = 'MONTHLY' 일 때 사용)
-MONTHLY_WITHDRAWAL_RATE = 0.10        # 매월 총자산의 10% 출금
+MONTHLY_WITHDRAWAL_RATE = 0.10        # 매월 전달 수익의 10% 출금
 
 # JSON 데이터 경로
 DATA_PATH = r'C:\AutoTrading\Coin\json'
@@ -196,6 +196,7 @@ class FundManager:
         self.withdrawal_history = []
         self.total_withdrawn = 0
         self.last_year_balance = initial_capital
+        self.last_month_balance = initial_capital  # 월별 출금용 전월 잔액
         self.last_withdrawal_date = None
     
     def get_total_equity(self, current_prices):
@@ -525,19 +526,24 @@ class FundManager:
             self.last_year_balance = self.get_total_equity(current_prices)
         
         elif WITHDRAWAL_TYPE == 'MONTHLY':
-            # 월별 출금: 매월 총자산의 일정 비율 출금
-            withdrawal = current_equity * MONTHLY_WITHDRAWAL_RATE
+            # 월별 출금: 전달 수익의 일정 비율 출금
+            month_profit = current_equity - self.last_month_balance
             
-            if withdrawal > 0 and withdrawal <= self.available_balance:
-                self.available_balance -= withdrawal
-                self.total_withdrawn += withdrawal
-                self.withdrawal_history.append({
-                    'date': str(current_date),
-                    'amount': withdrawal,
-                    'total': self.total_withdrawn,
-                    'type': 'MONTHLY'
-                })
-                print(f"\n[월별출금] {current_date}: 총자산 ${current_equity:,.2f}의 {MONTHLY_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
+            if month_profit > 0:
+                withdrawal = month_profit * MONTHLY_WITHDRAWAL_RATE
+                if withdrawal <= self.available_balance:
+                    self.available_balance -= withdrawal
+                    self.total_withdrawn += withdrawal
+                    self.withdrawal_history.append({
+                        'date': str(current_date),
+                        'amount': withdrawal,
+                        'total': self.total_withdrawn,
+                        'type': 'MONTHLY'
+                    })
+                    print(f"\n[월별출금] {current_date}: 전달 수익 ${month_profit:,.2f}의 {MONTHLY_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
+            
+            # 다음 달 비교를 위해 현재 자산 저장
+            self.last_month_balance = self.get_total_equity(current_prices)
         
         self.last_withdrawal_date = current_date
     
@@ -1364,22 +1370,40 @@ def analyze_results(results):
         # 연도별 수익 집계
         yearly_pnl = trades_df.groupby('year')['pnl'].sum()
         
+        # 출금 기록을 월별로 집계
+        withdrawal_history = results.get('withdrawal_history', [])
+        monthly_withdrawals = {}
+        for w in withdrawal_history:
+            w_date = pd.to_datetime(w['date'])
+            w_period = w_date.to_period('M')
+            if w_period not in monthly_withdrawals:
+                monthly_withdrawals[w_period] = 0
+            monthly_withdrawals[w_period] += w['amount']
+        
         # 월별 수익 출력
-        print("\n" + "="*100)
+        print("\n" + "="*120)
         print("월별 수익 요약")
-        print("="*100)
-        print(f"{'월':^10} | {'수익(USDT)':>15} | {'수익률(%)':>10} | {'누적수익':>15} | {'잔액':>15}")
-        print("-"*100)
+        print("="*120)
+        print(f"{'월':^10} | {'수익(USDT)':>15} | {'수익률(%)':>10} | {'출금액':>12} | {'누적수익':>15} | {'잔액':>15}")
+        print("-"*120)
         
         cumulative = 0
+        cumulative_withdrawal = 0
         prev_balance = initial_capital
         balance = initial_capital
         for period, pnl in monthly_pnl.items():
             # 월간 수익률 = 해당월 수익 / 월초 잔액 * 100
             monthly_return = (pnl / prev_balance * 100) if prev_balance > 0 else 0
             cumulative += pnl
-            balance = initial_capital + cumulative
-            print(f"{str(period):^10} | {pnl:>+15,.2f} | {monthly_return:>+9.2f}% | {cumulative:>+15,.2f} | {balance:>15,.2f}")
+            
+            # 해당 월 출금액
+            month_withdrawal = monthly_withdrawals.get(period, 0)
+            cumulative_withdrawal += month_withdrawal
+            
+            balance = initial_capital + cumulative - cumulative_withdrawal
+            
+            withdrawal_str = f"${month_withdrawal:>10,.2f}" if month_withdrawal > 0 else "-"
+            print(f"{str(period):^10} | {pnl:>+15,.2f} | {monthly_return:>+9.2f}% | {withdrawal_str:>12} | {cumulative:>+15,.2f} | {balance:>15,.2f}")
             prev_balance = balance
         
         # 연도별 수익 출력
