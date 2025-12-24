@@ -89,10 +89,18 @@ TAKE_PROFIT_LEVELS = [
     {'profit_pct': 50, 'sell_pct': 70},
 ]
 
-# 연간 출금 설정
-ANNUAL_WITHDRAWAL_ENABLED = False
-ANNUAL_WITHDRAWAL_RATE = 0.20
-ANNUAL_WITHDRAWAL_MONTHS = [1]
+# ==============================================================================
+# 출금 설정
+# WITHDRAWAL_TYPE: 'NONE' = 출금 안함, 'ANNUAL' = 연간 출금, 'MONTHLY' = 월별 출금
+# ==============================================================================
+WITHDRAWAL_TYPE = 'NONE'              # 'NONE', 'ANNUAL', 'MONTHLY' 중 선택
+
+# 연간 출금 설정 (WITHDRAWAL_TYPE = 'ANNUAL' 일 때 사용)
+ANNUAL_WITHDRAWAL_RATE = 0.20         # 연간 수익의 20% 출금
+ANNUAL_WITHDRAWAL_MONTHS = [1]        # 1월에 출금
+
+# 월별 출금 설정 (WITHDRAWAL_TYPE = 'MONTHLY' 일 때 사용)
+MONTHLY_WITHDRAWAL_RATE = 0.10        # 매월 총자산의 10% 출금
 
 # JSON 데이터 경로
 DATA_PATH = r'C:\AutoTrading\Coin\json'
@@ -477,35 +485,60 @@ class FundManager:
                 if not pos.short_tp_triggered[i] and profit_pct >= tp['profit_pct']:
                     self.partial_close_short(symbol, price, timestamp, leverage, tp['sell_pct'], i, current_prices)
     
-    def check_annual_withdrawal(self, timestamp, current_prices):
-        """연간 출금 체크"""
-        if not ANNUAL_WITHDRAWAL_ENABLED:
+    def check_withdrawal(self, timestamp, current_prices):
+        """출금 체크 (연간 또는 월별)"""
+        if WITHDRAWAL_TYPE == 'NONE':
             return
         
         current_date = timestamp.date() if hasattr(timestamp, 'date') else timestamp
         
-        if current_date.day != 1 or current_date.month not in ANNUAL_WITHDRAWAL_MONTHS:
-            return
-        
+        # 이미 같은 날 출금 체크했으면 스킵
         if self.last_withdrawal_date == current_date:
             return
         
-        current_equity = self.get_total_equity(current_prices)
-        year_profit = current_equity - self.last_year_balance
+        # 월 1일에만 출금 체크
+        if current_date.day != 1:
+            return
         
-        if year_profit > 0:
-            withdrawal = year_profit * ANNUAL_WITHDRAWAL_RATE
-            if withdrawal <= self.available_balance:
+        current_equity = self.get_total_equity(current_prices)
+        
+        if WITHDRAWAL_TYPE == 'ANNUAL':
+            # 연간 출금: 지정된 월에만 수익 기준 출금
+            if current_date.month not in ANNUAL_WITHDRAWAL_MONTHS:
+                return
+            
+            year_profit = current_equity - self.last_year_balance
+            
+            if year_profit > 0:
+                withdrawal = year_profit * ANNUAL_WITHDRAWAL_RATE
+                if withdrawal <= self.available_balance:
+                    self.available_balance -= withdrawal
+                    self.total_withdrawn += withdrawal
+                    self.withdrawal_history.append({
+                        'date': str(current_date),
+                        'amount': withdrawal,
+                        'total': self.total_withdrawn,
+                        'type': 'ANNUAL'
+                    })
+                    print(f"\n[연간출금] {current_date}: 연간 수익 ${year_profit:,.2f}의 {ANNUAL_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
+            
+            self.last_year_balance = self.get_total_equity(current_prices)
+        
+        elif WITHDRAWAL_TYPE == 'MONTHLY':
+            # 월별 출금: 매월 총자산의 일정 비율 출금
+            withdrawal = current_equity * MONTHLY_WITHDRAWAL_RATE
+            
+            if withdrawal > 0 and withdrawal <= self.available_balance:
                 self.available_balance -= withdrawal
                 self.total_withdrawn += withdrawal
                 self.withdrawal_history.append({
                     'date': str(current_date),
                     'amount': withdrawal,
-                    'total': self.total_withdrawn
+                    'total': self.total_withdrawn,
+                    'type': 'MONTHLY'
                 })
-                print(f"\n[출금] {current_date}: 연간 수익 ${year_profit:,.2f}의 {ANNUAL_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
+                print(f"\n[월별출금] {current_date}: 총자산 ${current_equity:,.2f}의 {MONTHLY_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
         
-        self.last_year_balance = self.get_total_equity(current_prices)
         self.last_withdrawal_date = current_date
     
     def record_daily_balance(self, timestamp, current_prices):
@@ -1075,8 +1108,8 @@ def run_backtest():
                     if can_enter:
                         fund_mgr.open_short(symbol, execution_price, current_time, current_prices, current_zone, LEVERAGE, prev_rsi)
         
-        # 연간 출금 체크
-        fund_mgr.check_annual_withdrawal(current_time, current_prices)
+        # 출금 체크 (연간 또는 월별)
+        fund_mgr.check_withdrawal(current_time, current_prices)
         
         # 일별 잔액 기록
         fund_mgr.record_daily_balance(current_time, current_prices)
