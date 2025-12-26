@@ -298,7 +298,7 @@ except Exception as e:
 
 
 #내 계좌의 총 평가금액에서 해당 봇에게 할당할 총 금액비율 1.0 = 100%  0.5 = 50%
-InvestRate = 0.3
+InvestRate = 0.5
 
 #기준이 되는 내 총 평가금액에서 투자비중을 곱해서 나온 포트폴리오에 할당된 돈!!
 TotalMoney = float(Balance['TotalMoney']) * InvestRate

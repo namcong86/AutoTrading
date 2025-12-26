@@ -32,7 +32,7 @@ BASE_BUY_RATE = 0.02 # 할당 자본 대비 1회차 매수 금액 비율 (예: 0
 USE_DYNAMIC_BASE_BUY_AMOUNT = True
 
 # 월별 수익 출금 비율 설정
-MONTHLY_WITHDRAWAL_RATE = 0 # 월별 수익 출금 비율 (%, 0이면 출금 안함)
+MONTHLY_WITHDRAWAL_RATE = 20 # 월별 수익 출금 비율 (%, 0이면 출금 안함)
 
 # --- 전략 선택 스위치 ---
 USE_ADDITIVE_BUYING = False   # True: RSI/차수별 가산 매수 사용, False: 균등 매수 사용
@@ -810,17 +810,19 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
         print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,   수익률: {row.get('monthly_return', 0):>+7.2f}%,   수수료: {row.get('fees', 0):>8,.2f} USDT,   출금액: {row['Withdrawal']:>10,.2f} USDT")
     print("="*125)
 
-    # 연도별 요약 추가
+    # 연도별 요약 추가 (잔액 변동 기준)
     yearly_summary = daily_summary.resample('YE').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
     yearly_summary['begin_value'] = yearly_summary['value'].shift(1).fillna(INITIAL_CAPITAL)
-    yearly_summary['yearly_return'] = (yearly_summary['Realized PNL'] / yearly_summary['begin_value'].replace(0, np.nan)) * 100
+    # 잔액 변동 기반 PNL 계산 (출금액 포함)
+    yearly_summary['Net PNL'] = yearly_summary['value'] - yearly_summary['begin_value']
+    yearly_summary['yearly_return'] = (yearly_summary['Net PNL'] / yearly_summary['begin_value'].replace(0, np.nan)) * 100
     yearly_summary.index = yearly_summary.index.year
     
-    print("\n" + "="*100 + "\n" + " " * 35 + "연도별 요약 (실현 손익 기준)\n" + "="*100)
-    print(f"{'연도':^8} | {'총잔액':>15} | {'연간 실현 Net PNL':>18} | {'수익률':>10} | {'수수료':>12}")
+    print("\n" + "="*100 + "\n" + " " * 35 + "연도별 요약 (잔액 변동 기준)\n" + "="*100)
+    print(f"{'연도':^8} | {'총잔액':>15} | {'연간 Net PNL':>18} | {'수익률':>10} | {'수수료':>12}")
     print("-"*100)
     for year, row in yearly_summary.iterrows():
-        print(f"{year:^8} | {row['value']:>12,.2f} USDT | {row['Realized PNL']:>+15,.2f} USDT | {row.get('yearly_return', 0):>+8.2f}% | {row.get('fees', 0):>10,.2f} USDT")
+        print(f"{year:^8} | {row['value']:>12,.2f} USDT | {row['Net PNL']:>+15,.2f} USDT | {row.get('yearly_return', 0):>+8.2f}% | {row.get('fees', 0):>10,.2f} USDT")
     print("="*100)
 
     total_return_if_no_withdrawal = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100

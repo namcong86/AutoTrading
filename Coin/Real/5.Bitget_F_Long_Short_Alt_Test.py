@@ -50,13 +50,13 @@ set_korean_font()
 # 백테스트 설정
 # ==============================================================================
 INITIAL_CAPITAL = 10000      # 초기 자본금 (USDT)
-LEVERAGE = 1.5                  # 레버리지 배수
+LEVERAGE = 1.4                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
 DAILY_MA = 115                # 일봉 장기 이동평균 기간 (방향 필터용)
 DAILY_MA_SHORT = 15           # 일봉 단기 이동평균 기간 (듀얼 필터용)
 TIMEFRAME = '1h'              # 캔들 타임프레임 ('1h' 또는 '15m')
-FEE_RATE = 0.0006             # 거래 수수료 (0.06%)
+FEE_RATE = 0.001             # 거래 수수료 (0.06%)
 
 # 듀얼 이평선 필터 설정 (20일선 + 115일선)
 # True: 직전일 종가가 두 선 위 → 롱만, 두 선 아래 → 숏만, 사이 → 둘 다 가능
@@ -275,6 +275,7 @@ class CycleManager:
         self.cycle_num = 0              # 현재 사이클 번호
         self.cycle_allocation = 0       # 사이클 시작 시 코인당 할당금액
         self.in_cycle = False           # 사이클 진행 중 여부
+        self.cycle_start_time = None    # 현재 사이클 시작 시간
         
         # 코인별 포지션 정보
         self.positions = {}  # {symbol: {'direction': 'long/short', 'entry_price': float, 'qty': float, 'invest_amount': float}}
@@ -315,6 +316,7 @@ class CycleManager:
     def start_new_cycle(self, timestamp, current_prices):
         """새 사이클 시작 - 현재 총 자산을 N등분"""
         self.cycle_num += 1
+        self.cycle_start_time = timestamp  # 사이클 시작 시간 저장
         
         # 총 자산 계산 (사용가능잔액 + 미실현포지션가치) - 실제로는 포지션이 없을 때만 호출됨
         total_equity = self.get_total_equity(current_prices)
@@ -332,6 +334,7 @@ class CycleManager:
         """사이클 종료 - 모든 포지션이 청산되었을 때"""
         cycle_info = {
             'cycle_num': self.cycle_num,
+            'start_time': str(self.cycle_start_time) if self.cycle_start_time else None,
             'end_time': str(timestamp),
             'final_balance': self.available_balance,
             'allocation_per_coin': self.cycle_allocation
@@ -1003,10 +1006,23 @@ def analyze_results(results):
     daily_df['date'] = pd.to_datetime(daily_df['date'])
     daily_df.set_index('date', inplace=True)
     
-    # 전체 MDD 계산 (기존)
+    # 전체 MDD 계산 (기존) - 일별 잔액 기준
     daily_df['peak'] = daily_df['balance'].cummax()
     daily_df['drawdown'] = (daily_df['balance'] - daily_df['peak']) / daily_df['peak'] * 100
     mdd = daily_df['drawdown'].min()
+    daily_mdd = mdd  # 일별 잔액 기준 MDD (기존 MDD와 동일)
+    
+    # 주별 잔액 기준 MDD 계산
+    weekly_balance = daily_df['balance'].resample('W').last().ffill()
+    weekly_peak = weekly_balance.cummax()
+    weekly_drawdown = (weekly_balance - weekly_peak) / weekly_peak * 100
+    weekly_mdd = weekly_drawdown.min() if len(weekly_drawdown) > 0 else 0
+    
+    # 월별 잔액 기준 MDD 계산
+    monthly_balance = daily_df['balance'].resample('ME').last().ffill()
+    monthly_peak = monthly_balance.cummax()
+    monthly_drawdown = (monthly_balance - monthly_peak) / monthly_peak * 100
+    monthly_mdd = monthly_drawdown.min() if len(monthly_drawdown) > 0 else 0
     
     # ========================================
     # 사이클 종료 잔액 기준 MDD 계산 (출금 보정 포함)
@@ -1155,9 +1171,17 @@ def analyze_results(results):
     else:
         print(f"총 수익률: {results['total_return']:.2f}%")
     
-    print(f"최대 낙폭 (MDD): {mdd:.2f}%")
-    print(f"사이클 종료 기준 MDD: {cycle_mdd:.2f}% (출금 보정 포함)")
-    print(f"총 사이클 수: {results['total_cycles']}회")
+    # MDD 요약 섹션
+    print("\n" + "=" * 70)
+    print("[MDD] 최대 낙폭 분석")
+    print("=" * 70)
+    print(f"MDD (전략 성과 기준 / 출금 영향 제거): {cycle_mdd:.2f}%")
+    print(f"MDD (실제 자산 기준 / 청산 위험성 참고): {mdd:.2f}%")
+    print(f"일별 MDD: {daily_mdd:.2f}%")
+    print(f"주별 MDD: {weekly_mdd:.2f}%")
+    print(f"월별 MDD: {monthly_mdd:.2f}%")
+    
+    print(f"\n총 사이클 수: {results['total_cycles']}회")
     print(f"총 거래 횟수: {total_trades}회")
     print(f"승률: {win_rate:.2f}% (승: {win_trades}회, 패: {lose_trades}회)")
     
@@ -1205,6 +1229,38 @@ def analyze_results(results):
         end_balance = yearly.loc[date]
         pnl = end_balance - (yearly.iloc[i-1] if i > 0 else yearly_first.iloc[0])
         print(f"{date.year}년: {ret:+.2f}%  |  잔액: ${end_balance:,.2f}  |  손익: ${pnl:+,.2f}")
+    
+    # 사이클 기간 분석 - Top 5 가장 긴 사이클
+    cycle_history = results.get('cycle_history', [])
+    if cycle_history:
+        cycle_durations = []
+        for cycle in cycle_history:
+            if cycle.get('start_time') and cycle.get('end_time'):
+                start = pd.to_datetime(cycle['start_time'])
+                end = pd.to_datetime(cycle['end_time'])
+                duration = end - start
+                duration_days = duration.total_seconds() / (24 * 3600)  # 일 단위로 변환
+                cycle_durations.append({
+                    'cycle_num': cycle['cycle_num'],
+                    'start_time': start,
+                    'end_time': end,
+                    'duration': duration,
+                    'duration_days': duration_days
+                })
+        
+        if cycle_durations:
+            # 기간 기준 내림차순 정렬
+            sorted_cycles = sorted(cycle_durations, key=lambda x: x['duration'], reverse=True)[:5]
+            
+            print("\n" + "=" * 70)
+            print("[사이클] 가장 긴 사이클 Top 5")
+            print("=" * 70)
+            for rank, cycle in enumerate(sorted_cycles, 1):
+                days = int(cycle['duration_days'])
+                hours = int((cycle['duration_days'] - days) * 24)
+                print(f"  {rank}위: 사이클 #{cycle['cycle_num']:>3}  |  "
+                      f"{cycle['start_time'].strftime('%Y-%m-%d %H:%M')} ~ {cycle['end_time'].strftime('%Y-%m-%d %H:%M')}  |  "
+                      f"{days}일 {hours}시간")
     
     return daily_df, mdd, cycle_mdd, coin_stats, trades
 
