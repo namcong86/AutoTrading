@@ -1,11 +1,8 @@
 # -*- coding:utf-8 -*-
 '''
-파일이름: 4-2.GateIO_F_Grid_Danta_Test.py
-설명: RSI 기반 롱숏 분할매매 전략 백테스트
-      - 일봉 이평선(120/20) 기준 3영역(LONG/MIDDLE/SHORT) 구분
-      - RSI(14) 기반 진입 (25 이하 롱, 75 이상 숏)
-      - 분할 익절 (5/10/20/30/50%)
-      - 영역 변화에 따른 청산
+
+파일이름: 9.GateIO_F_Grid_Danta_LongShort_Final_v9_adx_condition.py
+설명: 볼린저밴드, RSI, MACD, ADX를 이용한 롱/숏 그리드 매매 전략 (ADX 조건부 동적 RSI 적용)
 '''
 import ccxt
 import time
@@ -13,1862 +10,867 @@ import pandas as pd
 import numpy as np
 import datetime
 import matplotlib.pyplot as plt
-import matplotlib as mpl
 import os
-import json
-import re
-from enum import Enum
-
-# GUI 및 차트 연동을 위한 라이브러리
-import tkinter as tk
-from tkinter import ttk
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-
-# ==============================================================================
-# 한글 폰트 설정 (Windows)
-# ==============================================================================
-import matplotlib.font_manager as fm
-
-def set_korean_font():
-    font_list = ['Malgun Gothic', 'NanumGothic', 'NanumBarunGothic', 'Gulim', 'Dotum']
-    for font_name in font_list:
-        try:
-            font_path = fm.findfont(fm.FontProperties(family=font_name))
-            if font_path and 'ttf' in font_path.lower():
-                plt.rcParams['font.family'] = font_name
-                plt.rcParams['axes.unicode_minus'] = False
-                print(f"[폰트] {font_name} 사용")
-                return True
-        except:
-            continue
-    plt.rcParams['axes.unicode_minus'] = False
-    return False
-
-set_korean_font()
 
 # ==============================================================================
 # 1. 백테스트 환경 설정
 # ==============================================================================
-COIN_EXCHANGE = "gateio"
-TEST_START_DATE = datetime.datetime(2021, 4, 1)
-TEST_END_DATE = datetime.datetime.now()
-INITIAL_CAPITAL = 10000
-TIMEFRAME = '15m'                      # 1시간봉
-LEVERAGE = 7
-FEE_RATE = 0.001                     # 거래 수수료 (0.1%)
+COIN_EXCHANGE = "gateio"  # 거래소 이름 (예: 'binance', 'gateio')
+TEST_START_DATE = datetime.datetime(2021, 1, 1)  # 시작일
+TEST_END_DATE = datetime.datetime.now()   # 종료일 (현재)
+INITIAL_CAPITAL = 100000      # 시작 자본 (USDT)
+TIMEFRAME ='15m'             # 15분봉 데이터 사용
+LEVERAGE = 8                # 레버리지
+STOP_LOSS_PNL_RATE = -1    # 할당 자본 대비 손절 PNL 비율 (-1 = 사용 안함)
+INVEST_COIN_LIST = "DOGE/USDT" # 백테스트할 코인 목록 (리스트 또는 단일 문자열)
+FEE_RATE = 0.0005            # 거래 수수료 (시장가 0.05%)
 
-# 코인 리스트
-COIN_LIST = ['BTC/USDT','ETH/USDT','XRP/USDT','DOGE/USDT','ADA/USDT']
-#COIN_LIST = ['ETH/USDT']
+BASE_BUY_RATE = 0.02 # 할당 자본 대비 1회차 매수 금액 비율 (예: 0.03 = 3%)
 
-# RSI 설정
-RSI_LENGTH = 14
-RSI_LONG_ENTRY = 25                   # 롱 진입 RSI
-RSI_SHORT_ENTRY = 75                  # 숏 진입 RSI
-RSI_LONG_RESET = 40                   # 롱 리셋 RSI (이 값 위로 갔다가 다시 25 아래로)
-RSI_SHORT_RESET = 60                  # 숏 리셋 RSI (이 값 아래로 갔다가 다시 75 위로)
+# <<< [수정] 설정 설명 명확화 >>>
+# True: '매 진입 시점'의 가용 현금 기준, False: 포지션 사이클 시작 시점의 '할당 자본' 기준
+USE_DYNAMIC_BASE_BUY_AMOUNT = True
 
-# 일봉 이평선 설정 (영역 구분용)
-DAILY_MA_LONG = 120                   # 장기 이평선
-DAILY_MA_SHORT = 20                   # 단기 이평선
+# 월별 수익 출금 비율 설정
+MONTHLY_WITHDRAWAL_RATE = 0 # 월별 수익 출금 비율 (%, 0이면 출금 안함)
 
-# 분할 진입 설정
-MAX_ENTRY_COUNT = 10                  # 최대 진입 회차
+# --- 전략 선택 스위치 ---
+USE_ADDITIVE_BUYING = False   # True: RSI/차수별 가산 매수 사용, False: 균등 매수 사용
+USE_STRATEGIC_EXIT = False   # True: 누적 수익으로 손실 포지션을 상쇄하는 전략적 종료 로직 사용
+USE_MACD_BUY_LOCK = True     # True: MACD 히스토그램이 음수일 때 추가 매수 잠금
 
-# 중립구간 50% 투자 옵션
-HALF_INVEST_IN_MIDDLE = True          # True: 중립구간에서 50% 투자
+# 숏 포지션 전략 관련 설정
+USE_SHORT_STRATEGY = True    # True: 숏 포지션 전략 사용
+SHORT_CONDITION_TIMEFRAME = '1d' # 숏 포지션 진입 조건(MA, MACD)을 확인할 타임프레임 ('1d', '4h', '1h' 등)
+MAX_LONG_BUY_COUNT = 10      # 최대 롱 분할매수 횟수
+MAX_SHORT_BUY_COUNT = 5     # 최대 숏 분할매수 횟수
+SHORT_ENTRY_RSI = 75         # 숏 포지션 진입을 위한 RSI 조건 값
 
-# 익절 설정 (레버리지 미적용 수익률 기준)
-TAKE_PROFIT_ENABLED = True
-TAKE_PROFIT_LEVELS = [
-    {'profit_pct': 5, 'sell_pct': 10},
-    {'profit_pct': 10, 'sell_pct': 20},
-    {'profit_pct': 20, 'sell_pct': 30},
-    {'profit_pct': 30, 'sell_pct': 50},
-    {'profit_pct': 50, 'sell_pct': 70},
-]
+# 롱 포지션 개수와 ADX에 따른 숏 진입 RSI 조정값 설정
+SHORT_RSI_ADJUSTMENT = 0
 
-# ==============================================================================
-# 출금 설정
-# WITHDRAWAL_TYPE: 'NONE' = 출금 안함, 'ANNUAL' = 연간 출금, 'MONTHLY' = 월별 출금
-# ==============================================================================
-WITHDRAWAL_TYPE = 'MONTHLY'              # 'NONE', 'ANNUAL', 'MONTHLY' 중 선택
+# 롱 포지션이 숏 포지션보다 이 횟수 이상 많고, 특정 조건 만족 시 추가 롱 진입을 막습니다.
+LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 6
 
-# 연간 출금 설정 (WITHDRAWAL_TYPE = 'ANNUAL' 일 때 사용)
-ANNUAL_WITHDRAWAL_RATE = 0.20         # 연간 수익의 20% 출금
-ANNUAL_WITHDRAWAL_MONTHS = [1]        # 1월에 출금
-
-# 월별 출금 설정 (WITHDRAWAL_TYPE = 'MONTHLY' 일 때 사용)
-MONTHLY_WITHDRAWAL_RATE = 0.10        # 매월 전달 수익의 10% 출금
-
-# JSON 데이터 경로
-DATA_PATH = r'C:\AutoTrading\Coin\json'
 
 # ==============================================================================
-# 2. 영역 타입 정의
+# 2. 데이터 처리 및 보조지표 계산 함수
+# (이전과 동일)
 # ==============================================================================
-class ZoneType(Enum):
-    LONG = 'LONG'       # 두 이평선 위
-    MIDDLE = 'MIDDLE'   # 두 이평선 사이
-    SHORT = 'SHORT'     # 두 이평선 아래
-
-# ==============================================================================
-# 3. 포지션 관리 클래스
-# ==============================================================================
-class PositionManager:
-    """코인별 포지션 및 영역 상태 관리"""
-    
-    def __init__(self, symbol, n_coins):
-        self.symbol = symbol
-        self.n_coins = n_coins
-        
-        # 롱 포지션 상태
-        self.long_entry_count = 0
-        self.long_avg_price = 0.0
-        self.long_quantity = 0.0
-        self.long_collateral = 0.0
-        self.long_start_zone = None       # 롱 포지션 시작 영역
-        self.long_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        self.long_rsi_reset = True        # RSI 리셋 여부 (진입 가능 상태)
-        self.long_visited_zone = None     # MIDDLE 시작 시 방문한 영역 추적
-        
-        # 숏 포지션 상태
-        self.short_entry_count = 0
-        self.short_avg_price = 0.0
-        self.short_quantity = 0.0
-        self.short_collateral = 0.0
-        self.short_start_zone = None
-        self.short_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        self.short_rsi_reset = True
-        self.short_visited_zone = None
-    
-    def has_long_position(self):
-        return self.long_entry_count > 0
-    
-    def has_short_position(self):
-        return self.short_entry_count > 0
-    
-    def get_long_unrealized_pnl(self, current_price):
-        """롱 미실현 손익 (레버리지 미적용 수익률 기준)"""
-        if self.long_quantity == 0:
-            return 0.0
-        return (current_price - self.long_avg_price) * self.long_quantity
-    
-    def get_short_unrealized_pnl(self, current_price):
-        """숏 미실현 손익"""
-        if self.short_quantity == 0:
-            return 0.0
-        return (self.short_avg_price - current_price) * self.short_quantity
-    
-    def get_long_profit_pct(self, current_price):
-        """롱 수익률 (레버리지 미적용)"""
-        if self.long_avg_price == 0:
-            return 0.0
-        return (current_price - self.long_avg_price) / self.long_avg_price * 100
-    
-    def get_short_profit_pct(self, current_price):
-        """숏 수익률 (레버리지 미적용)"""
-        if self.short_avg_price == 0:
-            return 0.0
-        return (self.short_avg_price - current_price) / self.short_avg_price * 100
-
-# ==============================================================================
-# 4. 자금 관리 클래스
-# ==============================================================================
-class FundManager:
-    """통합 자금 관리"""
-    
-    def __init__(self, initial_capital, coin_list):
-        self.available_balance = initial_capital
-        self.initial_capital = initial_capital
-        self.coin_list = coin_list
-        self.n_coins = len(coin_list)
-        
-        # 포지션 매니저 (코인별)
-        self.positions = {symbol: PositionManager(symbol, self.n_coins) for symbol in coin_list}
-        
-        # 거래 기록
-        self.trades = []
-        self.daily_balance = []
-        
-        # 출금 기록
-        self.withdrawal_history = []
-        self.total_withdrawn = 0
-        self.last_year_balance = initial_capital
-        self.last_month_balance = initial_capital  # 월별 출금용 전월 잔액
-        self.last_withdrawal_date = None
-    
-    def get_total_equity(self, current_prices):
-        """현재 총 자산가치"""
-        total = self.available_balance
-        for symbol, pos in self.positions.items():
-            if symbol in current_prices:
-                price = current_prices[symbol]
-                total += pos.long_collateral + pos.get_long_unrealized_pnl(price)
-                total += pos.short_collateral + pos.get_short_unrealized_pnl(price)
-        return total
-    
-    def calculate_entry_amount(self, current_prices, is_middle_zone=False):
-        """진입 금액 계산 (총자산 / 코인수 / 최대회차)"""
-        equity = self.get_total_equity(current_prices)
-        base_amount = equity / self.n_coins / MAX_ENTRY_COUNT
-        
-        if is_middle_zone and HALF_INVEST_IN_MIDDLE:
-            base_amount *= 0.5
-        
-        return base_amount
-    
-    def open_long(self, symbol, price, timestamp, current_prices, zone, leverage, rsi=None):
-        """롱 포지션 진입"""
-        pos = self.positions[symbol]
-        is_middle = (zone == ZoneType.MIDDLE)
-        
-        collateral = self.calculate_entry_amount(current_prices, is_middle)
-        position_size = collateral * leverage
-        quantity = position_size / price
-        fee = position_size * FEE_RATE
-        
-        if self.available_balance < collateral + fee:
-            return False
-        
-        self.available_balance -= (collateral + fee)
-        
-        # 평단가 업데이트
-        total_value = pos.long_avg_price * pos.long_quantity + price * quantity
-        pos.long_quantity += quantity
-        pos.long_avg_price = total_value / pos.long_quantity if pos.long_quantity > 0 else 0
-        pos.long_collateral += collateral
-        pos.long_entry_count += 1
-        pos.long_rsi_reset = False
-        
-        # 첫 진입 시 시작 영역 기록
-        if pos.long_entry_count == 1:
-            pos.long_start_zone = zone
-            pos.long_visited_zone = None
-        
-        # 매 진입마다 TP 리셋 (새 평단가 기준으로 TP1부터 다시)
-        pos.long_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        
-        # 영역 표시: L(롱구간), M(중립), S(숏구간)
-        zone_label = {'LONG': 'L', 'MIDDLE': 'M', 'SHORT': 'S'}[zone.value]
-        zone_info = f"[{zone_label}]"
-        if is_middle and HALF_INVEST_IN_MIDDLE:
-            zone_info += " 50%"
-        rsi_info = f", RSI {rsi:.2f}" if rsi is not None else ""
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 📈 {symbol} 롱 진입 ({pos.long_entry_count}차) {zone_info}: "
-              f"가격 ${price:.6f}, 수량 {quantity:.4f}, 금액 ${collateral:.2f}{rsi_info}, "
-              f"평단가 ${pos.long_avg_price:.6f}, 총수량 {pos.long_quantity:.4f}, 💰총자산 ${total_equity:,.2f}")
-        
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'long',
-            'action': 'entry', 'price': price, 'quantity': quantity,
-            'collateral': collateral, 'entry_count': pos.long_entry_count,
-            'zone': zone.value, 'fee': fee
-        })
-        
-        return True
-    
-    def open_short(self, symbol, price, timestamp, current_prices, zone, leverage, rsi=None):
-        """숏 포지션 진입"""
-        pos = self.positions[symbol]
-        is_middle = (zone == ZoneType.MIDDLE)
-        
-        collateral = self.calculate_entry_amount(current_prices, is_middle)
-        position_size = collateral * leverage
-        quantity = position_size / price
-        fee = position_size * FEE_RATE
-        
-        if self.available_balance < collateral + fee:
-            return False
-        
-        self.available_balance -= (collateral + fee)
-        
-        # 평단가 업데이트
-        total_value = pos.short_avg_price * pos.short_quantity + price * quantity
-        pos.short_quantity += quantity
-        pos.short_avg_price = total_value / pos.short_quantity if pos.short_quantity > 0 else 0
-        pos.short_collateral += collateral
-        pos.short_entry_count += 1
-        pos.short_rsi_reset = False
-        
-        # 첫 진입 시 시작 영역 기록
-        if pos.short_entry_count == 1:
-            pos.short_start_zone = zone
-            pos.short_visited_zone = None
-        
-        # 매 진입마다 TP 리셋 (새 평단가 기준으로 TP1부터 다시)
-        pos.short_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        
-        # 영역 표시: L(롱구간), M(중립), S(숏구간)
-        zone_label = {'LONG': 'L', 'MIDDLE': 'M', 'SHORT': 'S'}[zone.value]
-        zone_info = f"[{zone_label}]"
-        if is_middle and HALF_INVEST_IN_MIDDLE:
-            zone_info += " 50%"
-        rsi_info = f", RSI {rsi:.2f}" if rsi is not None else ""
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 📉 {symbol} 숏 진입 ({pos.short_entry_count}차) {zone_info}: "
-              f"가격 ${price:.6f}, 수량 {quantity:.4f}, 금액 ${collateral:.2f}{rsi_info}, "
-              f"평단가 ${pos.short_avg_price:.6f}, 총수량 {pos.short_quantity:.4f}, 💰총자산 ${total_equity:,.2f}")
-        
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'short',
-            'action': 'entry', 'price': price, 'quantity': quantity,
-            'collateral': collateral, 'entry_count': pos.short_entry_count,
-            'zone': zone.value, 'fee': fee
-        })
-        
-        return True
-    
-    def close_long(self, symbol, price, timestamp, leverage, reason="", current_prices=None):
-        """롱 포지션 전체 청산"""
-        pos = self.positions[symbol]
-        if pos.long_quantity == 0:
-            return 0
-        
-        pnl_rate = (price - pos.long_avg_price) / pos.long_avg_price * leverage
-        pnl = pos.long_collateral * pnl_rate
-        fee = pos.long_quantity * price * FEE_RATE
-        
-        self.available_balance += pos.long_collateral + pnl - fee
-        
-        # 청산 후 총자산 계산
-        if current_prices is None:
-            current_prices = {symbol: price}
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 💰 {symbol} 롱 전체청산 ({reason}): "
-              f"청산가 ${price:.6f}, 수익률 {pnl_rate*100:+.2f}%, 수익금 ${pnl:+.2f}, 가용잔액 ${self.available_balance:.2f}, 💰총자산 ${total_equity:,.2f}")
-        
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'long',
-            'action': 'close', 'price': price, 'quantity': pos.long_quantity,
-            'pnl': pnl, 'pnl_rate': pnl_rate * 100, 'reason': reason, 'fee': fee
-        })
-        
-        # 포지션 초기화
-        pos.long_entry_count = 0
-        pos.long_avg_price = 0.0
-        pos.long_quantity = 0.0
-        pos.long_collateral = 0.0
-        pos.long_start_zone = None
-        pos.long_visited_zone = None
-        pos.long_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        pos.long_rsi_reset = True
-        
-        return pnl
-    
-    def close_short(self, symbol, price, timestamp, leverage, reason="", current_prices=None):
-        """숏 포지션 전체 청산"""
-        pos = self.positions[symbol]
-        if pos.short_quantity == 0:
-            return 0
-        
-        pnl_rate = (pos.short_avg_price - price) / pos.short_avg_price * leverage
-        pnl = pos.short_collateral * pnl_rate
-        fee = pos.short_quantity * price * FEE_RATE
-        
-        self.available_balance += pos.short_collateral + pnl - fee
-        
-        # 청산 후 총자산 계산
-        if current_prices is None:
-            current_prices = {symbol: price}
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 💰 {symbol} 숏 전체청산 ({reason}): "
-              f"청산가 ${price:.6f}, 수익률 {pnl_rate*100:+.2f}%, 수익금 ${pnl:+.2f}, 가용잔액 ${self.available_balance:.2f}, 💰총자산 ${total_equity:,.2f}")
-        
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'short',
-            'action': 'close', 'price': price, 'quantity': pos.short_quantity,
-            'pnl': pnl, 'pnl_rate': pnl_rate * 100, 'reason': reason, 'fee': fee
-        })
-        
-        # 포지션 초기화
-        pos.short_entry_count = 0
-        pos.short_avg_price = 0.0
-        pos.short_quantity = 0.0
-        pos.short_collateral = 0.0
-        pos.short_start_zone = None
-        pos.short_visited_zone = None
-        pos.short_tp_triggered = [False] * len(TAKE_PROFIT_LEVELS)
-        pos.short_rsi_reset = True
-        
-        return pnl
-    
-    def partial_close_long(self, symbol, price, timestamp, leverage, sell_pct, tp_level, current_prices=None):
-        """롱 부분 익절"""
-        pos = self.positions[symbol]
-        if pos.long_quantity == 0:
-            return 0
-        
-        close_qty = pos.long_quantity * (sell_pct / 100)
-        close_collateral = pos.long_collateral * (sell_pct / 100)
-        
-        pnl_rate = (price - pos.long_avg_price) / pos.long_avg_price * leverage
-        pnl = close_collateral * pnl_rate
-        fee = close_qty * price * FEE_RATE
-        
-        self.available_balance += close_collateral + pnl - fee
-        
-        pos.long_quantity -= close_qty
-        pos.long_collateral -= close_collateral
-        pos.long_tp_triggered[tp_level] = True
-        
-        # 익절 후 총자산 계산
-        if current_prices is None:
-            current_prices = {symbol: price}
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 💰 {symbol} 롱 익절 TP{tp_level+1} ({sell_pct}%): "
-              f"가격 ${price:.6f}, 수익률 {pnl_rate*100:+.2f}%, 수익금 ${pnl:+.2f}, 💰총자산 ${total_equity:,.2f}")
-        
-        # 거래 기록 추가
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'long',
-            'action': 'partial_close', 'price': price, 'quantity': close_qty,
-            'pnl': pnl, 'pnl_rate': pnl_rate * 100, 'reason': f'TP{tp_level+1}', 'fee': fee
-        })
-        
-        return pnl
-    
-    def partial_close_short(self, symbol, price, timestamp, leverage, sell_pct, tp_level, current_prices=None):
-        """숏 부분 익절"""
-        pos = self.positions[symbol]
-        if pos.short_quantity == 0:
-            return 0
-        
-        close_qty = pos.short_quantity * (sell_pct / 100)
-        close_collateral = pos.short_collateral * (sell_pct / 100)
-        
-        pnl_rate = (pos.short_avg_price - price) / pos.short_avg_price * leverage
-        pnl = close_collateral * pnl_rate
-        fee = close_qty * price * FEE_RATE
-        
-        self.available_balance += close_collateral + pnl - fee
-        
-        pos.short_quantity -= close_qty
-        pos.short_collateral -= close_collateral
-        pos.short_tp_triggered[tp_level] = True
-        
-        # 익절 후 총자산 계산
-        if current_prices is None:
-            current_prices = {symbol: price}
-        total_equity = self.get_total_equity(current_prices)
-        print(f"[{timestamp}] 💰 {symbol} 숏 익절 TP{tp_level+1} ({sell_pct}%): "
-              f"가격 ${price:.6f}, 수익률 {pnl_rate*100:+.2f}%, 수익금 ${pnl:+.2f}, 💰총자산 ${total_equity:,.2f}")
-        
-        # 거래 기록 추가
-        self.trades.append({
-            'timestamp': timestamp, 'symbol': symbol, 'direction': 'short',
-            'action': 'partial_close', 'price': price, 'quantity': close_qty,
-            'pnl': pnl, 'pnl_rate': pnl_rate * 100, 'reason': f'TP{tp_level+1}', 'fee': fee
-        })
-        
-        return pnl
-    
-    def check_take_profit(self, symbol, price, timestamp, leverage, current_prices=None):
-        """익절 조건 체크"""
-        if not TAKE_PROFIT_ENABLED:
-            return
-        
-        pos = self.positions[symbol]
-        
-        # 롱 익절 체크
-        if pos.has_long_position():
-            profit_pct = pos.get_long_profit_pct(price)
-            for i, tp in enumerate(TAKE_PROFIT_LEVELS):
-                if not pos.long_tp_triggered[i] and profit_pct >= tp['profit_pct']:
-                    self.partial_close_long(symbol, price, timestamp, leverage, tp['sell_pct'], i, current_prices)
-        
-        # 숏 익절 체크
-        if pos.has_short_position():
-            profit_pct = pos.get_short_profit_pct(price)
-            for i, tp in enumerate(TAKE_PROFIT_LEVELS):
-                if not pos.short_tp_triggered[i] and profit_pct >= tp['profit_pct']:
-                    self.partial_close_short(symbol, price, timestamp, leverage, tp['sell_pct'], i, current_prices)
-    
-    def check_withdrawal(self, timestamp, current_prices):
-        """출금 체크 (연간 또는 월별)"""
-        if WITHDRAWAL_TYPE == 'NONE':
-            return
-        
-        current_date = timestamp.date() if hasattr(timestamp, 'date') else timestamp
-        
-        # 이미 같은 날 출금 체크했으면 스킵
-        if self.last_withdrawal_date == current_date:
-            return
-        
-        # 월 1일에만 출금 체크
-        if current_date.day != 1:
-            return
-        
-        current_equity = self.get_total_equity(current_prices)
-        
-        if WITHDRAWAL_TYPE == 'ANNUAL':
-            # 연간 출금: 지정된 월에만 수익 기준 출금
-            if current_date.month not in ANNUAL_WITHDRAWAL_MONTHS:
-                return
-            
-            year_profit = current_equity - self.last_year_balance
-            
-            if year_profit > 0:
-                withdrawal = year_profit * ANNUAL_WITHDRAWAL_RATE
-                if withdrawal <= self.available_balance:
-                    self.available_balance -= withdrawal
-                    self.total_withdrawn += withdrawal
-                    self.withdrawal_history.append({
-                        'date': str(current_date),
-                        'amount': withdrawal,
-                        'total': self.total_withdrawn,
-                        'type': 'ANNUAL'
-                    })
-                    print(f"\n[연간출금] {current_date}: 연간 수익 ${year_profit:,.2f}의 {ANNUAL_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
-            
-            self.last_year_balance = self.get_total_equity(current_prices)
-        
-        elif WITHDRAWAL_TYPE == 'MONTHLY':
-            # 월별 출금: 전달 수익의 일정 비율 출금
-            month_profit = current_equity - self.last_month_balance
-            
-            if month_profit > 0:
-                withdrawal = month_profit * MONTHLY_WITHDRAWAL_RATE
-                if withdrawal <= self.available_balance:
-                    self.available_balance -= withdrawal
-                    self.total_withdrawn += withdrawal
-                    self.withdrawal_history.append({
-                        'date': str(current_date),
-                        'amount': withdrawal,
-                        'total': self.total_withdrawn,
-                        'type': 'MONTHLY'
-                    })
-                    print(f"\n[월별출금] {current_date}: 전달 수익 ${month_profit:,.2f}의 {MONTHLY_WITHDRAWAL_RATE*100:.0f}% = ${withdrawal:,.2f} 출금\n")
-            
-            # 다음 달 비교를 위해 현재 자산 저장
-            self.last_month_balance = self.get_total_equity(current_prices)
-        
-        self.last_withdrawal_date = current_date
-    
-    def record_daily_balance(self, timestamp, current_prices):
-        """일별 잔액 기록"""
-        equity = self.get_total_equity(current_prices)
-        self.daily_balance.append({
-            'date': timestamp,
-            'balance': equity,
-            'total_withdrawn': self.total_withdrawn  # 누적 출금액 추가
-        })
-    
-    def get_results(self):
-        """결과 반환"""
-        return {
-            'initial_capital': self.initial_capital,
-            'final_balance': self.available_balance,
-            'total_withdrawn': self.total_withdrawn,
-            'trades': self.trades,
-            'daily_balance': pd.DataFrame(self.daily_balance),
-            'withdrawal_history': self.withdrawal_history
-        }
-
-# ==============================================================================
-# 5. 헬퍼 함수들
-# ==============================================================================
-def get_zone(prev_close, ma_short, ma_long):
-    """직전 일봉 종가 기준으로 영역 판단"""
-    if pd.isna(ma_short) or pd.isna(ma_long):
-        return ZoneType.MIDDLE  # 데이터 부족 시 중립
-    
-    upper_ma = max(ma_short, ma_long)
-    lower_ma = min(ma_short, ma_long)
-    
-    if prev_close > upper_ma:
-        return ZoneType.LONG
-    elif prev_close < lower_ma:
-        return ZoneType.SHORT
-    else:
-        return ZoneType.MIDDLE
-
-def get_allowed_directions(zone):
-    """영역별 진입 가능한 방향 반환"""
-    if zone == ZoneType.LONG:
-        return ['long']
-    elif zone == ZoneType.SHORT:
-        return ['short']
-    else:  # MIDDLE
-        return ['long', 'short']
-
-def should_close_by_zone_change(pos, direction, current_zone):
-    """영역 변화에 따른 청산 여부 판단
-    
-    규칙:
-    - LONG영역 시작 롱: MIDDLE 진입 시 청산
-    - SHORT영역 시작 숏: MIDDLE 진입 시 청산
-    - MIDDLE 시작 롱: SHORT 진입 시 즉시 청산, LONG 갔다가 MIDDLE 복귀 시 청산
-    - MIDDLE 시작 숏: LONG 진입 시 즉시 청산, SHORT 갔다가 MIDDLE 복귀 시 청산
+def load_data(ticker, timeframe, start_date, end_date):
     """
-    if direction == 'long':
-        start_zone = pos.long_start_zone
-        visited = pos.long_visited_zone
-        
-        if start_zone is None:
-            return False
-        
-        if start_zone == ZoneType.LONG:
-            # LONG에서 시작 → MIDDLE 가면 청산
-            return current_zone == ZoneType.MIDDLE
-        elif start_zone == ZoneType.MIDDLE:
-            # MIDDLE에서 시작한 롱
-            if current_zone == ZoneType.SHORT:
-                return True  # SHORT 영역 직접 진입 시 즉시 청산
-            if visited == ZoneType.LONG and current_zone == ZoneType.MIDDLE:
-                return True  # LONG 갔다가 MIDDLE 복귀 시 청산
-    else:  # short
-        start_zone = pos.short_start_zone
-        visited = pos.short_visited_zone
-        
-        if start_zone is None:
-            return False
-        
-        if start_zone == ZoneType.SHORT:
-            # SHORT에서 시작 → MIDDLE 가면 청산
-            return current_zone == ZoneType.MIDDLE
-        elif start_zone == ZoneType.MIDDLE:
-            # MIDDLE에서 시작한 숏
-            if current_zone == ZoneType.LONG:
-                return True  # LONG 영역 직접 진입 시 즉시 청산
-            if visited == ZoneType.SHORT and current_zone == ZoneType.MIDDLE:
-                return True  # SHORT 갔다가 MIDDLE 복귀 시 청산
-    
-    return False
+    로컬 CSV 파일의 데이터를 우선 로드하고, 부족한 최신 데이터는 API를 통해 다운로드하여 병합합니다.
+    """
+    print(f"--- [{ticker}] 데이터 준비 중 ---")
+    csv_df = pd.DataFrame()
+    safe_ticker_name = ticker.replace('/', '_').lower()
+    # CSV 파일 이름 규칙을 스크립트 설정과 일치시킵니다.
+    csv_filename = f"{str(INVEST_COIN_LIST).replace('/USDT', '').lower()}_usdt_{COIN_EXCHANGE}_{TIMEFRAME}.csv"
+    # json 폴더에서 CSV 파일을 찾습니다.
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_file = os.path.join(script_dir, '..', 'json', csv_filename)
 
-def calculate_rsi(df, period=14):
-    """RSI 계산"""
-    delta = df['close'].diff(1)
-    gain = delta.where(delta > 0, 0).ewm(com=period-1, adjust=False).mean()
-    loss = (-delta.where(delta < 0, 0)).ewm(com=period-1, adjust=False).mean()
-    rs = gain / loss
-    return 100 - (100 / (1 + rs))
+    print(f"--- [{csv_file}] 데이터 준비 중 ---")
 
-# ==============================================================================
-# 6. 데이터 로딩
-# ==============================================================================
-def load_data(symbol, timeframe, start_date, end_date):
-    """JSON 파일에서 데이터 로드"""
-    safe_name = symbol.replace('/', '_').replace(':', '_').lower()
-    coin_name = safe_name.split('_')[0]
-    
-    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_{timeframe}.json")
-    
-    print(f"[{symbol}] 데이터 로드 중: {json_file}")
-    
-    if os.path.exists(json_file):
+    # 1. 로컬 CSV 파일에서 데이터 로드 시도
+    if os.path.exists(csv_file):
         try:
-            with open(json_file, 'r') as f:
-                data = json.load(f)
-            df = pd.DataFrame(data)
-            df['datetime'] = pd.to_datetime(df['datetime'])
-            df.set_index('datetime', inplace=True)
-            # 중복 인덱스 제거
-            df = df[~df.index.duplicated(keep='last')]
+            print(f"'{csv_file}' 파일에서 데이터를 로드합니다.")
+            csv_df = pd.read_csv(csv_file, index_col=0, parse_dates=True)
+            if csv_df.index.tz is None:
+                csv_df.index = csv_df.index.tz_localize('UTC')
+            csv_df.index = csv_df.index.tz_convert(None) # 시간대 정보 제거하여 단순화
         except Exception as e:
-            print(f"  파일 로드 오류: {e}")
-            return pd.DataFrame()
+            print(f"오류: '{csv_file}' 파일 로드 중 오류 발생: {e}.")
+            csv_df = pd.DataFrame()
+
+    # 2. 데이터 필요 여부 및 다운로드 시작 시점 결정
+    fetch_from_api = False
+    since = int(start_date.timestamp() * 1000)
+
+    if not csv_df.empty:
+        last_date_in_csv = csv_df.index.max()
+        if last_date_in_csv < end_date:
+            print(f"로컬 데이터가 최신이 아닙니다. 마지막 데이터: {last_date_in_csv}. 이후 데이터를 API로 가져옵니다.")
+            # 마지막 데이터 다음 캔들부터 가져오기 위해 시간 증분
+            timeframe_duration = pd.to_timedelta(timeframe)
+            since = int((last_date_in_csv + timeframe_duration).timestamp() * 1000)
+            fetch_from_api = True
+        else:
+            print("로컬 데이터가 최신 상태입니다. API 호출을 건너뜁니다.")
     else:
-        # ... (API 다운로드 로직 생략 - 기존과 동일하게 유지하거나 필요시 추가)
+        print("로컬 데이터가 없습니다. 전체 기간 데이터를 API로 다운로드합니다.")
+        fetch_from_api = True
+
+    # 3. 필요한 경우 API를 통해 데이터 다운로드
+    if fetch_from_api:
+        print(f"API 다운로드 시작: {datetime.datetime.fromtimestamp(since/1000)}")
+        exchange = getattr(ccxt, COIN_EXCHANGE)() # 설정된 거래소 객체 생성
+        all_ohlcv = []
+        end_ms = int(end_date.timestamp() * 1000)
+        timeframe_duration_in_ms = exchange.parse_timeframe(timeframe) * 1000
+
+        while since < end_ms:
+            try:
+                ohlcv = exchange.fetch_ohlcv(ticker, timeframe, since, limit=1000)
+                if not ohlcv:
+                    break
+                all_ohlcv.extend(ohlcv)
+                since = ohlcv[-1][0] + timeframe_duration_in_ms
+                print(f"[{ticker}] API 다운로드 중... 마지막 날짜: {datetime.datetime.fromtimestamp(ohlcv[-1][0]/1000)}")
+                time.sleep(exchange.rateLimit / 1000)
+            except Exception as e:
+                print(f"API 데이터 다운로드 오류: {e}")
+                break
+
+        if all_ohlcv:
+            api_df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            api_df['timestamp'] = pd.to_datetime(api_df['timestamp'], unit='ms')
+            api_df.set_index('timestamp', inplace=True)
+
+            # 4. 기존 데이터와 새로 받은 데이터 병합 및 저장
+            combined_df = pd.concat([csv_df, api_df])
+            # 중복된 인덱스(날짜)가 있을 경우, 새로 받은 데이터(keep='last')를 유지
+            combined_df = combined_df[~combined_df.index.duplicated(keep='last')]
+            combined_df.sort_index(inplace=True)
+
+            combined_df.to_csv(csv_file)
+            print(f"업데이트된 데이터를 '{csv_file}' 파일로 저장했습니다.")
+            df = combined_df
+        else:
+            df = csv_df # API로 가져온 데이터가 없으면 기존 데이터 사용
+    else:
+        df = csv_df # API 호출이 필요 없으면 기존 데이터 사용
+
+    # 5. 최종적으로 백테스트 기간에 맞춰 데이터 필터링 후 반환
+    if not df.empty:
+        return df.loc[start_date:end_date]
+    else:
         return pd.DataFrame()
-    
-    # RSI 계산 (기간 필터링 전에 전체 데이터로 계산해야 정확함!)
-    df['rsi'] = calculate_rsi(df, RSI_LENGTH)
-    
-    # 기간 필터링 (RSI 계산 후!)
-    df = df[(df.index >= pd.to_datetime(start_date)) & (df.index <= pd.to_datetime(end_date))]
-    
-    if df.empty:
-        return df
-    
-    print(f"  로드 완료: {len(df)}개 캔들")
+
+def calculate_indicators(df):
+    """DataFrame에 보조지표(BB, RSI, MACD)를 추가합니다."""
+    df['ma30'] = df['close'].rolling(window=30).mean()
+    df['stddev'] = df['close'].rolling(window=30).std()
+    df['bb_upper'] = df['ma30'] + 2 * df['stddev']
+    df['bb_lower'] = df['ma30'] - 2 * df['stddev']
+    delta = df['close'].diff(1)
+    gain = delta.where(delta > 0, 0).ewm(com=13, adjust=False).mean()
+    loss = -delta.where(delta < 0, 0).ewm(com=13, adjust=False).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    ema_fast = df['close'].ewm(span=12, adjust=False).mean()
+    ema_slow = df['close'].ewm(span=26, adjust=False).mean()
+    df['macd'] = ema_fast - ema_slow
+    df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+    df['macd_histogram'] = df['macd'] - df['macd_signal']
     return df
 
-# ... (중략) ...
+def calculate_adx(df, window=14):
+    """ADX 지표를 계산합니다."""
+    df['tr1'] = df['high'] - df['low']
+    df['tr2'] = abs(df['high'] - df['close'].shift(1))
+    df['tr3'] = abs(df['low'] - df['close'].shift(1))
+    df['tr'] = df[['tr1', 'tr2', 'tr3']].max(axis=1)
 
-def run_backtest():
-    # ... (중략) ...
-    
-    # 백테스트 루프
-    processed = 0
-    for current_time in common_index:
-        processed += 1
-        if processed % 10000 == 0:
-            print(f"  처리 중... {processed}/{len(common_index)} ({processed*100//len(common_index)}%)")
-        
-        # 현재가 수집 (중복 데이터 방지)
-        current_prices = {}
-        for symbol in data_frames:
-            try:
-                price_data = data_frames[symbol].loc[current_time]['close']
-                # Series로 반환되는 경우 (중복 인덱스) 첫 번째 값 사용
-                if isinstance(price_data, pd.Series):
-                    price_data = price_data.iloc[0]
-                current_prices[symbol] = float(price_data)
-            except Exception:
-                current_prices[symbol] = 0.0
+    df['pdm'] = (df['high'] - df['high'].shift(1))
+    df['mdm'] = (df['low'].shift(1) - df['low'])
+    df['pdm'] = df['pdm'].where((df['pdm'] > df['mdm']) & (df['pdm'] > 0), 0)
+    df['mdm'] = df['mdm'].where((df['mdm'] > df['pdm']) & (df['mdm'] > 0), 0)
 
-        # ... (중략) ...
-        
-        # 일별 잔액 기록
-        fund_mgr.record_daily_balance(current_time, current_prices)
-    
-    # ... (중략) ...
+    df['pdi'] = (df['pdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
+    df['mdi'] = (df['mdm'].ewm(alpha=1/window, adjust=False).mean() / df['tr'].ewm(alpha=1/window, adjust=False).mean()) * 100
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        df['dx'] = (abs(df['pdi'] - df['mdi']) / (df['pdi'] + df['mdi'])) * 100
+    df['dx'].fillna(0, inplace=True)
+    df['adx'] = df['dx'].ewm(alpha=1/window, adjust=False).mean()
+    return df
+
+def add_secondary_timeframe_indicators(df_base, secondary_timeframe='1d'):
+    """
+    주어진 타임프레임으로 데이터를 리샘플링하고,
+    이전 타임프레임 기준의 지표(MA, MACD, ADX)를 원본 데이터프레임에 병합합니다.
+    """
+    print(f"--- [{secondary_timeframe}] 기준 데이터 준비 및 병합 중 ---")
+
+    agg_rules = {'open':'first', 'high': 'max', 'low':'min', 'close': 'last'}
+    df_secondary = df_base.resample(secondary_timeframe).agg(agg_rules)
+    df_secondary = df_secondary.dropna()
+
+    if df_secondary.empty:
+        return df_base.assign(prev_tf_close_below_ma30=False, prev_tf_macd_hist_neg=False, prev_tf_ma30_3day_rising=False, prev_tf_adx=0)
+
+    # MA, MACD 계산
+    df_secondary['ma30'] = df_secondary['close'].rolling(window=30).mean()
+    ema_fast_sec = df_secondary['close'].ewm(span=12, adjust=False).mean()
+    ema_slow_sec = df_secondary['close'].ewm(span=26, adjust=False).mean()
+    macd_sec = ema_fast_sec - ema_slow_sec
+    df_secondary['macd_histogram'] = macd_sec - macd_sec.ewm(span=9, adjust=False).mean()
+    df_secondary['ma30_3day_rising'] = (df_secondary['ma30'].diff(1) > 0) & (df_secondary['ma30'].diff(2) > 0) & (df_secondary['ma30'].diff(3) > 0)
+
+    df_secondary = calculate_adx(df_secondary, window=14)
+
+    # 이전 봉 데이터 사용을 위해 shift
+    cols_to_shift = ['close', 'ma30', 'macd_histogram', 'ma30_3day_rising', 'adx']
+    df_secondary_shifted = df_secondary[cols_to_shift].shift(1)
+    df_secondary_shifted.rename(columns={
+        'close': 'prev_tf_close', 'ma30': 'prev_tf_ma30',
+        'macd_histogram': 'prev_tf_macd_hist', 'ma30_3day_rising': 'prev_tf_ma30_3day_rising',
+        'adx': 'prev_tf_adx'
+    }, inplace=True)
+
+    df_secondary_shifted['prev_tf_close_below_ma30'] = df_secondary_shifted['prev_tf_close'] < df_secondary_shifted['prev_tf_ma30']
+    df_secondary_shifted['prev_tf_macd_hist_neg'] = df_secondary_shifted['prev_tf_macd_hist'] < 0
+
+    cols_to_join = ['prev_tf_close_below_ma30', 'prev_tf_macd_hist_neg', 'prev_tf_ma30_3day_rising', 'prev_tf_adx']
+
+    df_merged = pd.merge_asof(
+        df_base.sort_index(),
+        df_secondary_shifted[cols_to_join],
+        left_index=True,
+        right_index=True,
+        direction='backward'
+    )
+
+    for col in cols_to_join:
+        if col == 'prev_tf_adx':
+            df_merged[col] = df_merged[col].fillna(0)
+        else:
+            df_merged[col] = df_merged[col].fillna(False)
+
+    print(f"--- [{secondary_timeframe}] 기준 데이터 병합 완료 ---")
+    return df_merged
+
+def get_rsi_level(rsi_value):
+    """RSI 값에 따른 레벨을 반환합니다."""
+    if 20 < rsi_value <= 25: return 1
+    if 15 < rsi_value <= 20: return 2
+    if 10 < rsi_value <= 15: return 3
+    if rsi_value <= 10: return 4
+    return 0
+
+def get_buy_amount(base_amount, rsi_level, entry_count):
+    """RSI 레벨과 진입 차수에 따라 최종 매수 증거금을 계산합니다."""
+    rsi_multiplier = {1: 1.0, 2: 1.1, 3: 1.2, 4: 1.3}.get(rsi_level, 1.0)
+    entry_multiplier = 1.0
+    if 4 <= entry_count <= 6: entry_multiplier = 1.2
+    elif 7 <= entry_count <= 10: entry_multiplier = 1.3
+    elif entry_count > 10: entry_multiplier = 1.3
+    return base_amount * rsi_multiplier * entry_multiplier
 
 # ==============================================================================
-# 8. 결과 분석 및 시각화
+# 3. 백테스팅 실행 엔진
 # ==============================================================================
-def analyze_results(results):
-    # ... (중략 - MDD 계산 부분 등) ...
-    
-    # 그래프 그리기
-    if not daily_df.empty and 'balance' in daily_df.columns:
-        try:
-            fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
-            
-            # 데이터 추출 및 타입을 강제로 float으로 변환
-            dates = daily_df.index.to_numpy()
-            
-            # balance가 object 타입 등으로 오염되었을 가능성 처리
-            balance_vals = pd.to_numeric(daily_df['balance'], errors='coerce').fillna(0).to_numpy()
-            
-            if 'drawdown' in daily_df.columns:
-                drawdown_vals = pd.to_numeric(daily_df['drawdown'], errors='coerce').fillna(0).to_numpy()
-            else:
-                drawdown_vals = np.zeros(len(balance_vals))
-            
-            # 잔액 추이
-            axes[0].plot(dates, balance_vals, label='잔액', color='blue')
-            axes[0].axhline(y=initial_capital, color='gray', linestyle='--', label='초기자본')
-            axes[0].set_title('RSI 롱숏 분할매매 전략 - 잔액 추이')
-            axes[0].set_ylabel('USDT')
-            axes[0].legend()
-            axes[0].grid(True, alpha=0.3)
-            
-            # 드로다운
-            axes[1].fill_between(dates, drawdown_vals, 0, color='red', alpha=0.3)
-            axes[1].set_title('드로다운')
-            axes[1].set_ylabel('%')
-            axes[1].set_xlabel('날짜')
-            axes[1].grid(True, alpha=0.3)
-            
-            plt.tight_layout()
-            plt.show()
-        except Exception as e:
-            print(f"그래프 생성 오류: {e}")
-            import traceback
-            traceback.print_exc()
-            
-    return results
-
-def load_daily_data(symbol):
-    """일봉 데이터 로드"""
-    safe_name = symbol.replace('/', '_').replace(':', '_').lower()
-    coin_name = safe_name.split('_')[0]
-    
-    json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_1d.json")
-    
-    if not os.path.exists(json_file):
-        # gateio 없으면 bitget 시도
-        json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_1d.json")
-    
-    if os.path.exists(json_file):
-        with open(json_file, 'r') as f:
-            data = json.load(f)
-        df = pd.DataFrame(data)
-        df['datetime'] = pd.to_datetime(df['datetime'])
-        df.set_index('datetime', inplace=True)
-        
-        # 이평선 계산
-        df['ma_short'] = df['close'].rolling(window=DAILY_MA_SHORT).mean()
-        df['ma_long'] = df['close'].rolling(window=DAILY_MA_LONG).mean()
-        
-        return df
+def run_backtest(data_frames):
+    """전략에 따라 백테스트를 실행하고 포트폴리오 가치 변화와 일별 실현 손익을 기록합니다."""
+    print("\n백테스트를 시작합니다...")
+    if USE_ADDITIVE_BUYING: print(">> 롱 가산 매수 모드(RSI/차수별 증액)가 활성화되었습니다.")
+    else: print(">> 롱 균등 매수 모드가 활성화되었습니다.")
+    if USE_MACD_BUY_LOCK: print(">> MACD 매수 잠금 기능이 활성화되었습니다.")
+    else: print(">> MACD 매수 잠금 기능이 비활성화되었습니다.")
+    if USE_SHORT_STRATEGY:
+        print(f">> 숏 포지션 전략이 활성화되었습니다. (조건 기준: {SHORT_CONDITION_TIMEFRAME})")
+    else: print(">> 숏 포지션 전략이 비활성화되었습니다.")
+    if USE_DYNAMIC_BASE_BUY_AMOUNT:
+        print(">> 1회차 진입금액: [동적] '매 진입 시점'의 가용 현금 기준으로 계산됩니다.")
     else:
-        print(f"  경고: 일봉 데이터 없음 - {symbol}")
-        return None
+        print(">> 1회차 진입금액: [고정] '사이클 시작 시점'의 할당 자본 기준으로 계산됩니다.")
 
-# ==============================================================================
-# 7. 백테스트 실행
-# ==============================================================================
-def validate_data_availability(coin_list, start_date, timeframe):
-    """
-    백테스트 시작 전 각 코인의 데이터 가용성 검증
-    
-    - 분봉/일봉 데이터 존재 여부 확인
-    - 120일 이평선 계산에 필요한 데이터가 테스트 시작일 이전에 충분히 있는지 확인
-    
-    Returns:
-        (bool, list): (검증 통과 여부, 에러 메시지 리스트)
-    """
-    errors = []
-    warnings = []
-    required_daily_candles = max(DAILY_MA_SHORT, DAILY_MA_LONG) + 10  # 120 + 10 = 130일
-    
-    # 각 코인별 테스트 가능 시작일 계산
-    earliest_possible_dates = {}
-    
-    print("\n" + "="*70)
-    print("[DATA CHECK] 데이터 가용성 검증 중...")
-    print(f"  - 테스트 시작일: {start_date.date()}")
-    print(f"  - 필요한 이평선: {DAILY_MA_LONG}일 (최소 {required_daily_candles}일 사전 데이터 필요)")
-    print("="*70)
-    
-    for symbol in coin_list:
-        safe_name = symbol.replace('/', '_').replace(':', '_').lower()
-        coin_name = safe_name.split('_')[0]
-        
-        print(f"\n  [{symbol}] 검증 중...", end=" ")
-        
-        # =======================================================================
-        # 일봉 데이터 확인 (이평선 계산용)
-        # =======================================================================
-        daily_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_1d.json")
-        if not os.path.exists(daily_file):
-            # gateio 없으면 bitget 확인
-            daily_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_1d.json")
-        
-        if os.path.exists(daily_file):
-            try:
-                with open(daily_file, 'r') as f:
-                    data = json.load(f)
-                df = pd.DataFrame(data)
-                df['datetime'] = pd.to_datetime(df['datetime'])
-                first_daily_date = df['datetime'].min()
-                
-                # 120일 이평선 계산을 위해 필요한 최소 시작일
-                # 데이터 시작일 + 130일 = 테스트 가능 시작일
-                min_test_start = first_daily_date + datetime.timedelta(days=required_daily_candles)
-                earliest_possible_dates[symbol] = min_test_start
-                
-                if start_date < min_test_start:
-                    print(f"[X] 이평선 데이터 부족")
-                    errors.append({
-                        'symbol': symbol,
-                        'first_daily': first_daily_date,
-                        'min_test_start': min_test_start,
-                        'type': 'ma_data_insufficient'
-                    })
-                else:
-                    print(f"[O] OK (일봉: {first_daily_date.date()}부터, 테스트 가능: {min_test_start.date()}부터)")
-                    
-            except Exception as e:
-                print(f"[X] 일봉 파일 읽기 오류: {e}")
-                errors.append({
-                    'symbol': symbol,
-                    'error': str(e),
-                    'type': 'file_error'
-                })
-        else:
-            print(f"[X] 일봉 파일 없음")
-            errors.append({
-                'symbol': symbol,
-                'type': 'no_daily_file'
-            })
-        
-        # =======================================================================
-        # 분봉 데이터 확인
-        # =======================================================================
-        hourly_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_{COIN_EXCHANGE}_{timeframe}.json")
-        if not os.path.exists(hourly_file):
-            # gateio 없으면 bitget 확인
-            hourly_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_{timeframe}.json")
-        
-        if not os.path.exists(hourly_file):
-            warnings.append(f"[!] [{symbol}] 로컬 {timeframe} 파일 없음")
-        else:
-            try:
-                with open(hourly_file, 'r') as f:
-                    data = json.load(f)
-                df = pd.DataFrame(data)
-                df['datetime'] = pd.to_datetime(df['datetime'])
-                first_date = df['datetime'].min()
-                
-                if first_date > start_date:
-                    warnings.append(f"[!] [{symbol}] {timeframe} 데이터 시작({first_date.date()})이 테스트 시작일보다 늦음")
-            except Exception as e:
-                warnings.append(f"[!] [{symbol}] {timeframe} 파일 읽기 오류: {e}")
-    
-    # =======================================================================
-    # 결과 출력
-    # =======================================================================
-    print("\n" + "="*70)
-    
-    if warnings:
-        print("\n[WARNING] 경고 (진행 가능하나 주의 필요):")
-        for w in warnings:
-            print(f"  {w}")
-    
-    if errors:
-        print("\n" + "="*70)
-        print("[ERROR] 데이터 검증 실패!")
-        print("="*70)
-        
-        # 이평선 데이터 부족 에러들 처리
-        ma_errors = [e for e in errors if e.get('type') == 'ma_data_insufficient']
-        if ma_errors:
-            print(f"\n[X] 아래 코인들은 {DAILY_MA_LONG}일 이평선 계산을 위한 데이터가 부족합니다:\n")
-            print("-"*70)
-            print(f"{'코인':<15} | {'일봉 시작일':<15} | {'테스트 가능일':<15}")
-            print("-"*70)
-            
-            latest_possible_date = None
-            for err in ma_errors:
-                first_daily = err['first_daily'].date()
-                min_start = err['min_test_start'].date()
-                print(f"{err['symbol']:<15} | {str(first_daily):<15} | {str(min_start):<15}")
-                
-                if latest_possible_date is None or err['min_test_start'] > latest_possible_date:
-                    latest_possible_date = err['min_test_start']
-            
-            print("-"*70)
-            print(f"\n[TIP] 모든 코인을 포함하여 테스트하려면:")
-            print(f"   TEST_START_DATE = datetime.datetime({latest_possible_date.year}, {latest_possible_date.month}, {latest_possible_date.day})")
-            print(f"   (최소 {latest_possible_date.date()} 이후로 설정해야 합니다)")
-        
-        # 파일 없음 에러들 처리
-        no_file_errors = [e for e in errors if e.get('type') == 'no_daily_file']
-        if no_file_errors:
-            print(f"\n[X] 아래 코인들은 일봉 데이터 파일이 없습니다:")
-            for err in no_file_errors:
-                print(f"  - {err['symbol']}")
-            print("\n[TIP] Gateio_F_caldle_info.py를 사용하여 일봉 데이터를 먼저 다운로드하세요.")
-        
-        print("\n" + "="*70)
-        return False, errors
-    
-    print("\n[OK] 모든 코인 데이터 검증 통과!")
-    return True, []
+    cash = INITIAL_CAPITAL
+    total_withdrawn = 0.0
+    # (이하 변수 선언은 동일)
+    total_long_pnl = 0.0
+    total_short_pnl = 0.0
+    monthly_withdrawals = {}
+    portfolio_history = []
+    daily_realized_pnl = {}
+    daily_fees = {}
+    new_cycle_dates = set()
+    positions = {}
+    coin_list = list(data_frames.keys())
 
-def run_backtest():
-    """백테스트 실행"""
-    print("\n" + "="*70)
-    print("RSI 롱숏 분할매매 전략 백테스트 [GATEIO]")
-    print("="*70)
-    print(f"거래소: {COIN_EXCHANGE.upper()}")
-    print(f"테스트 기간: {TEST_START_DATE.date()} ~ {TEST_END_DATE.date()}")
-    print(f"초기 자본: ${INITIAL_CAPITAL:,}")
-    print(f"레버리지: {LEVERAGE}x")
-    print(f"수수료: {FEE_RATE*100:.3f}%")
-    print(f"코인: {COIN_LIST}")
-    print(f"RSI 설정: 롱 진입 {RSI_LONG_ENTRY} 이하, 숏 진입 {RSI_SHORT_ENTRY} 이상")
-    print(f"영역 판단: 일봉 {DAILY_MA_SHORT}/{DAILY_MA_LONG} 이평선")
-    print("="*70 + "\n")
-    
-    # =========================================================================
-    # 데이터 가용성 검증
-    # =========================================================================
-    is_valid, errors = validate_data_availability(COIN_LIST, TEST_START_DATE, TIMEFRAME)
-    
-    if not is_valid:
-        # validate_data_availability에서 이미 상세한 에러 메시지 출력됨
-        return None
-    
+    total_long_position_opened = 0
+    total_long_position_closed = 0
+    total_long_trades = 0
+    total_short_position_opened = 0
+    total_short_position_closed = 0
+    total_short_trades = 0
 
-    # 데이터 로드
-    data_frames = {}
-    daily_frames = {}
-    
-    for symbol in COIN_LIST:
-        df = load_data(symbol, TIMEFRAME, TEST_START_DATE, TEST_END_DATE)
-        if not df.empty:
-            data_frames[symbol] = df
-            daily_frames[symbol] = load_daily_data(symbol)
-    
-    if not data_frames:
-        print("데이터가 없어 백테스트를 중단합니다.")
-        return None
-    
-    # 공통 인덱스 찾기
-    common_index = data_frames[list(data_frames.keys())[0]].index
-    for symbol in list(data_frames.keys())[1:]:
-        common_index = common_index.intersection(data_frames[symbol].index)
+    for ticker in coin_list:
+        allocated_capital = INITIAL_CAPITAL / len(coin_list)
+        positions[ticker] = {
+            "allocated_capital": allocated_capital,
+            "base_buy_amount": allocated_capital * BASE_BUY_RATE,
+            "long": {
+                "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0,
+                "total_collateral": 0.0, "last_buy_timestamp": None,
+                "buy_blocked_by_macd": False, "entries": []
+            },
+            "short": {
+                "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0,
+                "total_collateral": 0.0, "last_buy_timestamp": None,
+                "sell_blocked_by_macd": False, "entries": []
+            }
+        }
+
+    common_index = data_frames[coin_list[0]].index
+    for ticker in coin_list[1:]:
+        if ticker in data_frames:
+            common_index = common_index.intersection(data_frames[ticker].index)
     common_index = common_index.sort_values()
-    
+
+    if common_index.empty:
+        print("공통 데이터 기간이 없습니다.")
+        return pd.DataFrame(), {}, set(), {}, 0.0, {}, 0.0, 0.0, 0, 0, 0, 0, 0, 0
+
     print(f"공통 데이터 기간: {common_index.min()} ~ {common_index.max()}")
-    print(f"총 캔들 수: {len(common_index)}\n")
-    
-    # 자금 매니저 초기화
-    fund_mgr = FundManager(INITIAL_CAPITAL, list(data_frames.keys()))
-    
-    # 백테스트 루프
-    processed = 0
+
+    previous_time = None
     for current_time in common_index:
-        processed += 1
-        if processed % 10000 == 0:
-            print(f"  처리 중... {processed}/{len(common_index)} ({processed*100//len(common_index)}%)")
-        
-        # 현재가 수집 (중복 데이터 방지)
-        current_prices = {}
-        for symbol in data_frames:
-            try:
-                price_data = data_frames[symbol].loc[current_time]['close']
-                # Series로 반환되는 경우 (중복 인덱스) 첫 번째 값 사용
-                if isinstance(price_data, pd.Series):
-                    price_data = price_data.iloc[0]
-                current_prices[symbol] = float(price_data)
-            except Exception:
-                current_prices[symbol] = 0.0
-        
-        for symbol, df in data_frames.items():
-            pos = fund_mgr.positions[symbol]
-            daily_df = daily_frames.get(symbol)
-            
-            # 현재/이전 캔들 - 인덱스 찾기
-            try:
-                idx = df.index.get_loc(current_time)
-                # slice 반환 시 첫번째 값 사용
-                if isinstance(idx, slice):
-                    idx = idx.start if idx.start is not None else 0
-            except KeyError:
-                continue
-            
-            if idx < 2:
-                continue
-            
-            prev_candle = df.iloc[idx - 1]
-            current_candle = df.iloc[idx]
-            
-            prev_rsi = prev_candle['rsi']
+        current_date = current_time.date()
+
+        if MONTHLY_WITHDRAWAL_RATE > 0 and previous_time and current_time.month != previous_time.month:
+            target_year = previous_time.year
+            target_month = previous_time.month
+            last_month_pnl = sum(pnl for date, pnl in daily_realized_pnl.items() if date.year == target_year and date.month == target_month)
+
+            if last_month_pnl > 0:
+                withdrawal_rate_decimal = MONTHLY_WITHDRAWAL_RATE / 100.0
+                withdrawal_amount = last_month_pnl * withdrawal_rate_decimal
+                cash -= withdrawal_amount
+                total_withdrawn += withdrawal_amount
+                month_key = f"{target_year}-{target_month:02d}"
+                monthly_withdrawals[month_key] = withdrawal_amount
+                print(f"[{current_time.strftime('%Y-%m-%d')}] 💸 {target_year}년 {target_month}월 수익금 출금: {withdrawal_amount:,.2f} USDT")
+
+        current_portfolio_value = cash
+        for ticker, df in data_frames.items():
+            if current_time not in df.index: continue
+            pos = positions[ticker]
+            long_pos = pos['long']
+            short_pos = pos['short']
+            data_till_now = df.loc[:current_time]
+            if len(data_till_now) < 3: continue
+
+            prev_candle = data_till_now.iloc[-2]
+            prev_prev_candle = data_till_now.iloc[-3]
+            current_candle = data_till_now.iloc[-1]
+            mtm_price = current_candle['close']
             execution_price = current_candle['open']
-            current_price = current_candle['close']
-            
-            # 현재 영역 판단
-            current_zone = ZoneType.MIDDLE  # 기본값
-            if daily_df is not None:
-                # 현재 시간 이전의 가장 최근 일봉 종가 찾기
-                daily_before = daily_df[daily_df.index < current_time]
-                if len(daily_before) > 0:
-                    last_daily = daily_before.iloc[-1]
-                    current_zone = get_zone(
-                        last_daily['close'],
-                        last_daily['ma_short'],
-                        last_daily['ma_long']
-                    )
-            
-            # 1. 방문 영역 업데이트 (MIDDLE 시작 포지션용)
-            if pos.has_long_position() and pos.long_start_zone == ZoneType.MIDDLE:
-                if current_zone in [ZoneType.LONG, ZoneType.SHORT]:
-                    pos.long_visited_zone = current_zone
-            
-            if pos.has_short_position() and pos.short_start_zone == ZoneType.MIDDLE:
-                if current_zone in [ZoneType.LONG, ZoneType.SHORT]:
-                    pos.short_visited_zone = current_zone
-            
-            # 2. 영역 변화에 따른 청산 체크
-            if pos.has_long_position():
-                if should_close_by_zone_change(pos, 'long', current_zone):
-                    visited_info = f"→{pos.long_visited_zone.value}" if pos.long_visited_zone else ""
-                    reason = f"영역변화 {pos.long_start_zone.value}{visited_info}→{current_zone.value}"
-                    fund_mgr.close_long(symbol, execution_price, current_time, LEVERAGE, reason, current_prices)
-            
-            if pos.has_short_position():
-                if should_close_by_zone_change(pos, 'short', current_zone):
-                    visited_info = f"→{pos.short_visited_zone.value}" if pos.short_visited_zone else ""
-                    reason = f"영역변화 {pos.short_start_zone.value}{visited_info}→{current_zone.value}"
-                    fund_mgr.close_short(symbol, execution_price, current_time, LEVERAGE, reason, current_prices)
-            
-            # 3. 익절 체크
-            fund_mgr.check_take_profit(symbol, current_price, current_time, LEVERAGE, current_prices)
-            
-            # 4. RSI 리셋 체크
-            if not pos.long_rsi_reset and prev_rsi > RSI_LONG_RESET:
-                pos.long_rsi_reset = True
-            if not pos.short_rsi_reset and prev_rsi < RSI_SHORT_RESET:
-                pos.short_rsi_reset = True
-            
-            # 5. 진입 조건 체크
-            allowed = get_allowed_directions(current_zone)
-            
-            # RSI 유효성 검사 (NaN, 0, 100 등 극단값은 진입 불가)
-            # RSI가 0 또는 100이면 아직 충분히 계산되지 않은 상태
-            rsi_valid = (
-                not pd.isna(prev_rsi) and 
-                prev_rsi > 1 and 
-                prev_rsi < 99
-            )
-            
-            # 롱 진입
-            if 'long' in allowed and rsi_valid:
-                if prev_rsi <= RSI_LONG_ENTRY:
-                    can_enter = False
-                    if pos.long_entry_count == 0:
-                        can_enter = True
-                    elif pos.long_rsi_reset and pos.long_entry_count < MAX_ENTRY_COUNT:
-                        can_enter = True
-                    
-                    if can_enter:
-                        fund_mgr.open_long(symbol, execution_price, current_time, current_prices, current_zone, LEVERAGE, prev_rsi)
-            
-            # 숏 진입
-            if 'short' in allowed and rsi_valid:
-                if prev_rsi >= RSI_SHORT_ENTRY:
-                    can_enter = False
-                    if pos.short_entry_count == 0:
-                        can_enter = True
-                    elif pos.short_rsi_reset and pos.short_entry_count < MAX_ENTRY_COUNT:
-                        can_enter = True
-                    
-                    if can_enter:
-                        fund_mgr.open_short(symbol, execution_price, current_time, current_prices, current_zone, LEVERAGE, prev_rsi)
-        
-        # 출금 체크 (연간 또는 월별)
-        fund_mgr.check_withdrawal(current_time, current_prices)
-        
-        # 일별 잔액 기록
-        fund_mgr.record_daily_balance(current_time, current_prices)
-    
-    # 미청산 포지션 정리
-    print("\n미청산 포지션 정리...")
-    for symbol in data_frames:
-        pos = fund_mgr.positions[symbol]
-        last_price = data_frames[symbol].iloc[-1]['close']
-        last_time = data_frames[symbol].index[-1]
-        # 마지막 청산을 위한 current_prices 생성
-        final_prices = {s: data_frames[s].iloc[-1]['close'] for s in data_frames}
-        
-        if pos.has_long_position():
-            fund_mgr.close_long(symbol, last_price, last_time, LEVERAGE, "백테스트 종료", final_prices)
-        if pos.has_short_position():
-            fund_mgr.close_short(symbol, last_price, last_time, LEVERAGE, "백테스트 종료", final_prices)
-    
-    return fund_mgr.get_results()
 
-# ==============================================================================
-# 8. 결과 분석 및 시각화
-# ==============================================================================
-def analyze_results(results):
-    """백테스트 결과 분석"""
-    if results is None:
-        return
-    
-    initial_capital = results['initial_capital']
-    final_balance = results['final_balance']
-    total_withdrawn = results['total_withdrawn']
-    trades = results['trades']
-    daily_df = results['daily_balance']
-    
-    total_equity = final_balance + total_withdrawn
-    total_return = (total_equity - initial_capital) / initial_capital * 100
-    
-    # 거래 통계
-    long_trades = [t for t in trades if t['direction'] == 'long' and t['action'] == 'close']
-    short_trades = [t for t in trades if t['direction'] == 'short' and t['action'] == 'close']
-    
-    long_pnl = sum(t.get('pnl', 0) for t in long_trades)
-    short_pnl = sum(t.get('pnl', 0) for t in short_trades)
-    
-    # =========================================================================
-    # 포지션별 승/패 통계 (분할익절 + 최종청산 합산 기준)
-    # =========================================================================
-    # 포지션 그룹핑: symbol + direction + 청산시간 기준으로 포지션 단위 묶기
-    position_pnl = {}  # key: (symbol, direction, position_id), value: total_pnl
-    
-    # 청산 거래(close)와 부분익절(partial_close)을 포지션 단위로 그룹핑
-    close_trades_all = [t for t in trades if t['action'] in ['close', 'partial_close']]
-    
-    # 시간순 정렬
-    close_trades_all.sort(key=lambda x: x['timestamp'])
-    
-    # 포지션 ID 추적 (같은 symbol, direction의 연속된 거래를 하나의 포지션으로)
-    position_tracker = {}  # key: (symbol, direction), value: current_position_id
-    position_counter = {}  # key: (symbol, direction), value: counter
-    
-    for t in close_trades_all:
-        key = (t['symbol'], t['direction'])
-        
-        if key not in position_counter:
-            position_counter[key] = 0
-            
-        # 전체 청산(close)이면 새 포지션 ID 할당 필요
-        if t['action'] == 'close':
-            pos_id = position_counter[key]
-            position_counter[key] += 1
-        else:  # partial_close
-            if key not in position_tracker:
-                position_tracker[key] = position_counter[key]
-                position_counter[key] += 1
-            pos_id = position_tracker[key]
-        
-        full_key = (t['symbol'], t['direction'], pos_id)
-        if full_key not in position_pnl:
-            position_pnl[full_key] = 0
-        position_pnl[full_key] += t.get('pnl', 0)
-        
-        # 전체 청산이면 tracker 리셋
-        if t['action'] == 'close':
-            position_tracker.pop(key, None)
-    
-    # 승/패 집계
-    long_wins, long_losses = 0, 0
-    short_wins, short_losses = 0, 0
-    long_win_pnl, long_loss_pnl = 0, 0
-    short_win_pnl, short_loss_pnl = 0, 0
-    
-    for (symbol, direction, pos_id), total_pnl in position_pnl.items():
-        if direction == 'long':
-            if total_pnl >= 0:
-                long_wins += 1
-                long_win_pnl += total_pnl
-            else:
-                long_losses += 1
-                long_loss_pnl += total_pnl
-        else:  # short
-            if total_pnl >= 0:
-                short_wins += 1
-                short_win_pnl += total_pnl
-            else:
-                short_losses += 1
-                short_loss_pnl += total_pnl
-    
-    total_wins = long_wins + short_wins
-    total_losses = long_losses + short_losses
-    total_positions = total_wins + total_losses
-    win_rate = (total_wins / total_positions * 100) if total_positions > 0 else 0
-    long_win_rate = (long_wins / (long_wins + long_losses) * 100) if (long_wins + long_losses) > 0 else 0
-    short_win_rate = (short_wins / (short_wins + short_losses) * 100) if (short_wins + short_losses) > 0 else 0
-    
-    print("\n" + "="*70)
-    print("백테스트 결과")
-    print("="*70)
-    print(f"초기 자본: ${initial_capital:,.2f}")
-    print(f"최종 잔액: ${final_balance:,.2f}")
-    print(f"총 출금액: ${total_withdrawn:,.2f}")
-    print(f"총 자산가치: ${total_equity:,.2f}")
-    print(f"총 수익률: {total_return:+.2f}%")
-    print("-"*70)
-    print(f"롱 청산 수: {len(long_trades)}, 롱 수익: ${long_pnl:+,.2f}")
-    print(f"숏 청산 수: {len(short_trades)}, 숏 수익: ${short_pnl:+,.2f}")
-    print("-"*70)
-    print("📊 포지션별 승/패 통계 (분할익절+청산 합산 기준)")
-    print("-"*70)
-    print(f"{'':15} | {'승':>6} | {'패':>6} | {'승률':>8} | {'승리금액':>12} | {'패배금액':>12}")
-    print("-"*70)
-    print(f"{'롱':15} | {long_wins:>6} | {long_losses:>6} | {long_win_rate:>7.1f}% | ${long_win_pnl:>+11,.2f} | ${long_loss_pnl:>+11,.2f}")
-    print(f"{'숏':15} | {short_wins:>6} | {short_losses:>6} | {short_win_rate:>7.1f}% | ${short_win_pnl:>+11,.2f} | ${short_loss_pnl:>+11,.2f}")
-    print("-"*70)
-    print(f"{'합계':15} | {total_wins:>6} | {total_losses:>6} | {win_rate:>7.1f}% | ${long_win_pnl+short_win_pnl:>+11,.2f} | ${long_loss_pnl+short_loss_pnl:>+11,.2f}")
-    print("="*70)
-    
-    # MDD 계산 (출금 포함 자산 기준)
-    mdd = 0
-    balance_mdd = 0
-    monthly_mdd = 0
-    weekly_mdd = 0
-    daily_mdd = 0
-    if not daily_df.empty:
-        try:
-            daily_df = daily_df.copy()
-            daily_df['date'] = pd.to_datetime(daily_df['date'])
-            
-            # total_withdrawn 컬럼이 없으면 0으로 생성
-            if 'total_withdrawn' not in daily_df.columns:
-                print("[!] daily_df에 total_withdrawn 컬럼이 없습니다. 0으로 설정합니다.")
-                daily_df['total_withdrawn'] = 0
-            
-            # 일별로 집계 (중복 방지 및 마지막 값 사용)
-            daily_agg = daily_df.groupby('date').agg({
-                'balance': 'last',
-                'total_withdrawn': 'last'
-            }).reset_index()
-            daily_agg = daily_agg.sort_values('date')
-            
-            # Series나 object 타입이 섞여있을 수 있으므로 float으로 강제 변환
-            daily_agg['balance'] = pd.to_numeric(daily_agg['balance'], errors='coerce').fillna(0)
-            daily_agg['total_withdrawn'] = pd.to_numeric(daily_agg['total_withdrawn'], errors='coerce').fillna(0)
-            
-            # 출금 포함 총 자산가치 (잔액 + 누적 출금액)
-            daily_agg['total_equity'] = daily_agg['balance'] + daily_agg['total_withdrawn']
-            
-            # MDD는 출금 포함 총 자산가치 기준으로 계산 (출금이 손실로 반영되지 않음)
-            total_equity_series = daily_agg['total_equity'].values
-            peak = np.maximum.accumulate(total_equity_series)
-            
-            # 0으로 나누기 방지
-            peak_safe = np.where(peak == 0, 1, peak)
-            drawdown = (total_equity_series - peak) / peak_safe * 100
-            mdd = np.min(drawdown)
-            
-            # 그래프용 daily_df 재구성 (차트는 실제 잔액 기준)
-            balance_series = daily_agg['balance'].values
-            balance_peak = np.maximum.accumulate(balance_series)
-            balance_peak_safe = np.where(balance_peak == 0, 1, balance_peak)
-            balance_drawdown = (balance_series - balance_peak) / balance_peak_safe * 100
-            balance_mdd = np.min(balance_drawdown)
-            
-            # =================================================================
-            # 일별 MDD 계산 (일별 종료 잔액 시계열 기준)
-            # daily_agg는 이미 일별로 집계된 상태이므로 그대로 사용
-            # =================================================================
-            daily_balance = daily_agg['balance'].values
-            daily_peak = np.maximum.accumulate(daily_balance)
-            daily_peak_safe = np.where(daily_peak == 0, 1, daily_peak)
-            daily_drawdown = (daily_balance - daily_peak) / daily_peak_safe * 100
-            daily_mdd = np.min(daily_drawdown)
-            
-            # =================================================================
-            # 주별 MDD 계산 (주 종료 잔액 시계열 기준)
-            # =================================================================
-            weekly_df = daily_agg.copy()
-            weekly_df['year_week'] = pd.to_datetime(weekly_df['date']).dt.to_period('W')
-            weekly_balance = weekly_df.groupby('year_week')['balance'].last().values
-            weekly_peak = np.maximum.accumulate(weekly_balance)
-            weekly_peak_safe = np.where(weekly_peak == 0, 1, weekly_peak)
-            weekly_drawdown = (weekly_balance - weekly_peak) / weekly_peak_safe * 100
-            weekly_mdd = np.min(weekly_drawdown)
-            
-            # =================================================================
-            # 월별 MDD 계산 (월 종료 잔액 시계열 기준)
-            # =================================================================
-            monthly_df = daily_agg.copy()
-            monthly_df['year_month'] = pd.to_datetime(monthly_df['date']).dt.to_period('M')
-            monthly_balance = monthly_df.groupby('year_month')['balance'].last().values
-            monthly_peak = np.maximum.accumulate(monthly_balance)
-            monthly_peak_safe = np.where(monthly_peak == 0, 1, monthly_peak)
-            monthly_drawdown = (monthly_balance - monthly_peak) / monthly_peak_safe * 100
-            monthly_mdd = np.min(monthly_drawdown)
-            
-            daily_df = daily_agg.set_index('date')
-            daily_df['peak'] = balance_peak
-            daily_df['drawdown'] = balance_drawdown  # 차트는 잔액 기준 드로다운
-            
-            print("-"*50)
-            print("[MDD] Maximum Drawdown 요약")
-            print("-"*50)
-            total_withdrawn_max = daily_agg['total_withdrawn'].max()
-            print(f"  총 출금액: ${total_withdrawn_max:,.2f}")
-            print(f"  MDD (출금포함 전체): {mdd:.2f}%")
-            print("-"*50)
-            print(f"  MDD (일별 잔액 기준): {daily_mdd:.2f}%")
-            print(f"  MDD (주별 잔액 기준): {weekly_mdd:.2f}%")
-            print(f"  MDD (월별 잔액 기준): {monthly_mdd:.2f}%")
-            print("-"*50)
-        except Exception as e:
-            print(f"MDD 계산 오류: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    # =========================================================================
-    # 월별/연도별 수익 요약
-    # =========================================================================
-    # close와 partial_close 모두 포함 (부분 익절 수익도 집계)
-    close_trades = [t for t in trades if t['action'] in ['close', 'partial_close']]
-    
-    if close_trades:
-        # 거래를 DataFrame으로 변환
-        trades_df = pd.DataFrame(close_trades)
-        trades_df['timestamp'] = pd.to_datetime(trades_df['timestamp'])
-        trades_df['year'] = trades_df['timestamp'].dt.year
-        trades_df['month'] = trades_df['timestamp'].dt.month
-        trades_df['year_month'] = trades_df['timestamp'].dt.to_period('M')
-        
-        # 월별 수익 집계
-        monthly_pnl = trades_df.groupby('year_month')['pnl'].sum()
-        
-        # 연도별 수익 집계
-        yearly_pnl = trades_df.groupby('year')['pnl'].sum()
-        
-        # 출금 기록을 월별로 집계
-        withdrawal_history = results.get('withdrawal_history', [])
-        monthly_withdrawals = {}
-        for w in withdrawal_history:
-            w_date = pd.to_datetime(w['date'])
-            w_period = w_date.to_period('M')
-            if w_period not in monthly_withdrawals:
-                monthly_withdrawals[w_period] = 0
-            monthly_withdrawals[w_period] += w['amount']
-        
-        # 월별 수익 출력
-        print("\n" + "="*120)
-        print("월별 수익 요약")
-        print("="*120)
-        print(f"{'월':^10} | {'수익(USDT)':>15} | {'수익률(%)':>10} | {'출금액':>12} | {'누적수익':>15} | {'잔액':>15}")
-        print("-"*120)
-        
-        cumulative = 0
-        cumulative_withdrawal = 0
-        prev_balance = initial_capital
-        balance = initial_capital
-        for period, pnl in monthly_pnl.items():
-            # 월간 수익률 = 해당월 수익 / 월초 잔액 * 100
-            monthly_return = (pnl / prev_balance * 100) if prev_balance > 0 else 0
-            cumulative += pnl
-            
-            # 해당 월 출금액
-            month_withdrawal = monthly_withdrawals.get(period, 0)
-            cumulative_withdrawal += month_withdrawal
-            
-            balance = initial_capital + cumulative - cumulative_withdrawal
-            
-            withdrawal_str = f"${month_withdrawal:>10,.2f}" if month_withdrawal > 0 else "-"
-            print(f"{str(period):^10} | {pnl:>+15,.2f} | {monthly_return:>+9.2f}% | {withdrawal_str:>12} | {cumulative:>+15,.2f} | {balance:>15,.2f}")
-            prev_balance = balance
-        
-        # 연도별 수익 출력
-        print("\n" + "="*85)
-        print("연도별 수익 요약")
-        print("="*85)
-        print(f"{'연도':^10} | {'수익(USDT)':>15} | {'수익률(%)':>12} | {'잔액':>15}")
-        print("-"*85)
-        
-        prev_balance = initial_capital
-        balance = initial_capital
-        for year, pnl in yearly_pnl.items():
-            if prev_balance == 0:
-                year_return = 0
-            else:
-                year_return = (pnl / prev_balance) * 100
-                
-            balance = prev_balance + pnl
-            print(f"{year:^10} | {pnl:>+15,.2f} | {year_return:>+12.2f}% | {balance:>15,.2f}")
-            prev_balance = balance
-        
-        print("="*85)
-    
-    return results
+            if USE_MACD_BUY_LOCK and long_pos['buy_blocked_by_macd'] and prev_candle['macd_histogram'] > 0:
+                long_pos['buy_blocked_by_macd'] = False
+            if USE_SHORT_STRATEGY and short_pos['sell_blocked_by_macd'] and prev_candle['macd_histogram'] < 0:
+                short_pos['sell_blocked_by_macd'] = False
 
-# ==============================================================================
-# 9. GUI 차트 앱 클래스
-# ==============================================================================
-class ChartApp(tk.Tk):
-    """백테스트 결과 분석 GUI 앱"""
-    
-    def __init__(self, results, coin_list, daily_df, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.title("4-2 RSI 롱숏 분할매매 전략 - 백테스트 결과 분석")
-        self.geometry("1800x1000")
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+            unrealized_pnl_long = 0
+            if long_pos['total_quantity'] > 0:
+                unrealized_pnl_long = (mtm_price - long_pos['average_price']) * long_pos['total_quantity']
+                current_portfolio_value += (long_pos['total_collateral'] + unrealized_pnl_long)
+
+            unrealized_pnl_short = 0
+            if short_pos['total_quantity'] > 0:
+                unrealized_pnl_short = (short_pos['average_price'] - mtm_price) * short_pos['total_quantity']
+                current_portfolio_value += (short_pos['total_collateral'] + unrealized_pnl_short)
+
+            if long_pos['current_entry_count'] > 0:
+                entries_to_sell_indices, sell_reason = [], ""
+                is_ma_cross_up = prev_candle['high'] > prev_candle['ma30'] and prev_prev_candle['close'] < prev_prev_candle['ma30']
+                if is_ma_cross_up:
+                    entries_to_sell_indices = [i for i, e in enumerate(long_pos['entries']) if e['price'] < prev_candle['ma30']]
+                    if entries_to_sell_indices: sell_reason = "30MA 상향 돌파"
+                elif prev_candle['close'] > prev_candle['bb_upper']:
+                    # <<< [수정 시작] BB 상단 돌파 시, 수익성 판단 기준을 prev_candle['close']로 통일 >>>
+                    if prev_candle['close'] > long_pos['average_price']:
+                        entries_to_sell_indices = list(range(len(long_pos['entries'])))
+                        sell_reason = "BB 상단 돌파 (전체 익절)"
+                    else:
+                        entries_to_sell_indices = [i for i, e in enumerate(long_pos['entries']) if prev_candle['close'] > e['price']]
+                        if entries_to_sell_indices: sell_reason = "BB 상단 돌파 (부분 익절)"
+                    # <<< [수정 끝] >>>
+
+                if entries_to_sell_indices:
+                    sold_entries = [long_pos['entries'][i] for i in entries_to_sell_indices]
+                    gross_pnl = sum([(execution_price - e['price']) * e['quantity'] for e in sold_entries])
+                    total_buy_fee = sum(e.get('buy_fee', 0) for e in sold_entries)
+                    qty_sold = sum(e['quantity'] for e in sold_entries)
+                    sell_fee = (qty_sold * execution_price) * FEE_RATE
+                    net_pnl = gross_pnl - total_buy_fee - sell_fee
+
+                    # 상세 PNL 계산 로그 출력
+                    if len(sold_entries) == long_pos['current_entry_count']:
+                        print(f"[{current_time}] 💰 {ticker} [LONG] 포지션 전체 익절 (사유: {sell_reason}).")
+                        total_long_position_closed += 1
+                    else:
+                        print(f"[{current_time}] 💰 {ticker} [LONG] 부분 매도 (사유: {sell_reason}).")
+
+                    # print(f"    - PNL 계산 상세 내역:")
+                    # print(f"    - (1) 매도 실행 가격: {execution_price:,.5f}")
+                    # print(f"    - (2) 총 매매 손익 (Gross PNL): {gross_pnl:,.2f} USDT")
+                    # print(f"        └ (매도 실행 가격 - 각 진입 가격) * 수량 의 합계")
+                    # print(f"    - (3) 총 매수 수수료 (매도 대상): {total_buy_fee:,.2f} USDT")
+                    # print(f"    - (4) 매도 수수료: {sell_fee:,.2f} USDT")
+                    # print(f"        └ (총 매도 수량 {qty_sold:.4f} * 매도 실행 가격) * 수수료율 {FEE_RATE}")
+                    print(f"    - >> 최종 순손익 (Net PNL): {net_pnl:,.2f} USDT <<")
+                    # print(f"        └ (2)총 매매 손익 - (3)총 매수 수수료 - (4)매도 수수료")
+
+                    daily_fees[current_date] = daily_fees.get(current_date, 0) + total_buy_fee + sell_fee
+                    daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl
+                    total_long_pnl += net_pnl
+                    total_long_trades += len(entries_to_sell_indices)
+
+                    removed_collateral = sum([(e['price'] * e['quantity'] / LEVERAGE) for e in sold_entries])
+                    cash += removed_collateral + net_pnl
+                    long_pos['total_collateral'] -= removed_collateral
+
+                    for i in sorted(entries_to_sell_indices, reverse=True): del long_pos['entries'][i]
+                    for new_idx, entry in enumerate(long_pos['entries']): entry['entry_num'] = new_idx + 1
+                    long_pos['current_entry_count'] = len(long_pos['entries'])
+
+                    if long_pos['current_entry_count'] == 0:
+                        # 롱포지션이 0회차가 되면 모든 숏포지션 강제 정리 (손익 무관)
+                        if short_pos['current_entry_count'] > 0:
+                            print(f"[{current_time}] 🔄 {ticker} [ACTION] 롱 포지션 완전 정리로 모든 숏 포지션 강제 정리 (손익 무관).")
+                            
+                            gross_pnl_s = sum([(e['price'] - execution_price) * e['quantity'] for e in short_pos['entries']])
+                            total_sell_fee = sum(e.get('sell_fee', 0) for e in short_pos['entries'])
+                            qty_to_buy_back = sum(e['quantity'] for e in short_pos['entries'])
+                            buy_back_fee = (qty_to_buy_back * execution_price) * FEE_RATE
+                            net_pnl_s = gross_pnl_s - total_sell_fee - buy_back_fee
+                            
+                            daily_fees[current_date] = daily_fees.get(current_date, 0) + total_sell_fee + buy_back_fee
+                            daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl_s
+                            total_short_pnl += net_pnl_s
+                            
+                            removed_collateral_s = short_pos['total_collateral']
+                            cash += removed_collateral_s + net_pnl_s
+                            
+                            total_short_trades += short_pos['current_entry_count']
+                            total_short_position_closed += 1
+                            
+                            print(f"    - 모든 숏 포지션 강제 정리 완료. Net PNL: {net_pnl_s:,.2f} USDT")
+                            
+                            positions[ticker]['short'].update({
+                                "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0,
+                                "total_collateral": 0.0, "last_buy_timestamp": None,
+                                "sell_blocked_by_macd": False, "entries": []
+                            })
+                        
+                        new_allocated_asset = cash / len(data_frames)
+                        positions[ticker]['long'].update({
+                            "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0,
+                            "total_collateral": 0.0, "last_buy_timestamp": None,
+                            "buy_blocked_by_macd": False, "entries": []
+                        })
+                        positions[ticker]['allocated_capital'] = new_allocated_asset
+                        positions[ticker]['base_buy_amount'] = new_allocated_asset * BASE_BUY_RATE
+                    else:
+                        long_pos['total_quantity'] = sum(e['quantity'] for e in long_pos['entries'])
+                        long_pos['average_price'] = sum(e['price'] * e['quantity'] for e in long_pos['entries']) / long_pos['total_quantity']
+
+                    if (short_pos['current_entry_count'] - long_pos['current_entry_count']) >= 4 and short_pos['current_entry_count'] > 0:
+                        print(f"[{current_time}] 밸런스 조정! ↔️ {ticker} [ACTION] 롱 포지션 정리로 숏/롱 격차 발생. 숏 1개 강제 정리.")
+
+                        entry_to_close_s = short_pos['entries'].pop(-1)
+                        gross_pnl_s = (entry_to_close_s['price'] - execution_price) * entry_to_close_s['quantity']
+                        sell_fee_s = entry_to_close_s.get('sell_fee', 0)
+                        buy_back_fee = (entry_to_close_s['quantity'] * execution_price) * FEE_RATE
+                        net_pnl_s = gross_pnl_s - sell_fee_s - buy_back_fee
+
+                        daily_fees[current_date] = daily_fees.get(current_date, 0) + sell_fee_s + buy_back_fee
+                        daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl_s
+                        total_short_pnl += net_pnl_s
+
+                        removed_collateral_s = (entry_to_close_s['price'] * entry_to_close_s['quantity'] / LEVERAGE)
+                        cash += removed_collateral_s + net_pnl_s
+                        short_pos['total_collateral'] -= removed_collateral_s
+
+                        total_short_trades += 1
+                        short_pos['current_entry_count'] = len(short_pos['entries'])
+
+                        if short_pos['current_entry_count'] == 0:
+                            print(f"    - 조정으로 모든 숏 포지션이 정리되었습니다. Net PNL: {net_pnl_s:,.2f} USDT")
+                            total_short_position_closed += 1
+                            positions[ticker]['short'].update({"current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0, "total_collateral": 0.0, "last_buy_timestamp": None, "sell_blocked_by_macd": False, "entries": []})
+                        else:
+                            short_pos['total_quantity'] = sum(e['quantity'] for e in short_pos['entries'])
+                            short_pos['average_price'] = sum(e['price'] * e['quantity'] for e in short_pos['entries']) / short_pos['total_quantity']
+                            print(f"    - 숏 강제 정리 완료. Net PNL: {net_pnl_s:,.2f} USDT. 남은 숏 수량: {short_pos['total_quantity']:.4f}")
+
+                    continue
+
+            if long_pos['current_entry_count'] < MAX_LONG_BUY_COUNT:
+                base_buy_cond = prev_candle['rsi'] < 25 and prev_candle['close'] < prev_candle['bb_lower']
+                should_buy = False
+                if base_buy_cond:
+                    if long_pos['current_entry_count'] == 0:
+                        should_buy = True
+                        total_long_position_opened += 1
+                    else:
+                        last_buy_time = long_pos['last_buy_timestamp']
+                        reset_check = df.loc[(df.index > last_buy_time) & (df.index <= prev_candle.name)]
+                        if not reset_check.empty and (reset_check['rsi'] > 25).any(): should_buy = True
+                        elif get_rsi_level(prev_candle['rsi']) > get_rsi_level(long_pos['entries'][-1]['trigger_rsi']): should_buy = True
+
+                if should_buy:
+                    is_prev_day_close_below_ma = current_candle.get('prev_tf_close_below_ma30', False)
+                    long_short_diff = long_pos['current_entry_count'] - short_pos['current_entry_count']
+
+                    if is_prev_day_close_below_ma and long_short_diff >= LONG_ENTRY_LOCK_SHORT_COUNT_DIFF:
+                        should_buy = False
+
+                if should_buy and not long_pos['buy_blocked_by_macd'] and short_pos['current_entry_count'] > 0 and USE_SHORT_STRATEGY:
+                    entries_to_close_s = [e for e in short_pos['entries'] if e['price'] > execution_price]
+                    indices_to_close_s = [i for i, e in enumerate(short_pos['entries']) if e['price'] > execution_price]
+                    if entries_to_close_s:
+                        print(f"[{current_time}] ↔️ {ticker} [ACTION] 롱 진입으로 수익 중인 숏 포지션 정리 ({len(entries_to_close_s)}/{short_pos['current_entry_count']}개).")
+                        gross_pnl_s = sum([(e['price'] - execution_price) * e['quantity'] for e in entries_to_close_s])
+                        total_sell_fee = sum(e.get('sell_fee', 0) for e in entries_to_close_s)
+                        qty_to_buy_back = sum(e['quantity'] for e in entries_to_close_s)
+                        buy_back_fee = (qty_to_buy_back * execution_price) * FEE_RATE
+                        net_pnl_s = gross_pnl_s - total_sell_fee - buy_back_fee
+                        daily_fees[current_date] = daily_fees.get(current_date, 0) + total_sell_fee + buy_back_fee
+                        daily_realized_pnl[current_date] = daily_realized_pnl.get(current_date, 0) + net_pnl_s
+                        total_short_pnl += net_pnl_s
+                        removed_collateral_s = sum([(e['price'] * e['quantity'] / LEVERAGE) for e in entries_to_close_s])
+                        cash += removed_collateral_s + net_pnl_s
+                        short_pos['total_collateral'] -= removed_collateral_s
+                        total_short_trades += len(entries_to_close_s)
+                        for i in sorted(indices_to_close_s, reverse=True): del short_pos['entries'][i]
+                        for new_idx, entry in enumerate(short_pos['entries']): entry['entry_num'] = new_idx + 1
+                        short_pos['current_entry_count'] = len(short_pos['entries'])
+                        if short_pos['current_entry_count'] == 0:
+                            print(f"    - 모든 숏 포지션이 정리되었습니다. Net PNL: {net_pnl_s:,.2f} USDT")
+                            total_short_position_closed += 1
+                            positions[ticker]['short'].update({ "current_entry_count": 0, "average_price": 0.0, "total_quantity": 0.0, "total_collateral": 0.0, "last_buy_timestamp": None, "sell_blocked_by_macd": False, "entries": [] })
+                        else:
+                            short_pos['total_quantity'] = sum(e['quantity'] for e in short_pos['entries'])
+                            short_pos['average_price'] = sum(e['price'] * e['quantity'] for e in short_pos['entries']) / short_pos['total_quantity']
+                            print(f"    - 숏 부분 정리 완료. Net PNL: {net_pnl_s:,.2f} USDT. 남은 숏 수량: {short_pos['total_quantity']:.4f}")
+
+                if should_buy and not long_pos['buy_blocked_by_macd']:
+                    next_entry_num = long_pos['current_entry_count'] + 1
+
+                    # <<< [수정] 매수 금액 계산 로직을 단순화 및 명확화 >>>
+                    buy_collateral = 0
+                    if USE_DYNAMIC_BASE_BUY_AMOUNT:
+                        # 동적 모드: '매 진입 시점'의 가용 현금을 기준으로 기초 매수액을 계산
+                        base_amount = cash * BASE_BUY_RATE
+                        buy_collateral = get_buy_amount(base_amount, get_rsi_level(prev_candle['rsi']), next_entry_num) if USE_ADDITIVE_BUYING else base_amount
+                    else:
+                        # 고정 모드: 사이클 시작 시점에 계산된 'base_buy_amount'를 사용
+                        buy_collateral = get_buy_amount(pos['base_buy_amount'], get_rsi_level(prev_candle['rsi']), next_entry_num) if USE_ADDITIVE_BUYING else pos['base_buy_amount']
+
+                    if cash >= buy_collateral:
+                        buy_price = execution_price
+                        quantity_to_buy = (buy_collateral * LEVERAGE) / buy_price
+                        buy_fee = (buy_collateral * LEVERAGE) * FEE_RATE
+                        daily_fees[current_date] = daily_fees.get(current_date, 0) + buy_fee
+                        print(f"[{current_time}] 📈 {ticker} [LONG] 매수 ({next_entry_num}차): 가격 {buy_price:.5f}, 금액 {buy_collateral:,.2f} USDT, RSI {prev_candle['rsi']:.2f}")
+                        if next_entry_num == 1: new_cycle_dates.add(current_time.date())
+                        cash -= buy_collateral
+                        long_pos['total_collateral'] += buy_collateral
+                        long_pos['entries'].append({
+                            "entry_num": next_entry_num, "price": buy_price, "quantity": quantity_to_buy,
+                            "timestamp": current_time, "trigger_rsi": prev_candle['rsi'], "buy_fee": buy_fee
+                        })
+                        long_pos['current_entry_count'] += 1
+                        long_pos['last_buy_timestamp'] = current_time
+                        long_pos['total_quantity'] = sum(e['quantity'] for e in long_pos['entries'])
+                        long_pos['average_price'] = sum(e['price'] * e['quantity'] for e in long_pos['entries']) / long_pos['total_quantity']
+                        total_long_trades += 1
+                        if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] < 0:
+                            long_pos['buy_blocked_by_macd'] = True
+
+            # 일반 숏 포지션 진입 로직
+            if USE_SHORT_STRATEGY and short_pos['current_entry_count'] < MAX_SHORT_BUY_COUNT:
+
+                # 롱포지션이 1회차도 없으면 숏포지션 진입 금지
+                if long_pos['current_entry_count'] == 0:
+                    pass
+                elif (short_pos['current_entry_count'] - long_pos['current_entry_count']) >= 3:
+                    pass
+                else:
+                    short_cond_tf = current_candle.get('prev_tf_close_below_ma30', False) and \
+                                      current_candle.get('prev_tf_macd_hist_neg', False) and \
+                                      not current_candle.get('prev_tf_ma30_3day_rising', False)
+
+                    current_short_entry_rsi = SHORT_ENTRY_RSI
+
+                    prev_tf_adx_value = current_candle.get('prev_tf_adx', 0)
+                    if long_pos['current_entry_count'] >= 4 and prev_tf_adx_value >= 30:
+                        current_short_entry_rsi = SHORT_ENTRY_RSI - SHORT_RSI_ADJUSTMENT
+
+                    short_cond_15m = prev_candle['rsi'] >= current_short_entry_rsi
+
+                    should_short = False
+                    if short_cond_tf and short_cond_15m:
+                        if short_pos['current_entry_count'] == 0:
+                            should_short = True
+                            total_short_position_opened += 1
+                        else:
+                            last_short_time = short_pos['last_buy_timestamp']
+                            reset_check_s = df.loc[(df.index > last_short_time) & (df.index <= prev_candle.name)]
+                            if not reset_check_s.empty and (reset_check_s['rsi'] < current_short_entry_rsi).any():
+                                should_short = True
+
+                    if should_short and not short_pos['sell_blocked_by_macd']:
+                        next_entry_num = short_pos['current_entry_count'] + 1
+
+                        # <<< [수정] 매도 금액 계산 로직을 단순화 및 명확화 >>>
+                        sell_collateral = 0
+                        if USE_DYNAMIC_BASE_BUY_AMOUNT:
+                             # 동적 모드: '매 진입 시점'의 가용 현금을 기준으로 매도액 계산
+                             sell_collateral = cash * BASE_BUY_RATE
+                        else:
+                            # 고정 모드: 사이클 시작 시점에 계산된 'base_buy_amount'를 사용
+                            sell_collateral = pos['base_buy_amount']
+
+                        if cash >= sell_collateral:
+                            sell_price = execution_price
+                            quantity_to_sell = (sell_collateral * LEVERAGE) / sell_price
+                            sell_fee = (sell_collateral * LEVERAGE) * FEE_RATE
+                            daily_fees[current_date] = daily_fees.get(current_date, 0) + sell_fee
+                            print(f"[{current_time}] 📉 {ticker} [SHORT] 매도 ({next_entry_num}차): 가격 {sell_price:.5f}, 금액 {sell_collateral:,.2f} USDT, RSI {prev_candle['rsi']:.2f}")
+                            if next_entry_num == 1: new_cycle_dates.add(current_time.date())
+                            cash -= sell_collateral
+                            short_pos['total_collateral'] += sell_collateral
+                            short_pos['entries'].append({
+                                "entry_num": next_entry_num, "price": sell_price, "quantity": quantity_to_sell,
+                                "timestamp": current_time, "trigger_rsi": prev_candle['rsi'], "sell_fee": sell_fee
+                            })
+                            short_pos['current_entry_count'] += 1
+                            short_pos['last_buy_timestamp'] = current_time
+                            short_pos['total_quantity'] = sum(e['quantity'] for e in short_pos['entries'])
+                            short_pos['average_price'] = sum(e['price'] * e['quantity'] for e in short_pos['entries']) / short_pos['total_quantity']
+                            total_short_trades += 1
+                            if USE_MACD_BUY_LOCK and prev_candle['macd_histogram'] > 0:
+                                short_pos['sell_blocked_by_macd'] = True
+
+        previous_time = current_time
+        total_long_entries = sum(p['long'].get('current_entry_count', 0) for p in positions.values())
+        total_short_entries = sum(p['short'].get('current_entry_count', 0) for p in positions.values())
         
-        self.results = results
-        self.coin_list = coin_list
-        self.daily_df = daily_df
-        self.trades = results['trades']
+        # 롱/숏 평단가 계산 (모든 코인의 가중평균)
+        total_long_qty = sum(p['long'].get('total_quantity', 0) for p in positions.values())
+        total_short_qty = sum(p['short'].get('total_quantity', 0) for p in positions.values())
         
-        # 거래 로그 파싱
-        self.all_trade_logs_parsed = self.parse_trade_logs()
-        self.currently_displayed_logs = self.all_trade_logs_parsed[:]
-        self.chart_artists = {}
-        self.highlight_plot = None
-        self.sort_info = {'col': None, 'reverse': False}
-        
-        # 메인 레이아웃 구성
-        main_pane = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        main_pane.pack(fill=tk.BOTH, expand=True)
-        
-        # 왼쪽 패널 (필터 + 로그)
-        left_panel = ttk.Frame(main_pane, width=650)
-        left_panel.pack_propagate(False)
-        main_pane.add(left_panel, weight=1)
-        
-        # 필터 프레임
-        filter_frame = ttk.LabelFrame(left_panel, text="거래 로그 필터")
-        filter_frame.pack(fill=tk.X, padx=5, pady=5)
-        
-        ttk.Label(filter_frame, text="코인:").grid(row=0, column=0, padx=(5,2), pady=5, sticky='w')
-        self.filter_ticker_var = tk.StringVar()
-        self.filter_ticker_entry = ttk.Entry(filter_frame, textvariable=self.filter_ticker_var, width=15)
-        self.filter_ticker_entry.grid(row=0, column=1, padx=(0,5), pady=5, sticky='w')
-        
-        ttk.Label(filter_frame, text="방향:").grid(row=0, column=2, padx=(5,2), pady=5, sticky='w')
-        self.filter_direction_var = tk.StringVar()
-        self.filter_direction_combo = ttk.Combobox(filter_frame, textvariable=self.filter_direction_var, 
-                                                   values=['', 'long', 'short'], width=8)
-        self.filter_direction_combo.grid(row=0, column=3, padx=(0,5), pady=5, sticky='w')
-        
-        ttk.Label(filter_frame, text="유형:").grid(row=0, column=4, padx=(5,2), pady=5, sticky='w')
-        self.filter_action_var = tk.StringVar()
-        self.filter_action_combo = ttk.Combobox(filter_frame, textvariable=self.filter_action_var, 
-                                                values=['', 'entry', 'close', 'partial_close'], width=12)
-        self.filter_action_combo.grid(row=0, column=5, padx=(0,5), pady=5, sticky='w')
-        
-        apply_button = ttk.Button(filter_frame, text="적용", command=self.apply_filters_and_sort)
-        apply_button.grid(row=0, column=6, padx=5, pady=5)
-        clear_button = ttk.Button(filter_frame, text="초기화", command=self.clear_filters)
-        clear_button.grid(row=0, column=7, padx=5, pady=5)
-        
-        self.filter_ticker_entry.bind('<Return>', lambda e: self.apply_filters_and_sort())
-        
-        # 로그 테이블
-        log_frame = ttk.Frame(left_panel)
-        log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=(0,5))
-        
-        cols = ('Symbol', 'Direction', 'Action', 'DateTime', 'Price', 'Quantity', 'Zone', 'PnL')
-        self.log_tree = ttk.Treeview(log_frame, columns=cols, show='headings')
-        
-        for col in cols:
-            self.log_tree.heading(col, text=col, command=lambda _col=col: self.sort_by_column(_col))
-            width = {'Symbol': 100, 'Direction': 60, 'Action': 90, 'DateTime': 130, 
-                     'Price': 100, 'Quantity': 80, 'Zone': 60, 'PnL': 100}.get(col, 80)
-            anchor = 'e' if col in ['Price', 'Quantity', 'PnL'] else 'center'
-            self.log_tree.column(col, width=width, anchor=anchor)
-        
-        v_scroll = ttk.Scrollbar(log_frame, orient="vertical", command=self.log_tree.yview)
-        h_scroll = ttk.Scrollbar(log_frame, orient="horizontal", command=self.log_tree.xview)
-        self.log_tree.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-        v_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        h_scroll.pack(side=tk.BOTTOM, fill=tk.X)
-        self.log_tree.pack(fill=tk.BOTH, expand=True)
-        
-        # 오른쪽 패널 (차트)
-        chart_frame = ttk.Frame(main_pane)
-        main_pane.add(chart_frame, weight=3)
-        
-        self.tab_control = ttk.Notebook(chart_frame)
-        self.tab_control.pack(expand=1, fill="both")
-        
-        # 탭 추가
-        self.add_overall_tab()
-        for symbol in self.coin_list:
-            self.add_coin_tab(symbol)
-        
-        self.tab_control.bind("<<NotebookTabChanged>>", self.on_tab_changed)
-        self.log_tree.bind("<<TreeviewSelect>>", self.on_log_select)
-        self.repopulate_log_tree()
-    
-    def parse_trade_logs(self):
-        """거래 기록 파싱"""
-        parsed = []
-        for trade in self.trades:
-            parsed.append({
-                'symbol': trade['symbol'],
-                'direction': trade['direction'],
-                'action': trade['action'],
-                'datetime': trade['timestamp'],
-                'price': trade['price'],
-                'quantity': trade.get('quantity', 0),
-                'zone': trade.get('zone', ''),
-                'pnl': trade.get('pnl', 0),
-                'pnl_rate': trade.get('pnl_rate', 0),
-                'reason': trade.get('reason', '')
-            })
-        return parsed
-    
-    def apply_filters_and_sort(self):
-        """필터 적용 및 정렬"""
-        ticker_filter = self.filter_ticker_var.get().upper()
-        direction_filter = self.filter_direction_var.get()
-        action_filter = self.filter_action_var.get()
-        
-        # 현재 탭에 따른 필터
-        current_tab_text = self.tab_control.tab(self.tab_control.select(), "text")
-        tab_ticker_filter = None
-        if current_tab_text != '📊 종합 결과':
-            tab_ticker_filter = current_tab_text
-        
-        logs = self.all_trade_logs_parsed[:]
-        
-        if tab_ticker_filter:
-            logs = [log for log in logs if log['symbol'] == tab_ticker_filter]
-        if ticker_filter:
-            logs = [log for log in logs if ticker_filter in log['symbol'].upper()]
-        if direction_filter:
-            logs = [log for log in logs if log['direction'] == direction_filter]
-        if action_filter:
-            logs = [log for log in logs if log['action'] == action_filter]
-        
-        self.currently_displayed_logs = logs
-        
-        if self.sort_info['col']:
-            key_map = {'Symbol': 'symbol', 'Direction': 'direction', 'Action': 'action',
-                      'DateTime': 'datetime', 'Price': 'price', 'Quantity': 'quantity',
-                      'Zone': 'zone', 'PnL': 'pnl'}
-            sort_key = key_map.get(self.sort_info['col'])
-            if sort_key:
-                self.currently_displayed_logs.sort(key=lambda x: x[sort_key] if x[sort_key] else 0, 
-                                                   reverse=self.sort_info['reverse'])
-        
-        self.repopulate_log_tree()
-    
-    def clear_filters(self):
-        """필터 초기화"""
-        self.filter_ticker_var.set("")
-        self.filter_direction_var.set("")
-        self.filter_action_var.set("")
-        self.apply_filters_and_sort()
-    
-    def sort_by_column(self, col):
-        """컬럼 정렬"""
-        if self.sort_info['col'] == col:
-            self.sort_info['reverse'] = not self.sort_info['reverse']
+        if total_long_qty > 0:
+            avg_long_price = sum(p['long'].get('average_price', 0) * p['long'].get('total_quantity', 0) for p in positions.values()) / total_long_qty
         else:
-            self.sort_info['col'] = col
-            self.sort_info['reverse'] = False
-        self.apply_filters_and_sort()
-    
-    def repopulate_log_tree(self):
-        """로그 테이블 갱신"""
-        self.log_tree.delete(*self.log_tree.get_children())
-        for log in self.currently_displayed_logs:
-            pnl_str = f"${log['pnl']:+,.2f}" if log['pnl'] else ""
-            datetime_str = log['datetime'].strftime('%Y-%m-%d %H:%M') if hasattr(log['datetime'], 'strftime') else str(log['datetime'])
-            self.log_tree.insert('', 'end', values=(
-                log['symbol'], log['direction'], log['action'], datetime_str,
-                f"${log['price']:.6f}", f"{log['quantity']:.4f}", log['zone'], pnl_str
-            ))
-    
-    def on_tab_changed(self, event):
-        """탭 변경 시"""
-        self.remove_highlight()
-        self.apply_filters_and_sort()
-    
-    def on_log_select(self, event):
-        """로그 선택 시 차트에 하이라이트"""
-        self.remove_highlight()
-        selected_items = self.log_tree.selection()
-        if not selected_items:
-            return
+            avg_long_price = 0.0
         
-        item_values = self.log_tree.item(selected_items[0], 'values')
-        log_symbol = item_values[0]
-        log_datetime_str = item_values[3]
-        log_price = float(item_values[4].replace('$', '').replace(',', ''))
-        log_datetime = pd.to_datetime(log_datetime_str)
-        
-        current_tab_text = self.tab_control.tab(self.tab_control.select(), "text")
-        ticker_key = 'overall' if current_tab_text == '📊 종합 결과' else current_tab_text
-        
-        # 다른 코인 탭으로 이동
-        if ticker_key != 'overall' and ticker_key != log_symbol:
-            for i, tab_id in enumerate(self.tab_control.tabs()):
-                if self.tab_control.tab(tab_id, "text") == log_symbol:
-                    self.tab_control.select(i)
-                    ticker_key = log_symbol
-                    break
-        
-        if ticker_key not in self.chart_artists:
-            return
-        
-        artists = self.chart_artists[ticker_key]
-        ax, canvas = artists['ax'], artists['canvas']
-        
-        y_coord = log_price
-        if ticker_key == 'overall':
-            try:
-                nearest_idx = self.daily_df.index.get_indexer([log_datetime], method='nearest')[0]
-                y_coord = self.daily_df['balance'].iloc[nearest_idx]
-            except:
-                return
-        
-        marker = '^' if item_values[2] == 'entry' else 'v'
-        self.highlight_plot = ax.plot(log_datetime, y_coord, marker=marker, color='cyan', 
-                                       markersize=15, markeredgecolor='black', zorder=10)[0]
-        canvas.draw()
-    
-    def remove_highlight(self):
-        """하이라이트 제거"""
-        if self.highlight_plot:
-            self.highlight_plot.remove()
-            self.highlight_plot = None
-            try:
-                current_tab_text = self.tab_control.tab(self.tab_control.select(), "text")
-                ticker_key = 'overall' if current_tab_text == '📊 종합 결과' else current_tab_text
-                if ticker_key in self.chart_artists:
-                    self.chart_artists[ticker_key]['canvas'].draw()
-            except:
-                pass
-    
-    def on_closing(self):
-        """창 닫기"""
-        self.quit()
-        self.destroy()
-    
-    def create_chart_frame(self, parent_tab):
-        """차트 프레임 생성"""
-        frame = ttk.Frame(parent_tab)
-        frame.pack(fill='both', expand=True)
-        fig = Figure(dpi=100)
-        canvas = FigureCanvasTkAgg(fig, master=frame)
-        canvas.get_tk_widget().pack(side='top', fill='both', expand=True)
-        toolbar = NavigationToolbar2Tk(canvas, frame)
-        toolbar.update()
-        return fig, canvas
-    
-    def add_overall_tab(self):
-        """종합 결과 탭 추가"""
-        overall_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(overall_tab, text='📊 종합 결과')
-        fig, canvas = self.create_chart_frame(overall_tab)
-        axs = fig.subplots(3, 1, sharex=True, gridspec_kw={'height_ratios': [2, 2, 1]})
-        fig.tight_layout(pad=3.0)
-        
-        if self.daily_df.empty:
-            return
-        
-        dates = self.daily_df.index
-        balance = self.daily_df['balance']
-        
-        # 선형 스케일
-        axs[0].plot(dates, balance, label='잔액 (선형)', color='blue', linewidth=1.5)
-        axs[0].axhline(y=self.results['initial_capital'], color='gray', linestyle='--', alpha=0.7)
-        axs[0].set_title('종합 성과 (선형 스케일)', fontsize=12)
-        axs[0].set_ylabel('USDT')
-        axs[0].grid(True, alpha=0.3)
-        axs[0].legend(loc='upper left')
-        axs[0].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
-        
-        # 로그 스케일
-        axs[1].plot(dates, balance, label='잔액 (로그)', color='purple', linewidth=1.5)
-        axs[1].set_yscale('log')
-        axs[1].set_title('종합 성과 (로그 스케일)', fontsize=12)
-        axs[1].set_ylabel('USDT')
-        axs[1].grid(True, alpha=0.3)
-        axs[1].legend(loc='upper left')
-        axs[1].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
-        
-        # 드로다운 - 세 가지 MDD 색깔별 표시
-        axs[2].set_title('드로다운 (잔액/출금포함/월별)', fontsize=12)
-        
-        # 1. 잔액 기준 드로다운 (빨강)
-        if 'drawdown' in self.daily_df.columns:
-            axs[2].fill_between(dates, self.daily_df['drawdown'], 0, color='red', alpha=0.2)
-            axs[2].plot(dates, self.daily_df['drawdown'], color='red', linewidth=1, 
-                       label=f'잔액 기준 (MDD: {self.daily_df["drawdown"].min():.1f}%)')
-        
-        # 2. 출금 포함 드로다운 (파랑)
-        if 'total_withdrawn' in self.daily_df.columns:
-            total_equity = self.daily_df['balance'] + self.daily_df['total_withdrawn']
-            peak = total_equity.cummax()
-            peak_safe = peak.replace(0, 1)
-            equity_drawdown = (total_equity - peak) / peak_safe * 100
-            axs[2].plot(dates, equity_drawdown, color='blue', linewidth=1.5, linestyle='--',
-                       label=f'출금 포함 (MDD: {equity_drawdown.min():.1f}%)')
-        
-        # 3. 월별 드로다운 (주황)
-        try:
-            monthly_df = self.daily_df.copy()
-            monthly_df['year_month'] = monthly_df.index.to_period('M')
-            monthly_balance = monthly_df.groupby('year_month')['balance'].last()
-            monthly_peak = monthly_balance.cummax()
-            monthly_peak_safe = monthly_peak.replace(0, 1)
-            monthly_drawdown = (monthly_balance - monthly_peak) / monthly_peak_safe * 100
-            monthly_dates = monthly_df.groupby('year_month').apply(lambda x: x.index[-1], include_groups=False)
-            axs[2].plot(monthly_dates, monthly_drawdown, color='orange', linewidth=2, 
-                       marker='o', markersize=3, linestyle='-',
-                       label=f'월별 기준 (MDD: {monthly_drawdown.min():.1f}%)')
-        except Exception as e:
-            print(f"월별 드로다운 차트 오류: {e}")
-        
-        axs[2].set_ylabel('%')
-        axs[2].grid(True, alpha=0.3)
-        axs[2].legend(loc='lower left', fontsize=8)
-        axs[2].axhline(y=0, color='gray', linestyle='-', linewidth=0.5)
-        
-        self.chart_artists['overall'] = {'fig': fig, 'canvas': canvas, 'ax': axs[1]}
-        canvas.draw()
-    
-    def add_coin_tab(self, symbol):
-        """코인별 탭 추가"""
-        coin_tab = ttk.Frame(self.tab_control)
-        self.tab_control.add(coin_tab, text=symbol)
-        fig, canvas = self.create_chart_frame(coin_tab)
-        axs = fig.subplots(2, 1, sharex=True, gridspec_kw={'height_ratios': [3, 1]})
-        fig.tight_layout(pad=3.0)
-        
-        # 해당 코인의 거래만 필터
-        coin_trades = [t for t in self.trades if t['symbol'] == symbol]
-        
-        if not coin_trades:
-            axs[0].text(0.5, 0.5, f'{symbol}\n거래 없음', ha='center', va='center', fontsize=14)
-            self.chart_artists[symbol] = {'fig': fig, 'canvas': canvas, 'ax': axs[0]}
-            canvas.draw()
-            return
-        
-        # 거래 시점의 가격 데이터
-        trade_dates = [pd.to_datetime(t['timestamp']) for t in coin_trades]
-        trade_prices = [t['price'] for t in coin_trades]
-        trade_actions = [t['action'] for t in coin_trades]
-        trade_directions = [t['direction'] for t in coin_trades]
-        
-        # 가격 라인 (거래 가격으로 그리기)
-        entry_trades = [(d, p, dir) for d, p, a, dir in zip(trade_dates, trade_prices, trade_actions, trade_directions) if a == 'entry']
-        exit_trades = [(d, p, dir) for d, p, a, dir in zip(trade_dates, trade_prices, trade_actions, trade_directions) if a in ['close', 'partial_close']]
-        
-        # 모든 거래 가격을 시간순으로 정렬
-        all_points = sorted([(d, p) for d, p in zip(trade_dates, trade_prices)])
-        if all_points:
-            point_dates, point_prices = zip(*all_points)
-            axs[0].plot(point_dates, point_prices, color='gray', alpha=0.5, linewidth=0.5)
-        
-        # 진입/청산 마커
-        for d, p, dir in entry_trades:
-            color = 'green' if dir == 'long' else 'red'
-            marker = '^' if dir == 'long' else 'v'
-            axs[0].plot(d, p, marker=marker, color=color, markersize=8, alpha=0.8)
-        
-        for d, p, dir in exit_trades:
-            color = 'blue' if dir == 'long' else 'orange'
-            axs[0].plot(d, p, marker='o', color=color, markersize=6, alpha=0.8)
-        
-        axs[0].set_title(f'{symbol} 거래 내역', fontsize=12)
-        axs[0].set_ylabel('Price (USDT)')
-        axs[0].grid(True, alpha=0.3)
-        
-        # 범례
-        from matplotlib.lines import Line2D
-        legend_elements = [
-            Line2D([0], [0], marker='^', color='w', markerfacecolor='green', markersize=10, label='롱 진입'),
-            Line2D([0], [0], marker='v', color='w', markerfacecolor='red', markersize=10, label='숏 진입'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='blue', markersize=8, label='롱 청산'),
-            Line2D([0], [0], marker='o', color='w', markerfacecolor='orange', markersize=8, label='숏 청산'),
-        ]
-        axs[0].legend(handles=legend_elements, loc='upper right')
-        
-        # 손익 차트
-        pnl_trades = [t for t in coin_trades if t.get('pnl')]
-        if pnl_trades:
-            pnl_dates = [pd.to_datetime(t['timestamp']) for t in pnl_trades]
-            pnl_values = [t['pnl'] for t in pnl_trades]
-            cumulative_pnl = np.cumsum(pnl_values)
-            
-            colors = ['green' if p >= 0 else 'red' for p in pnl_values]
-            axs[1].bar(pnl_dates, pnl_values, color=colors, alpha=0.6, width=0.8)
-            axs[1].plot(pnl_dates, cumulative_pnl, color='purple', linewidth=2, label='누적 손익')
-            axs[1].axhline(y=0, color='gray', linestyle='-', linewidth=0.5)
-            axs[1].set_ylabel('PnL (USDT)')
-            axs[1].legend(loc='upper left')
-            axs[1].grid(True, alpha=0.3)
-        
-        self.chart_artists[symbol] = {'fig': fig, 'canvas': canvas, 'ax': axs[0]}
-        canvas.draw()
+        if total_short_qty > 0:
+            avg_short_price = sum(p['short'].get('average_price', 0) * p['short'].get('total_quantity', 0) for p in positions.values()) / total_short_qty
+        else:
+            avg_short_price = 0.0
 
+        portfolio_history.append({
+            'timestamp': current_time,
+            'value': current_portfolio_value,
+            'long_entry_count': total_long_entries,
+            'short_entry_count': total_short_entries,
+            'long_avg_price': avg_long_price,
+            'short_avg_price': avg_short_price
+        })
 
-def launch_gui(results):
-    """GUI 실행"""
-    if results is None:
-        print("결과가 없어 GUI를 실행할 수 없습니다.")
+    return (pd.DataFrame(portfolio_history).set_index('timestamp'), daily_realized_pnl, new_cycle_dates,
+            monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl,
+            total_long_position_opened, total_long_position_closed, total_long_trades,
+            total_short_position_opened, total_short_position_closed, total_short_trades)
+
+# ==============================================================================
+# 4. 결과 분석 및 시각화 함수
+# (이전과 동일)
+# ==============================================================================
+def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl,
+                             total_long_position_opened, total_long_position_closed, total_long_trades,
+                             total_short_position_opened, total_short_position_closed, total_short_trades):
+    """백테스트 결과를 분석하고 그래프로 시각화합니다. (경고 수정 버전)"""
+    if portfolio_df.empty:
+        print("백테스트 결과가 없어 분석을 종료합니다.")
         return
+
+    final_value = portfolio_df['value'].iloc[-1]
+
+    # --- MDD 계산을 위한 데이터 준비 ---
+    withdrawal_series = pd.Series(monthly_withdrawals)
+    if not withdrawal_series.empty:
+        withdrawal_series.index = pd.to_datetime(withdrawal_series.index, format='%Y-%m').to_period('M').asfreq('M', 'end').to_timestamp() + pd.Timedelta(days=1)
+        daily_cumulative_withdrawals = withdrawal_series.resample('D').sum().cumsum()
+        portfolio_df = portfolio_df.join(daily_cumulative_withdrawals.rename('cumulative_withdrawal'))
+
+        # --- 수정된 부분 1: fillna(method=...) 경고 해결 및 연쇄 할당 경고 해결 ---
+        # portfolio_df['cumulative_withdrawal'].fillna(method='ffill', inplace=True) -> 아래 코드로 변경
+        portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].ffill()
+
+    else:
+        portfolio_df['cumulative_withdrawal'] = 0
+
+    # --- 수정된 부분 2: 연쇄 할당 경고 해결 ---
+    # portfolio_df['cumulative_withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
+    portfolio_df['cumulative_withdrawal'] = portfolio_df['cumulative_withdrawal'].fillna(0)
+
+    portfolio_df['adjusted_value'] = portfolio_df['value'] + portfolio_df['cumulative_withdrawal']
+
+    def get_top_mdds(balance_series, value_series):
+        peak_series = balance_series.cummax()
+        drawdown_series = (peak_series - balance_series) / peak_series.replace(0, np.nan)
+        # --- 수정된 부분 3: 연쇄 할당 경고 해결 ---
+        # drawdown_series.fillna(0, inplace=True) -> 아래 코드로 변경
+        drawdown_series = drawdown_series.fillna(0)
+
+        periods = []
+        is_in_dd = False
+        start_idx = 0
+        for i in range(len(drawdown_series)):
+            if not is_in_dd and drawdown_series.iloc[i] > 0:
+                is_in_dd = True
+                peak_idx = i - 1 if i > 0 else 0
+                start_idx = peak_idx
+            elif is_in_dd and drawdown_series.iloc[i] == 0:
+                is_in_dd = False
+                period_slice = drawdown_series.iloc[start_idx:i]
+                if not period_slice.empty:
+                    trough_date = period_slice.idxmax()
+                    periods.append({'max_dd': period_slice.loc[trough_date], 'peak_date': balance_series.index[start_idx], 'peak_value': balance_series.iloc[start_idx], 'trough_date': trough_date, 'trough_value': balance_series.loc[trough_date]})
+        if is_in_dd:
+             period_slice = drawdown_series.iloc[start_idx:]
+             if not period_slice.empty:
+                trough_date = period_slice.idxmax()
+                periods.append({'max_dd': period_slice.loc[trough_date], 'peak_date': balance_series.index[start_idx], 'peak_value': balance_series.iloc[start_idx], 'trough_date': trough_date, 'trough_value': balance_series.loc[trough_date]})
+        return sorted(periods, key=lambda x: x['max_dd'], reverse=True)[:3]
+
+    mdd_performance = get_top_mdds(portfolio_df['adjusted_value'], portfolio_df['adjusted_value'])
+    mdd_equity = get_top_mdds(portfolio_df['value'], portfolio_df['value'])
+
+    def format_mdd_string(mdd_list, prefix="성과"):
+        info_str = ""
+        if not mdd_list: return "  - 0.00% (No drawdown recorded)"
+        for i, mdd in enumerate(mdd_list):
+            info_str += (f"    - [TOP {i+1}] {mdd['max_dd']*100:.2f}% (Peak: {mdd['peak_value']:,.0f} USDT on {mdd['peak_date'].strftime('%Y-%m-%d')} -> Trough: {mdd['trough_value']:,.0f} USDT on {mdd['trough_date'].strftime('%Y-%m-%d')})")
+            if i < len(mdd_list) - 1: info_str += "\n"
+        return info_str
+
+    mdd_perf_str = format_mdd_string(mdd_performance, prefix="성과")
+    mdd_equity_str = format_mdd_string(mdd_equity, prefix="실제잔고")
+
+    daily_summary = portfolio_df[['value', 'adjusted_value', 'long_entry_count', 'short_entry_count', 'long_avg_price', 'short_avg_price']].resample('D').last().ffill()
+    realized_pnl_series = pd.Series(realized_pnl_data, name="Realized PNL")
+
+    if not realized_pnl_series.empty:
+        realized_pnl_series.index = pd.to_datetime(realized_pnl_series.index)
+        daily_summary = daily_summary.join(realized_pnl_series.resample('D').sum())
+
+    # --- 수정된 부분 4: 연쇄 할당 경고 해결 ---
+    # daily_summary['Realized PNL'].fillna(0, inplace=True) -> 아래 코드로 변경
+    daily_summary['Realized PNL'] = daily_summary['Realized PNL'].fillna(0)
+
+    total_realized_pnl = daily_summary['Realized PNL'].sum()
+    daily_summary['Cumulative Realized PNL'] = daily_summary['Realized PNL'].cumsum()
+    fees_series = pd.Series(daily_fees, name="fees")
+
+    if not fees_series.empty:
+        fees_series.index = pd.to_datetime(fees_series.index)
+        daily_summary = daily_summary.join(fees_series.resample('D').sum())
+
+    # --- 수정된 부분 5: 연쇄 할당 경고 해결 ---
+    # daily_summary['fees'].fillna(0, inplace=True) -> 아래 코드로 변경
+    daily_summary['fees'] = daily_summary['fees'].fillna(0)
+
+    # --- 수정된 부분 6: resample('M') 경고 해결 ---
+    # monthly_summary = daily_summary.resample('M').agg(...) -> 'ME'로 변경
+    monthly_summary = daily_summary.resample('ME').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
+
+    monthly_summary['begin_value'] = monthly_summary['value'].shift(1).fillna(INITIAL_CAPITAL)
+    monthly_summary['monthly_return'] = (monthly_summary['Realized PNL'] / monthly_summary['begin_value'].replace(0, np.nan)) * 100
+    monthly_summary.index = monthly_summary.index.strftime('%Y-%m')
+    monthly_withdrawal_series = pd.Series(monthly_withdrawals, name="Withdrawal")
+    monthly_summary = monthly_summary.join(monthly_withdrawal_series)
+
+    # --- 수정된 부분 7: 연쇄 할당 경고 해결 ---
+    # monthly_summary['Withdrawal'].fillna(0, inplace=True) -> 아래 코드로 변경
+    monthly_summary['Withdrawal'] = monthly_summary['Withdrawal'].fillna(0)
+
+    # (이하 출력 및 시각화 부분은 동일)
+    print("\n" + "="*155 + "\n" + " " * 50 + "일별 요약 (실현 손익 기준)\n" + "="*155)
+    for index, row in daily_summary.iterrows():
+        new_cycle_marker = " « 신규 포지션" if index.date() in new_cycle_dates else ""
+        long_entry_count = int(row.get('long_entry_count', 0)); short_entry_count = int(row.get('short_entry_count', 0))
+        long_avg_price = row.get('long_avg_price', 0); short_avg_price = row.get('short_avg_price', 0)
+        position_str = f"롱:{long_entry_count}개"
+        long_price_str = f"(평단:{long_avg_price:,.5f})" if long_entry_count > 0 else ""
+        short_price_str = f"(평단:{short_avg_price:,.5f})" if short_entry_count > 0 else ""
+        print(f"{index.strftime('%Y-%m-%d')}: 총잔액:{row['value']:>12,.2f} USDT,  일일 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,  누적 실현 Net PNL:{row['Cumulative Realized PNL']:>12,.2f} USDT,  롱:{long_entry_count}개{long_price_str}, 숏:{short_entry_count}개{short_price_str}" + new_cycle_marker)
+    print("="*155)
+
+    print("\n" + "="*125 + "\n" + " " * 45 + "월별 요약 (실현 손익 기준)\n" + "="*125)
+    for index, row in monthly_summary.iterrows():
+        print(f"{index}: 총잔액:{row['value']:>12,.2f} USDT,   월별 실현 Net PNL:{row['Realized PNL']:>+11,.2f} USDT,   수익률: {row.get('monthly_return', 0):>+7.2f}%,   수수료: {row.get('fees', 0):>8,.2f} USDT,   출금액: {row['Withdrawal']:>10,.2f} USDT")
+    print("="*125)
+
+    # 연도별 요약 추가
+    yearly_summary = daily_summary.resample('YE').agg({'value': 'last', 'Realized PNL': 'sum', 'fees': 'sum'})
+    yearly_summary['begin_value'] = yearly_summary['value'].shift(1).fillna(INITIAL_CAPITAL)
+    yearly_summary['yearly_return'] = (yearly_summary['Realized PNL'] / yearly_summary['begin_value'].replace(0, np.nan)) * 100
+    yearly_summary.index = yearly_summary.index.year
     
-    # daily_df 준비
-    daily_df = results['daily_balance']
-    if not daily_df.empty:
-        daily_df['date'] = pd.to_datetime(daily_df['date'])
-        daily_df = daily_df.groupby('date')['balance'].last().reset_index()
-        daily_df = daily_df.sort_values('date').set_index('date')
-        daily_df['balance'] = pd.to_numeric(daily_df['balance'], errors='coerce').fillna(0)
-        
-        # 드로다운 계산
-        peak = daily_df['balance'].cummax()
-        peak_safe = np.where(peak == 0, 1, peak)
-        daily_df['drawdown'] = (daily_df['balance'] - peak) / peak_safe * 100
-    
-    # 코인 리스트 추출
-    coin_list = list(set(t['symbol'] for t in results['trades']))
-    coin_list.sort()
-    
-    app = ChartApp(results, coin_list, daily_df)
-    app.mainloop()
+    print("\n" + "="*100 + "\n" + " " * 35 + "연도별 요약 (실현 손익 기준)\n" + "="*100)
+    print(f"{'연도':^8} | {'총잔액':>15} | {'연간 실현 Net PNL':>18} | {'수익률':>10} | {'수수료':>12}")
+    print("-"*100)
+    for year, row in yearly_summary.iterrows():
+        print(f"{year:^8} | {row['value']:>12,.2f} USDT | {row['Realized PNL']:>+15,.2f} USDT | {row.get('yearly_return', 0):>+8.2f}% | {row.get('fees', 0):>10,.2f} USDT")
+    print("="*100)
+
+    total_return_if_no_withdrawal = ((final_value + total_withdrawn) / INITIAL_CAPITAL - 1) * 100
+    print("\n" + "="*80 + "\n" + " " * 30 + "백테스트 최종 결과\n" + "="*80)
+    print(f"  - 시작 자본: {INITIAL_CAPITAL:,.2f} USDT"); print(f"  - 최종 자산: {final_value:,.2f} USDT")
+    print(f"  - 총 실현 손익: {total_realized_pnl:,.2f} USDT"); print(f"    - 롱 포지션 수익: {total_long_pnl:,.2f} USDT"); print(f"    - 숏 포지션 수익: {total_short_pnl:,.2f} USDT")
+    print(f"  - 총 출금액: {total_withdrawn:,.2f} USDT"); total_fees = sum(daily_fees.values()); print(f"  - 총 수수료: {total_fees:,.2f} USDT")
+    print(f"  - 총 수익률 (출금액 포함 가정): {total_return_if_no_withdrawal:.2f}%")
+    print("-" * 80); print(f"  - MDD (전략 성과 기준 / 출금 영향 제거):\n{mdd_perf_str}"); print(f"  - MDD (실제 자산 기준 / 청산 위험성 참고):\n{mdd_equity_str}")
+    print("    (참고: '실제 자산 기준 MDD'는 출금도 자산 감소로 계산되어 변동성이 크게 나타날 수 있습니다.)")
+    print("\n" + " " * 31 + "최종 거래 횟수\n" + "-"*80); print(f"  - 롱 포지션 시작/종료: {total_long_position_opened}회 / {total_long_position_closed}회"); print(f"  - 롱 포지션 총 거래(매수/매도) 횟수: {total_long_trades}회")
+    print(f"  - 숏 포지션 시작/종료: {total_short_position_opened}회 / {total_short_position_closed}회"); print(f"  - 숏 포지션 총 거래(매수/매도) 횟수: {total_short_trades}회")
+    print("="*80)
+
+    plt.figure(figsize=(15, 10))
+    try: plt.rc('font', family='Malgun Gothic')
+    except: plt.rc('font', family='AppleGothic')
+    plt.rcParams['axes.unicode_minus'] = False
+
+    ax1 = plt.subplot(2, 1, 1); portfolio_df['adjusted_value'].plot(ax=ax1, label='전략 성과 자산 (출금 보정)'); portfolio_df['value'].plot(ax=ax1, label='실제 계좌 자산', linestyle='--')
+    ax1.set_title('자산 추이 비교'); ax1.set_ylabel('자산 가치 (USDT)'); ax1.grid(True); ax1.legend()
+
+    ax2 = plt.subplot(2, 1, 2)
+    mdd_perf_series = (portfolio_df['value'].cummax() - portfolio_df['value']) / portfolio_df['value'].cummax()
+    (mdd_perf_series * 100).plot(ax=ax2, title='최대 낙폭 (MDD, 전략 성과 기준)', color='red')
+    ax2.set_ylabel('낙폭 (%)'); ax2.grid(True)
+    plt.xlabel('날짜'); plt.tight_layout(); plt.show()
 
 
 # ==============================================================================
-# 10. 메인 실행
+# 5. 메인 실행 블록
 # ==============================================================================
-if __name__ == "__main__":
-    results = run_backtest()
-    if results:
-        analyze_results(results)
-        print("\n" + "="*70)
-        print("GUI 차트 앱을 실행합니다...")
-        print("="*70)
-        launch_gui(results)
+if __name__ == '__main__':
+    coin_list_to_process = INVEST_COIN_LIST if isinstance(INVEST_COIN_LIST, list) else [INVEST_COIN_LIST]
+
+    all_data_frames = {}
+    for coin_ticker in coin_list_to_process:
+        df = load_data(coin_ticker, TIMEFRAME, TEST_START_DATE, TEST_END_DATE)
+        if not df.empty:
+            df_with_indicators = calculate_indicators(df)
+            df_with_secondary_indicators = add_secondary_timeframe_indicators(df_with_indicators, SHORT_CONDITION_TIMEFRAME)
+            all_data_frames[coin_ticker] = df_with_secondary_indicators.dropna()
+
+    if not all_data_frames:
+        print("백테스트를 위한 데이터를 로드하지 못했습니다. 프로그램을 종료합니다.")
+    else:
+        portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl, \
+        total_long_position_opened, total_long_position_closed, total_long_trades, \
+        total_short_position_opened, total_short_position_closed, total_short_trades = run_backtest(all_data_frames)
+
+        analyze_and_plot_results(portfolio_result, realized_pnl, new_cycles, monthly_withdrawals, total_withdrawn, daily_fees, total_long_pnl, total_short_pnl,
+                                 total_long_position_opened, total_long_position_closed, total_long_trades,
+                                 total_short_position_opened, total_short_position_closed, total_short_trades)

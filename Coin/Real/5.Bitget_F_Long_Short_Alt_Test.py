@@ -71,6 +71,7 @@ TAKE_PROFIT_LEVELS = [
     {'profit_pct': 5, 'sell_pct': 10},   # 3% 수익 시 10% 익절
     {'profit_pct': 10, 'sell_pct': 20},   # 5% 수익 시 나머지의 20% 익절
     {'profit_pct': 20, 'sell_pct': 30},  # 10% 수익 시 나머지의 30% 익절
+    {'profit_pct': 30, 'sell_pct': 50},  # 10% 수익 시 나머지의 30% 익절
 ]
 
 # 테스트 기간
@@ -78,7 +79,7 @@ START_DATE = '2022-02-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')  # 오늘 날짜까지
 
 # 연간 출금 설정 (1월 1일에 전년도 수익의 일정 비율 출금)
-ANNUAL_WITHDRAWAL_ENABLED = True        # 연간 출금 활성화 여부
+ANNUAL_WITHDRAWAL_ENABLED = False        # 연간 출금 활성화 여부
 ANNUAL_WITHDRAWAL_RATE = 0.20           # 1년 수익의 출금 비율 (20%)
 ANNUAL_WITHDRAWAL_MONTHS = [1]          # 출금 실행 월 (1월 1일만)
 
@@ -376,7 +377,7 @@ class CycleManager:
             'qty': qty,
             'invest_amount': invest_amount,
             'entry_time': str(timestamp),
-            'tp_triggered': [False, False, False]  # 각 익절 레벨 트리거 여부
+            'tp_triggered': [False] * len(TAKE_PROFIT_LEVELS)  # 각 익절 레벨 트리거 여부
         }
         
         active_count = len(self.positions)
