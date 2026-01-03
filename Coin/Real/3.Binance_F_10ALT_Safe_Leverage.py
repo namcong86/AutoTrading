@@ -50,6 +50,12 @@ ACCOUNT_LIST = [
         "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S1),
         "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S1),
         "leverage": 5  # 서브 계정 1 레버리지
+    },
+    {
+        "name": "Sub2",
+        "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S2),
+        "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S2),
+        "leverage": 10  # 서브 계정 2 레버리지
     }
 ]
 
@@ -63,15 +69,15 @@ INVEST_COIN_LIST = [
     {'ticker': 'XRP/USDT', 'rate': 0.1},
     {'ticker': 'HBAR/USDT', 'rate': 0.1},
     {'ticker': 'ETH/USDT', 'rate': 0.1},
-    {'ticker': '1000PEPE/USDT', 'rate': 1},
-    {'ticker': '1000BONK/USDT', 'rate': 1},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.1},
+    {'ticker': '1000BONK/USDT', 'rate':0.1},
     {'ticker': '1000FLOKI/USDT', 'rate': 0.08},
     {'ticker': '1000SHIB/USDT', 'rate': 0.08},
 ]
 # ==============================================================================
 
 
-INVEST_RATE = 0.99
+INVEST_RATE = 1
 FEE = 0.001
 
 # --- [추가] 핵심 거래 로직을 함수로 분리 ---
