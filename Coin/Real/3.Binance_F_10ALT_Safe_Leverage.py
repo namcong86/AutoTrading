@@ -63,16 +63,16 @@ ACCOUNT_LIST = [
 # <<< 코드 수정: 투자 종목을 테스트 파일과 동일하게 7종목으로 변경 >>>
 # ==============================================================================
 INVEST_COIN_LIST = [
-    {'ticker': 'DOGE/USDT', 'rate': 0.12},
-    {'ticker': 'ADA/USDT',  'rate': 0.12},
+    {'ticker': 'DOGE/USDT', 'rate': 0.1},
+    {'ticker': 'ADA/USDT',  'rate': 0.1},
     {'ticker': 'XLM/USDT', 'rate': 0.1},
     {'ticker': 'XRP/USDT', 'rate': 0.1},
     {'ticker': 'HBAR/USDT', 'rate': 0.1},
     {'ticker': 'ETH/USDT', 'rate': 0.1},
     {'ticker': '1000PEPE/USDT', 'rate': 0.1},
     {'ticker': '1000BONK/USDT', 'rate':0.1},
-    {'ticker': '1000FLOKI/USDT', 'rate': 0.08},
-    {'ticker': '1000SHIB/USDT', 'rate': 0.08},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.1},
+    {'ticker': 'SUI/USDT', 'rate': 0.1},
 ]
 # ==============================================================================
 

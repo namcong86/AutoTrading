@@ -113,16 +113,16 @@ ACCOUNT_LIST = [
 # 투자 종목 리스트 - 비트겟 티커명으로 수정
 # ====================================================0==========================
 INVEST_COIN_LIST = [
-    {'ticker': 'DOGE/USDT:USDT', 'rate': 0.12},
-    {'ticker': 'ADA/USDT:USDT', 'rate': 0.12},
+    {'ticker': 'DOGE/USDT:USDT', 'rate': 0.1},
+    {'ticker': 'ADA/USDT:USDT', 'rate': 0.1},
     {'ticker': 'XLM/USDT:USDT', 'rate': 0.1},
     {'ticker': 'XRP/USDT:USDT', 'rate': 0.1},
     {'ticker': 'HBAR/USDT:USDT', 'rate': 0.1},
     {'ticker': 'ETH/USDT:USDT', 'rate': 0.1},
     {'ticker': 'PEPE/USDT:USDT', 'rate': 0.1},
     {'ticker': '1000BONK/USDT:USDT', 'rate': 0.1},
-    {'ticker': 'FLOKI/USDT:USDT', 'rate': 0.08},
-    {'ticker': 'SHIB/USDT:USDT', 'rate': 0.08},
+    {'ticker': 'FLOKI/USDT:USDT', 'rate': 0.1},
+    {'ticker': 'SUI/USDT:USDT', 'rate': 0.1},
 ]
 # ==============================================================================
 

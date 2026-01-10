@@ -284,37 +284,36 @@ COIN_LISTS_BY_YEAR = {
     '2020': [
         {'ticker': 'DOGE/USDT', 'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
         {'ticker': 'ADA/USDT',  'rate': 0.2, 'start_date': {'year': 2017, 'month': 1, 'day': 1}},
-        {'ticker': 'XLM/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
-        {'ticker': 'XRP/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
-        {'ticker': 'ETH/USDT', 'rate': 0.15, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
-        {'ticker': 'HBAR/USDT', 'rate': 0.15, 'start_date': {'year': 2019, 'month': 1, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.2, 'start_date':  {'year': 2017, 'month': 1, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.2, 'start_date': {'year': 2019, 'month': 1, 'day': 1}},
     ],
     '2022': [
         {'ticker': 'DOGE/USDT', 'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
         {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XLM/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XRP/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'HBAR/USDT', 'rate': 0.125, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'ETH/USDT', 'rate': 0.125, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'SHIB/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'FLOKI/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.14, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
     ],
     '2023': [
-        {'ticker': 'DOGE/USDT', 'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'ADA/USDT',  'rate': 0.12, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'SHIB/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'FLOKI/USDT', 'rate': 0.08, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'DOGE/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},  
+        {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'SUI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
     ]
 }
 
 # 1. 첫 번째 파라미터 (연도) 처리
-year_choice = '2022' # 기본값
+year_choice = '2023' # 기본값       
 if len(sys.argv) > 1:
     year_choice = sys.argv[1]
 
@@ -418,6 +417,7 @@ CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in valid_tickers
 balance_logs, trade_logs = [], []
 cycle_count = 1
 was_in_position = False
+cycle_balance_list = []  # 사이클 종료 시점의 잔액 기록
 
 # --- 백테스팅 루프 ---
 for date in common_dates:
@@ -495,6 +495,8 @@ for date in common_dates:
     if len(positions) > 0: was_in_position = True
     if len(positions) == 0 and was_in_position:
         if trade_logs and trade_logs[-1] != "": trade_logs.append("")
+        # 사이클 종료 시점의 잔액 기록
+        cycle_balance_list.append({'cycle': cycle_count, 'date': date, 'balance': cash_balance})
         cycle_count += 1
         was_in_position = False
 
@@ -677,7 +679,7 @@ class ChartApp(tk.Tk):
         overall_tab = ttk.Frame(self.tab_control)
         self.tab_control.add(overall_tab, text='📊 종합 결과')
         fig, canvas = self.create_chart_frame(overall_tab)
-        axs = fig.subplots(3, 1, sharex=True, gridspec_kw={'height_ratios': [2, 2, 1]})
+        axs = fig.subplots(4, 1, sharex=True, gridspec_kw={'height_ratios': [2, 2, 1.5, 1]})
         fig.tight_layout(pad=3.0)
         equity_line = result_df['Total_Equity']
 
@@ -696,12 +698,31 @@ class ChartApp(tk.Tk):
         axs[1].legend()
         axs[1].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
 
-        axs[2].fill_between(result_df.index, result_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='MDD')
-        axs[2].plot(result_df.index, result_df['Cash_Only_Drawdown'] * 100, color='mediumseagreen')
-        axs[2].plot(result_df.index, result_df['Modified_Drawdown'] * 100, color='orange')
-        axs[2].set_title('Drawdown (3 Methods)', fontsize=12)
-        axs[2].set_ylabel('Drawdown (%)'); axs[2].grid(True); axs[2].legend()
-        axs[2].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.0f}%'))
+        # 사이클별 기준 잔액 차트 (Linear + Log 동시 표시)
+        if cycle_balance_list:
+            cycle_df = pd.DataFrame(cycle_balance_list)
+            # 왼쪽 Y축: Linear 스케일 (실선)
+            line1, = axs[2].plot(cycle_df['date'], cycle_df['balance'], color='teal', marker='o', markersize=5, linestyle='-', linewidth=2, label='Cycle Balance (Linear)')
+            axs[2].set_ylabel('Balance (USDT) - Linear', color='teal')
+            axs[2].tick_params(axis='y', labelcolor='teal')
+            axs[2].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
+            # 오른쪽 Y축: Log 스케일 (점선)
+            ax2_log = axs[2].twinx()
+            line2, = ax2_log.plot(cycle_df['date'], cycle_df['balance'], color='darkviolet', marker='s', markersize=4, linestyle=':', linewidth=1.5, label='Cycle Balance (Log)')
+            ax2_log.set_yscale('log')
+            ax2_log.set_ylabel('Balance (USDT) - Log', color='darkviolet')
+            ax2_log.tick_params(axis='y', labelcolor='darkviolet')
+            ax2_log.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:,.0f}'))
+            # 레전드 통합
+            axs[2].legend(handles=[line1, line2], loc='upper left')
+        axs[2].set_title('Cycle End Balance (사이클 종료 시점 잔액)', fontsize=12)
+        axs[2].grid(True, which='both', linestyle='--', linewidth=0.5)
+
+        axs[3].fill_between(result_df.index, result_df['Total_Drawdown'] * 100, 0, color='skyblue', alpha=0.3, label='MDD')
+        axs[3].plot(result_df.index, result_df['Modified_Drawdown'] * 100, color='orange')
+        axs[3].set_title('Drawdown (2 Methods)', fontsize=12)
+        axs[3].set_ylabel('Drawdown (%)'); axs[3].grid(True); axs[3].legend()
+        axs[3].get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, p: f'{x:.0f}%'))
 
         self.chart_artists['overall'] = {'fig': fig, 'canvas': canvas, 'ax': axs[1]}
         canvas.draw()
