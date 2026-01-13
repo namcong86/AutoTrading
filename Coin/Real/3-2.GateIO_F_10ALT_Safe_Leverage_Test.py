@@ -331,7 +331,43 @@ if len(sys.argv) > 2:
     except ValueError:
         print(f"경고: 입력된 레버리지 '{sys.argv[2]}'가 숫자가 아닙니다. 기본값 {leverage}를 사용합니다.")
 
-# 3. Disparity Index 조건 기간 설정
+# 3. 세 번째 파라미터 (특정 코인 티커) 처리
+single_coin_ticker = None
+if len(sys.argv) > 3:
+    input_ticker = sys.argv[3].upper()  # 대문자로 변환
+    # /USDT 가 없으면 자동으로 추가
+    if not input_ticker.endswith('/USDT'):
+        input_ticker = input_ticker + '/USDT'
+    single_coin_ticker = input_ticker
+    
+    # 해당 코인에 대한 설정 찾기 (연도별 설정에서 start_date 가져오기)
+    target_coin_config = None
+    for year_key, coin_list in COIN_LISTS_BY_YEAR.items():
+        for coin_data in coin_list:
+            if coin_data['ticker'] == single_coin_ticker:
+                target_coin_config = coin_data
+                break
+        if target_coin_config:
+            break
+    
+    if target_coin_config:
+        # 해당 코인만 100% 비율로 설정
+        InvestCoinList = [{
+            'ticker': single_coin_ticker,
+            'rate': 1.0,  # 100% 비율
+            'start_date': target_coin_config['start_date']
+        }]
+        print(f"단일 코인 모드: {single_coin_ticker} (비율: 100%)")
+    else:
+        # 코인이 기존 설정에 없는 경우, 기본 시작일로 설정
+        InvestCoinList = [{
+            'ticker': single_coin_ticker,
+            'rate': 1.0,
+            'start_date': {'year': 2020, 'month': 1, 'day': 1}  # 기본 시작일
+        }]
+        print(f"단일 코인 모드: {single_coin_ticker} (비율: 100%, 기본 시작일 사용: 2020-01-01)")
+
+# 4. Disparity Index 조건 기간 설정
 disparity_period = 30  # 기본값: 30일 (10, 15, 50 등으로 변경 가능)
 # ==============================================================================
 # ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
@@ -345,7 +381,10 @@ InvestTotalMoney = 5000
 fee = 0.001
 
 print("="*50)
-print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x'")
+if single_coin_ticker:
+    print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x', 단일 코인 '{single_coin_ticker}'")
+else:
+    print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x'")
 print("="*50)
 
 
@@ -392,7 +431,7 @@ for coin_data in InvestCoinList:
     df['bollinger_lower'] = df['20ma_for_bb'] - (df['stddev'] * 2)
     
     # Disparity Index 계산 (종가 / 이동평균 * 100)
-    df['Disparity_Index_ma'] = df['close'].rolling(window=15).mean()
+    df['Disparity_Index_ma'] = df['close'].rolling(window=16).mean()
     df['disparity_index'] = (df['close'] / df['Disparity_Index_ma']) * 100
     
     df.dropna(inplace=True)

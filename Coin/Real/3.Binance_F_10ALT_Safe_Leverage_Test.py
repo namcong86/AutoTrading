@@ -189,7 +189,7 @@ for coin_data in InvestCoinList:
     df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
     
     # Disparity Index 계산 (종가 / 15일 이동평균 * 100)
-    df['Disparity_Index_ma'] = df['close'].rolling(window=15).mean()
+    df['Disparity_Index_ma'] = df['close'].rolling(window=16).mean()
     df['disparity_index'] = (df['close'] / df['Disparity_Index_ma']) * 100
 
     df.dropna(inplace=True)

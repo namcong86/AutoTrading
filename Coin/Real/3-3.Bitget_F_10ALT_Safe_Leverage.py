@@ -278,7 +278,7 @@ def execute_trading_logic(account_info):
         df['30ma_slope'] = df['30ma_slope'].fillna(0)  # 초기 NaN을 0으로 채움
         
         # Disparity Index 계산 (종가 / 15일 이동평균 * 100)
-        df['Disparity_Index_ma'] = df['close'].rolling(window=15).mean()
+        df['Disparity_Index_ma'] = df['close'].rolling(window=16).mean()
         df['disparity_index'] = (df['close'] / df['Disparity_Index_ma']) * 100
         
         df.dropna(inplace=True)
