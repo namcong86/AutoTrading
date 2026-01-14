@@ -107,7 +107,7 @@ ACCOUNT_LIST = [
         "access_key": simpleEnDecrypt.decrypt(my_key.bitget_access_S1),
         "secret_key": simpleEnDecrypt.decrypt(my_key.bitget_secret_S1),
         "passphrase": simpleEnDecrypt.decrypt(my_key.bitget_passphrase_S1),
-        "leverage": 5  # 서브 계정 1 레버리지
+        "leverage": 7  # 서브 계정 1 레버리지
     }
 ]
 # 투자 종목 리스트 - 비트겟 티커명으로 수정

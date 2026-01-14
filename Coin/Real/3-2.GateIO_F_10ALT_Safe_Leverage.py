@@ -130,7 +130,7 @@ except json.JSONDecodeError:
 if len(sys.argv) > 1:
     set_leverage = int(sys.argv[1])
 else:
-    set_leverage = current_account.get("leverage", 7)
+    set_leverage = current_account.get("leverage", 5)
 
 InvestRate = 1
 fee = 0.001
