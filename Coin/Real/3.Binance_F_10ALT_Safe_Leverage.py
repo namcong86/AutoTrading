@@ -49,13 +49,13 @@ ACCOUNT_LIST = [
         "name": "Sub1",
         "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S1),
         "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S1),
-        "leverage": 5  # 서브 계정 1 레버리지
+        "leverage": 10  # 서브 계정 1 레버리지
     },
     {
         "name": "Sub2",
         "access_key": simpleEnDecrypt.decrypt(my_key.binance_access_S2),
         "secret_key": simpleEnDecrypt.decrypt(my_key.binance_secret_S2),
-        "leverage": 10  # 서브 계정 2 레버리지
+        "leverage": 20  # 서브 계정 2 레버리지
     }
 ]
 
