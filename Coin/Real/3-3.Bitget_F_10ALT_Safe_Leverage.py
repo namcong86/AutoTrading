@@ -400,7 +400,7 @@ def execute_trading_logic(account_info):
             cond_20ma_up = df['20ma'].iloc[-3] <= df['20ma'].iloc[-2]
             
             # Disparity Index 조건 (30일 기준)
-            disparity_period = 30
+            disparity_period = 25
             filter_disparity = False
             
             if len(df) >= disparity_period:

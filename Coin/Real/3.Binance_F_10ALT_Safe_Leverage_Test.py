@@ -336,7 +336,7 @@ for date in common_dates:
                 # ==============================================================================
                 
                 # Disparity Index 조건 (30일 기준) - 오늘 미포함
-                disparity_period = 30
+                disparity_period = 25
                 filter_disparity = False
                 
                 if i >= disparity_period:
