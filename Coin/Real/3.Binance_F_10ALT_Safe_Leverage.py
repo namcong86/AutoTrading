@@ -64,15 +64,16 @@ ACCOUNT_LIST = [
 # ==============================================================================
 INVEST_COIN_LIST = [
     {'ticker': 'DOGE/USDT', 'rate': 0.1},
-    {'ticker': 'ADA/USDT',  'rate': 0.1},
-    {'ticker': 'XLM/USDT', 'rate': 0.1},
-    {'ticker': 'XRP/USDT', 'rate': 0.1},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1},
-    {'ticker': 'ETH/USDT', 'rate': 0.1},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.1},
-    {'ticker': '1000BONK/USDT', 'rate':0.1},
-    {'ticker': '1000FLOKI/USDT', 'rate': 0.1},
-    {'ticker': 'SUI/USDT', 'rate': 0.1},
+    {'ticker': 'ADA/USDT',  'rate': 0.09},
+    {'ticker': 'XLM/USDT', 'rate': 0.09},
+    {'ticker': 'XRP/USDT', 'rate': 0.09},
+    {'ticker': 'HBAR/USDT', 'rate': 0.09},
+    {'ticker': 'ETH/USDT', 'rate': 0.09},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.09},
+    {'ticker': '1000BONK/USDT', 'rate':0.09},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.09},
+    {'ticker': 'SUI/USDT', 'rate': 0.09},    
+    {'ticker': 'SHIB/USDT', 'rate': 0.09},
 ]
 # ==============================================================================
 

@@ -133,15 +133,16 @@ InvestCoinList = [
     # {'ticker': '1000BONK/USDT', 'rate': 0.125, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
 
     {'ticker': 'DOGE/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-    {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': '1000PEPE/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': '1000BONK/USDT', 'rate': 0.1, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
-    {'ticker': 'SUI/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': '1000FLOKI/USDT', 'rate': 0.1, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'ADA/USDT',  'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XLM/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'XRP/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'HBAR/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+    {'ticker': 'ETH/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000PEPE/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': '1000BONK/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
+    {'ticker': 'SUI/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000FLOKI/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': 'SHIB/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
 
 

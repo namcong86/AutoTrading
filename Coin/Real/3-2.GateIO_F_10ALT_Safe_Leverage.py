@@ -149,15 +149,16 @@ day_str = f"{t.tm_year}{t.tm_mon:02d}{t.tm_mday:02d}"
 # 투자 코인 리스트 (Bitget과 동일 10종) - Gate.io 심볼 형식에 맞춰 기입
 InvestCoinList = [
     {'ticker': 'DOGE_USDT', 'rate': 0.1},
-    {'ticker': 'ADA_USDT', 'rate': 0.1},
-    {'ticker': 'XLM_USDT', 'rate': 0.1},
-    {'ticker': 'XRP_USDT', 'rate': 0.1},
-    {'ticker': 'HBAR_USDT', 'rate': 0.1},
-    {'ticker': 'ETH_USDT', 'rate': 0.1},
-    {'ticker': 'PEPE_USDT', 'rate': 0.1},
-    {'ticker': 'BONK_USDT', 'rate': 0.1},
-    {'ticker': 'FLOKI_USDT', 'rate': 0.1},
-    {'ticker': 'SUI_USDT', 'rate': 0.1},
+    {'ticker': 'ADA_USDT', 'rate': 0.09},
+    {'ticker': 'XLM_USDT', 'rate': 0.09},
+    {'ticker': 'XRP_USDT', 'rate': 0.09},
+    {'ticker': 'HBAR_USDT', 'rate': 0.09},
+    {'ticker': 'ETH_USDT', 'rate': 0.09},
+    {'ticker': 'PEPE_USDT', 'rate': 0.09},
+    {'ticker': 'BONK_USDT', 'rate': 0.09},
+    {'ticker': 'FLOKI_USDT', 'rate': 0.09},
+    {'ticker': 'SUI_USDT', 'rate': 0.09},
+    {'ticker': 'SHIB_USDT', 'rate': 0.09},    
 ]
 
 # --- Helper Functions (myBinance 대체) ---

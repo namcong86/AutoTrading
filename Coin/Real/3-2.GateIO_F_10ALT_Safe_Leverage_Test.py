@@ -290,29 +290,42 @@ COIN_LISTS_BY_YEAR = {
         {'ticker': 'HBAR/USDT', 'rate': 0.2, 'start_date': {'year': 2019, 'month': 1, 'day': 1}},
     ],
     '2022': [
-        {'ticker': 'DOGE/USDT', 'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'ADA/USDT',  'rate': 0.15, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XLM/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'XRP/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'HBAR/USDT', 'rate': 0.14, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'ETH/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
-        {'ticker': 'FLOKI/USDT', 'rate': 0.14, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'DOGE/USDT', 'rate': 0.13, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.13, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.12, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.12, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.13, 'start_date': {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.12, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.13, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
+        {'ticker': 'SHIB/USDT', 'rate': 0.12, 'start_date':  {'year': 2020, 'month': 7, 'day': 1}},
     ],
     '2023': [
         {'ticker': 'DOGE/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},  
-        {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'FLOKI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
-        {'ticker': 'SUI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'ADA/USDT',  'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'XLM/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'XRP/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'HBAR/USDT', 'rate': 0.09, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'ETH/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'PEPE/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},  
+        {'ticker': 'BONK/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'FLOKI/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'SUI/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        {'ticker': 'SHIB/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        
     ]
 }
 
 # 1. 첫 번째 파라미터 (연도) 처리
+is_forecast_mode = False
+if 'T' in sys.argv:
+    is_forecast_mode = True
+    sys.argv.remove('T')
+
+USE_REALTIME_EQUITY_FOR_SIZING = False
+if 'R' in sys.argv:
+    USE_REALTIME_EQUITY_FOR_SIZING = True
+    sys.argv.remove('R')
+
 year_choice = '2023' # 기본값       
 if len(sys.argv) > 1:
     year_choice = sys.argv[1]
@@ -378,6 +391,8 @@ GateIO_AccessKey = "YOUR_GATEIO_API_KEY"
 GateIO_SecretKey = "YOUR_GATEIO_SECRET_KEY"
 exchange = ccxt.gateio({'apiKey': GateIO_AccessKey, 'secret': GateIO_SecretKey, 'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
 InvestTotalMoney = 5000
+# USE_REALTIME_EQUITY_FOR_SIZING 변수는 상단 파라미터 처리 부분에서 정의됨
+# True: 진입 시점의 총 자산(평가익 포함) 기준, False: 사이클 시작 시점 자산 기준
 fee = 0.001
 
 print("="*50)
@@ -385,6 +400,11 @@ if single_coin_ticker:
     print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x', 단일 코인 '{single_coin_ticker}'")
 else:
     print(f"백테스팅 설정: 연도 '{year_choice}', 레버리지 '{leverage}x'")
+
+if USE_REALTIME_EQUITY_FOR_SIZING:
+    print("투자금 산정 방식: 실시간 총자산 기반 (복리 효과/증감 적용)")
+else:
+    print("투자금 산정 방식: 사이클 시작 자산 고정 (단리/고정 적용)")
 print("="*50)
 
 
@@ -460,6 +480,7 @@ cycle_balance_list = []  # 사이클 종료 시점의 잔액 기록
 
 # --- 백테스팅 루프 ---
 for date in common_dates:
+    if is_forecast_mode: break
     current_data = {ticker: dfs[ticker].loc[date] for ticker in valid_tickers if date in dfs[ticker].index}
     if len(current_data) != len(valid_tickers): continue
     sold_today_tickers = set()
@@ -509,7 +530,22 @@ for date in common_dates:
         for coin_spec_to_buy in buy_signals_today_specs:
             ticker = coin_spec_to_buy['ticker']
             buy_price = current_data[ticker]['open']
-            investment_for_this_coin = current_cycle_investment_base * coin_spec_to_buy['rate']
+            # === [신규 기능] 자산 기반 투자금 산정 로직 ===
+            investment_base = current_cycle_investment_base
+            
+            # 옵션: 실시간 총 자산(상승분 포함)을 기준으로 투자금 산정
+            if USE_REALTIME_EQUITY_FOR_SIZING:
+                current_total_equity_now = cash_balance
+                for pos_ticker, pos_data in positions.items():
+                    if pos_ticker in current_data:
+                        # 현재가(Open) 기준으로 평가금액 합산
+                        # (단, Open 시점에 결정하므로 Open 가격 사용이 합리적)
+                        pos_current_price = current_data[pos_ticker]['open']
+                        pos_value = pos_data['margin'] + (pos_current_price - pos_data['entry_price']) * pos_data['quantity']
+                        current_total_equity_now += pos_value
+                investment_base = current_total_equity_now
+
+            investment_for_this_coin = investment_base * coin_spec_to_buy['rate']
             if cash_balance >= investment_for_this_coin and investment_for_this_coin > 0:
                 positions[ticker] = {'margin': investment_for_this_coin, 'entry_price': buy_price, 'quantity': (investment_for_this_coin * leverage) / buy_price, 'leverage': leverage}
                 cash_balance -= investment_for_this_coin
@@ -540,8 +576,6 @@ for date in common_dates:
         was_in_position = False
 
 # --- 결과 분석 및 데이터프레임 생성 ---
-result_df = pd.DataFrame(total_equity_list).set_index('date')
-result_df = result_df.join(pd.DataFrame(cash_only_equity_list).set_index('date')).join(pd.DataFrame(modified_equity_list).set_index('date'))
 def calculate_mdd(df, column_name):
     prefix = column_name.replace('_Equity', '')
     ror_col, cum_ror_col, hw_col, dd_col, mdd_col = f'{prefix}_Ror', f'{prefix}_Cum_or', f'{prefix}_Highwatermark', f'{prefix}_Drawdown', f'{prefix}_MaxDrawdown'
@@ -552,18 +586,25 @@ def calculate_mdd(df, column_name):
     df[dd_col] = (df[cum_ror_col] / df[hw_col]) - 1
     df[mdd_col] = df[dd_col].cummin()
     return df
-result_df = calculate_mdd(result_df, 'Total_Equity')
-result_df = calculate_mdd(result_df, 'Cash_Only_Equity')
-result_df = calculate_mdd(result_df, 'Modified_Equity')
-parsed_trades = []
-for log in trade_logs:
-    if "매수:" in log or "매도:" in log:
-        match = re.search(r'\[사이클 \d+\] (.*?) (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) >>> (매수|매도): (Entry|Exit) ([\d\.]+)?,?', log)
-        if match:
-            ticker, date_str, trade_type, _, price_str = match.groups()
-            price = float(price_str)
-            parsed_trades.append({'ticker': ticker.strip(), 'date': pd.to_datetime(date_str), 'type': trade_type, 'price': price})
-trade_df = pd.DataFrame(parsed_trades)
+
+result_df = pd.DataFrame()
+trade_df = pd.DataFrame()
+
+if not is_forecast_mode:
+    result_df = pd.DataFrame(total_equity_list).set_index('date')
+    result_df = result_df.join(pd.DataFrame(cash_only_equity_list).set_index('date')).join(pd.DataFrame(modified_equity_list).set_index('date'))
+    result_df = calculate_mdd(result_df, 'Total_Equity')
+    result_df = calculate_mdd(result_df, 'Cash_Only_Equity')
+    result_df = calculate_mdd(result_df, 'Modified_Equity')
+    parsed_trades = []
+    for log in trade_logs:
+        if "매수:" in log or "매도:" in log:
+            match = re.search(r'\[사이클 \d+\] (.*?) (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) >>> (매수|매도): (Entry|Exit) ([\d\.]+)?,?', log)
+            if match:
+                ticker, date_str, trade_type, _, price_str = match.groups()
+                price = float(price_str)
+                parsed_trades.append({'ticker': ticker.strip(), 'date': pd.to_datetime(date_str), 'type': trade_type, 'price': price})
+    trade_df = pd.DataFrame(parsed_trades)
 
 # --- GUI 차트 앱 클래스 ---
 class ChartApp(tk.Tk):
@@ -891,27 +932,43 @@ if __name__ == "__main__":
         i = len(df_coin) - 1
         last_date = df_coin.index[i]
         
+        # 예측 모드인 경우 index를 1씩 미룸 (오늘 데이터를 '전일' 데이터로 취급)
+        shift = 1 if is_forecast_mode else 0
+        idx_1 = i - 1 + shift
+        idx_2 = i - 2 + shift
+
         print(f"\n{'='*50}")
-        print(f"[{ticker}] 기준일: {last_date.strftime('%Y-%m-%d')}")
+        if is_forecast_mode:
+            print(f"[{ticker}] 기준일: {last_date.strftime('%Y-%m-%d')} (오늘 데이터를 기준으로 내일 매수 여부 예측)")
+        else:
+            print(f"[{ticker}] 기준일: {last_date.strftime('%Y-%m-%d')}")
         print(f"{'='*50}")
         
         # 기본 매수 조건
-        cond_buy_two_green = (df_coin['open'].iloc[i-1] < df_coin['close'].iloc[i-1] and 
-                              df_coin['open'].iloc[i-2] < df_coin['close'].iloc[i-2])
-        cond_buy_price_up = (df_coin['close'].iloc[i-2] < df_coin['close'].iloc[i-1] and 
-                             df_coin['high'].iloc[i-2] < df_coin['high'].iloc[i-1])
-        cond_buy_short_ma_up = (df_coin['7ma'].iloc[i-2] < df_coin['7ma'].iloc[i-1] and 
-                                df_coin['20ma'].iloc[i-2] <= df_coin['20ma'].iloc[i-1])
-        cond_buy_mid_ma_stable = (df_coin['30ma_slope'].iloc[i-1] > -2)
-        cond_buy_rsi_up = (df_coin['rsi_ma'].iloc[i-2] < df_coin['rsi_ma'].iloc[i-1])
-        filter_no_sudden_surge = (df_coin['change'].iloc[i-1] < 0.5)
+        cond_buy_two_green = (df_coin['open'].iloc[idx_1] < df_coin['close'].iloc[idx_1] and 
+                              df_coin['open'].iloc[idx_2] < df_coin['close'].iloc[idx_2])
+        cond_buy_price_up = (df_coin['close'].iloc[idx_2] < df_coin['close'].iloc[idx_1] and 
+                             df_coin['high'].iloc[idx_2] < df_coin['high'].iloc[idx_1])
+        cond_buy_short_ma_up = (df_coin['7ma'].iloc[idx_2] < df_coin['7ma'].iloc[idx_1] and 
+                                df_coin['20ma'].iloc[idx_2] <= df_coin['20ma'].iloc[idx_1])
+        cond_buy_mid_ma_stable = (df_coin['30ma_slope'].iloc[idx_1] > -2)
+        cond_buy_rsi_up = (df_coin['rsi_ma'].iloc[idx_2] < df_coin['rsi_ma'].iloc[idx_1])
+        filter_no_sudden_surge = (df_coin['change'].iloc[idx_1] < 0.5)
         
         # Disparity Index 조건 - 오늘 미포함
         filter_disparity = False
         disparity_detail = ""
-        if i >= disparity_period:
-            recent_disparity = df_coin['disparity_index'].iloc[i-disparity_period:i]
-            yesterday_disparity = df_coin['disparity_index'].iloc[i-1]
+        # if i >= disparity_period: # 기존 조건 (shift 적용 전)
+        # shift를 고려한 데이터 길이 확인 필요하지만, 보통 충분하다고 가정
+        if i + shift >= disparity_period:
+            # slice: [start : end] -> end is exclusive.
+            # Standard: [i-period : i] (excludes i, i.e., up to i-1)
+            # Forecast: [i-period+1 : i+1] (excludes i+1, i.e., up to i)
+            start_idx = i - disparity_period + shift
+            end_idx = i + shift
+            
+            recent_disparity = df_coin['disparity_index'].iloc[start_idx:end_idx]
+            yesterday_disparity = df_coin['disparity_index'].iloc[idx_1]
             max_disparity = recent_disparity.max()
             if yesterday_disparity == max_disparity:
                 filter_disparity = True
@@ -919,7 +976,9 @@ if __name__ == "__main__":
             else:
                 try:
                     max_idx = recent_disparity.idxmax()
-                    yesterday_idx = df_coin.index[i-1]
+                    # yesterday_idx = df_coin.index[i-1] # Standard
+                    yesterday_idx = df_coin.index[idx_1]
+                    
                     if max_idx < yesterday_idx:
                         range_disparity = df_coin.loc[max_idx:yesterday_idx, 'disparity_index']
                         if (range_disparity >= 100).all():
@@ -936,14 +995,14 @@ if __name__ == "__main__":
             disparity_detail = f"{disparity_period}일 데이터 부족 (통과)"
         
         # 200MA 위치 및 추가 조건
-        is_above_200ma = df_coin['close'].iloc[i-1] > df_coin['200ma'].iloc[i-1]
+        is_above_200ma = df_coin['close'].iloc[idx_1] > df_coin['200ma'].iloc[idx_1]
         filter_ma50_not_declining = True
         cond_no_long_upper_shadow = True
         cond_body_over_15_percent = True
         
         if is_above_200ma:
-            filter_ma50_not_declining = (df_coin['50ma'].iloc[i-2] <= df_coin['50ma'].iloc[i-1])
-            prev_candle = df_coin.iloc[i-1]
+            filter_ma50_not_declining = (df_coin['50ma'].iloc[idx_2] <= df_coin['50ma'].iloc[idx_1])
+            prev_candle = df_coin.iloc[idx_1]
             upper_shadow = prev_candle['high'] - max(prev_candle['open'], prev_candle['close'])
             body_and_lower_shadow = max(prev_candle['open'], prev_candle['close']) - prev_candle['low']
             cond_no_long_upper_shadow = upper_shadow <= body_and_lower_shadow
@@ -980,6 +1039,10 @@ if __name__ == "__main__":
     # ▲▲▲ 오늘 기준 진입조건 상세 로그 출력 끝 ▲▲▲
     # ==============================================================================
     
+    if is_forecast_mode:
+        print("\n예측 모드 실행 완료.")
+        sys.exit()
+
     print("\n\n" + "="*50 + "\n--- 매수/매도 로그 ---\n" + "="*50)
     if not trade_logs: print("거래 내역이 없습니다.")
     else:
