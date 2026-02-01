@@ -4,6 +4,13 @@
 파일이름: 9.GateIO_F_Grid_Danta_LongShort_Final_v9_adx_condition.py
 설명: 볼린저밴드, RSI, MACD, ADX를 이용한 롱/숏 그리드 매매 전략 (ADX 조건부 동적 RSI 적용)
 '''
+import sys
+import io
+
+# 윈도우 콘솔 출력 인코딩 강제 설정 (이모지 출력 오류 방지)
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
+
 import ccxt
 import time
 import pandas as pd
@@ -60,17 +67,27 @@ LONG_ENTRY_LOCK_SHORT_COUNT_DIFF = 6
 def load_data(ticker, timeframe, start_date, end_date):
     """
     로컬 CSV 파일의 데이터를 우선 로드하고, 부족한 최신 데이터는 API를 통해 다운로드하여 병합합니다.
+    (파일이 없으면 json 폴더에 오늘 날짜 기준으로 데이터를 다운로드하고 실행합니다)
     """
     print(f"--- [{ticker}] 데이터 준비 중 ---")
     csv_df = pd.DataFrame()
-    safe_ticker_name = ticker.replace('/', '_').lower()
-    # CSV 파일 이름 규칙을 스크립트 설정과 일치시킵니다.
-    csv_filename = f"{str(INVEST_COIN_LIST).replace('/USDT', '').lower()}_usdt_{COIN_EXCHANGE}_{TIMEFRAME}.csv"
-    # json 폴더에서 CSV 파일을 찾습니다.
+    
+    # CSV 파일 이름 규칙: ticker를 기준으로 생성 (INVEST_COIN_LIST가 리스트일 경우 대비)
+    file_ticker_name = ticker.replace('/USDT', '').lower()
+    csv_filename = f"{file_ticker_name}_usdt_{COIN_EXCHANGE}_{TIMEFRAME}.json"
+    
+    # json 폴더 확인 및 생성
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_file = os.path.join(script_dir, '..', 'json', csv_filename)
+    json_dir = os.path.join(script_dir, '..', 'json')
+    if not os.path.exists(json_dir):
+        try:
+            os.makedirs(json_dir, exist_ok=True)
+            print(f"알림: '{json_dir}' 폴더가 없어 생성했습니다.")
+        except Exception as e:
+            print(f"폴더 생성 실패: {e}")
 
-    print(f"--- [{csv_file}] 데이터 준비 중 ---")
+    csv_file = os.path.join(json_dir, csv_filename)
+    print(f"--- [{csv_file}] 데이터 파일 경로 확인 ---")
 
     # 1. 로컬 CSV 파일에서 데이터 로드 시도
     if os.path.exists(csv_file):
@@ -89,15 +106,23 @@ def load_data(ticker, timeframe, start_date, end_date):
     since = int(start_date.timestamp() * 1000)
 
     if not csv_df.empty:
-        last_date_in_csv = csv_df.index.max()
-        if last_date_in_csv < end_date:
-            print(f"로컬 데이터가 최신이 아닙니다. 마지막 데이터: {last_date_in_csv}. 이후 데이터를 API로 가져옵니다.")
-            # 마지막 데이터 다음 캔들부터 가져오기 위해 시간 증분
-            timeframe_duration = pd.to_timedelta(timeframe)
-            since = int((last_date_in_csv + timeframe_duration).timestamp() * 1000)
+        # [수정] 로컬 파일의 시작 날짜가 요청한 시작 날짜보다 현저히 늦으면(예: 2일 이상 차이), 전체 다시 다운로드
+        first_date_in_csv = csv_df.index.min()
+        if first_date_in_csv > start_date + datetime.timedelta(days=2):
+            print(f"로컬 데이터 시작일({first_date_in_csv})이 요청 시작일({start_date})보다 늦습니다. 전체 데이터를 다시 다운로드합니다.")
+            csv_df = pd.DataFrame() # 기존 데이터 폐기
             fetch_from_api = True
+            since = int(start_date.timestamp() * 1000)
         else:
-            print("로컬 데이터가 최신 상태입니다. API 호출을 건너뜁니다.")
+            last_date_in_csv = csv_df.index.max()
+            if last_date_in_csv < end_date:
+                print(f"로컬 데이터가 최신이 아닙니다. 마지막 데이터: {last_date_in_csv}. 이후 데이터를 API로 가져옵니다.")
+                # 마지막 데이터 다음 캔들부터 가져오기 위해 시간 증분
+                timeframe_duration = pd.to_timedelta(timeframe)
+                since = int((last_date_in_csv + timeframe_duration).timestamp() * 1000)
+                fetch_from_api = True
+            else:
+                print("로컬 데이터가 최신 상태입니다. API 호출을 건너뜁니다.")
     else:
         print("로컬 데이터가 없습니다. 전체 기간 데이터를 API로 다운로드합니다.")
         fetch_from_api = True
@@ -110,6 +135,12 @@ def load_data(ticker, timeframe, start_date, end_date):
         end_ms = int(end_date.timestamp() * 1000)
         timeframe_duration_in_ms = exchange.parse_timeframe(timeframe) * 1000
 
+        # Gate.io 등 일부 거래소의 과도한 과거 데이터 요청 제한에 대한 대비 (예: 15분봉 약 100일)
+        # 만약 Gate.io에서 에러가 나면 Binance로 우회 시도
+        
+        switched_to_binance = False 
+        original_since = since
+
         while since < end_ms:
             try:
                 ohlcv = exchange.fetch_ohlcv(ticker, timeframe, since, limit=1000)
@@ -120,8 +151,19 @@ def load_data(ticker, timeframe, start_date, end_date):
                 print(f"[{ticker}] API 다운로드 중... 마지막 날짜: {datetime.datetime.fromtimestamp(ohlcv[-1][0]/1000)}")
                 time.sleep(exchange.rateLimit / 1000)
             except Exception as e:
-                print(f"API 데이터 다운로드 오류: {e}")
-                break
+                # Gate.io "Candlestick too long ago" 혹은 기타 API 에러 처리
+                if "too long ago" in str(e) and COIN_EXCHANGE == 'gateio' and not switched_to_binance:
+                    print(f"\n[경고] Gate.io API는 오래된 15분봉 데이터(약 3.5개월 이전)를 제공하지 않습니다.")
+                    print(f"대체 수단으로 'Binance' API를 통해 과거 데이터를 다운로드합니다... (데이터 정합성은 대부분 일치함)\n")
+                    
+                    exchange = ccxt.binance()
+                    since = original_since # 원래 요청했던 시작 시간으로 리셋
+                    switched_to_binance = True
+                    time.sleep(1)
+                    continue
+                else:
+                    print(f"API 데이터 다운로드 오류: {e}")
+                    break
 
         if all_ohlcv:
             api_df = pd.DataFrame(all_ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
@@ -138,6 +180,7 @@ def load_data(ticker, timeframe, start_date, end_date):
             print(f"업데이트된 데이터를 '{csv_file}' 파일로 저장했습니다.")
             df = combined_df
         else:
+            print("API에서 가져온 데이터가 없습니다.")
             df = csv_df # API로 가져온 데이터가 없으면 기존 데이터 사용
     else:
         df = csv_df # API 호출이 필요 없으면 기존 데이터 사용
@@ -849,7 +892,14 @@ def analyze_and_plot_results(portfolio_df, realized_pnl_data, new_cycle_dates, m
     mdd_perf_series = (portfolio_df['value'].cummax() - portfolio_df['value']) / portfolio_df['value'].cummax()
     (mdd_perf_series * 100).plot(ax=ax2, title='최대 낙폭 (MDD, 전략 성과 기준)', color='red')
     ax2.set_ylabel('낙폭 (%)'); ax2.grid(True)
-    plt.xlabel('날짜'); plt.tight_layout(); plt.show()
+    plt.xlabel('날짜'); plt.tight_layout(); 
+    
+    import socket
+    pcServerGb = socket.gethostname()
+    if pcServerGb != "AutoBotCong":
+        plt.show()
+    else:
+        print("서버 환경이므로 차트 표시를 생략합니다.")
 
 
 # ==============================================================================

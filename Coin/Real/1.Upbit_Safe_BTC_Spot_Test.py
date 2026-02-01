@@ -367,8 +367,14 @@ if len(ResultList) > 0:
     axs[1].set_title('Drawdown Comparison Chart')
     axs[1].legend(loc='lower left')
     plt.tight_layout()
-    plt.show()
     
+    import socket
+    pcServerGb = socket.gethostname()
+    if pcServerGb != "AutoBotCong":
+        plt.show()
+    else:
+        print("서버 환경이므로 차트 표시를 생략합니다.")
+
     TotalOri = result_df['Total_Money'].iloc[1]
     TotalFinal = result_df['Total_Money'].iloc[-1]
     TotalMDD_daily = result_df['MaxDrawdown'].min() * 100.0

@@ -142,7 +142,7 @@ InvestCoinList = [
     {'ticker': '1000BONK/USDT', 'rate': 0.09, 'start_date': {'year': 2023, 'month': 1, 'day': 1}},
     {'ticker': 'SUI/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
     {'ticker': '1000FLOKI/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
-    {'ticker': 'SHIB/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
+    {'ticker': '1000SHIB/USDT', 'rate': 0.09, 'start_date': {'year': 2021, 'month': 7, 'day': 1}},
 ]
 
 
@@ -729,7 +729,12 @@ axs[1].grid(True)
 
 plt.xlabel('Date')
 plt.tight_layout()
-plt.show()
+import socket
+pcServerGb = socket.gethostname()
+if pcServerGb != "AutoBotCong":
+    plt.show()
+else:
+    print("서버 환경이므로 차트 표시를 생략합니다.")
 
 
 # 최종 결과 출력 (Gate.io 로직 적용)

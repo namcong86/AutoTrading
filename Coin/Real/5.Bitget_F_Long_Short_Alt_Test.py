@@ -21,6 +21,7 @@ from datetime import datetime
 import os
 import ccxt
 import time
+import socket
 
 # ==============================================================================
 # 한글 폰트 설정 (Windows)
@@ -29,18 +30,32 @@ import matplotlib.font_manager as fm
 
 # 시스템에서 사용 가능한 한글 폰트 찾기
 def set_korean_font():
-    font_list = ['Malgun Gothic', 'NanumGothic', 'NanumBarunGothic', 'Gulim', 'Dotum']
+    font_list = ['Malgun Gothic', 'NanumGothic', 'NanumBarunGothic', 'Gulim', 'Dotum', 'AppleGothic', 'UnDotum']
+    
+    # OS별 우선순위 조정
+    import platform
+    if platform.system() == 'Windows':
+        font_list.insert(0, 'Malgun Gothic')
+    elif platform.system() == 'Linux':
+        font_list = ['NanumGothic', 'NanumBarunGothic', 'UnDotum'] + font_list
+
     for font_name in font_list:
         try:
+            # 폰트 찾기 시도
             font_path = fm.findfont(fm.FontProperties(family=font_name))
-            if font_path and 'ttf' in font_path.lower():
+            
+            # 찾은 폰트 파일이 실제 존재하는지, 그리고 ttf/otf 인지 확인
+            if font_path and os.path.exists(font_path) and (font_path.lower().endswith('.ttf') or font_path.lower().endswith('.otf')):
                 plt.rcParams['font.family'] = font_name
                 plt.rcParams['axes.unicode_minus'] = False
-                print(f"[폰트] {font_name} 사용")
+                print(f"[폰트] '{font_name}' 설정 완료 (경로: {font_path})")
                 return True
-        except:
+        except Exception as e:
             continue
-    # 폰트를 못찾으면 기본 설정
+            
+    # 폰트를 못찾으면
+    print("[경고] 한글 폰트를 찾을 수 없습니다. 차트 글자가 깨질 수 있습니다.")
+    print("       Linux인 경우: sudo apt-get install fonts-nanum 명령어로 폰트를 설치하세요.")
     plt.rcParams['axes.unicode_minus'] = False
     return False
 
@@ -49,7 +64,7 @@ set_korean_font()
 # ==============================================================================
 # 백테스트 설정
 # ==============================================================================
-INITIAL_CAPITAL = 10000      # 초기 자본금 (USDT)
+INITIAL_CAPITAL = 100000      # 초기 자본금 (USDT)
 LEVERAGE = 1.4                  # 레버리지 배수
 SHORT_MA = 20                 # 단기 이동평균 기간
 LONG_MA = 120                 # 장기 이동평균 기간
@@ -75,7 +90,7 @@ TAKE_PROFIT_LEVELS = [
 ]
 
 # 테스트 기간
-START_DATE = '2022-02-01'
+START_DATE = '2025-03-01'
 END_DATE = datetime.now().strftime('%Y-%m-%d')  # 오늘 날짜까지
 
 # 연간 출금 설정 (1월 1일에 전년도 수익의 일정 비율 출금)
@@ -92,7 +107,10 @@ COIN_LIST = [
 ]
 
 # JSON 데이터 경로
-DATA_PATH = r'C:\AutoTrading\Coin\json'
+if socket.gethostname() == "AutoBotCong":
+    DATA_PATH = '/var/AutoBot/json'
+else:
+    DATA_PATH = r'C:\AutoTrading\Coin\json'
 CYCLE_STATE_FILE = os.path.join(DATA_PATH, 'cycle_state.json')
 
 
@@ -149,8 +167,8 @@ def validate_data_availability(coin_list, data_path, start_date, timeframe, requ
         coin_name = safe_name.split('_')[0]
         
         # 시간봉/분봉 데이터 확인
-        hourly_json = f"{data_path}\\{coin_name}_usdt_bitget_{timeframe}.json"
-        daily_json = f"{data_path}\\{coin_name}_usdt_bitget_1d.json"
+        hourly_json = os.path.join(data_path, f"{coin_name}_usdt_bitget_{timeframe}.json")
+        daily_json = os.path.join(data_path, f"{coin_name}_usdt_bitget_1d.json")
         
         symbol_errors = []
         
@@ -290,6 +308,9 @@ class CycleManager:
         self.total_withdrawn = 0      # 총 출금액
         self.last_quarter_balance = initial_capital  # 이전 분기말 잔액
         self.last_withdrawal_date = None  # 마지막 출금일
+        
+        # 코인별 총 보유 시간 (초 단위)
+        self.holding_times = {coin: 0 for coin in coin_list}
         
     def get_total_equity(self, current_prices):
         """현재 총 자산가치 (사용가능잔액 + 포지션가치 + 미실현손익)"""
@@ -1520,8 +1541,13 @@ def plot_results(daily_df, mdd):
 # 메인 실행
 # ==============================================================================
 if __name__ == '__main__':
+    # 호스트명 확인 (공백 제거)
+    CURRENT_HOSTNAME = socket.gethostname().strip()
+    SERVER_HOSTNAME = "AutoBotCong"
+    
     print("=" * 70)
     print("골든크로스/데드크로스 롱숏 전략 백테스팅 (사이클 기반)")
+    print(f"Hostname: '{CURRENT_HOSTNAME}'")
     print("=" * 70)
     print(f"기간: {START_DATE} ~ {END_DATE}")
     print(f"타임프레임: {TIMEFRAME}")
@@ -1541,6 +1567,19 @@ if __name__ == '__main__':
     print(f"  - 사이클 중 진입 시 할당된 금액으로 진입 (잔액 변동 무관)")
     print(f"  - 모든 포지션 청산 시 사이클 종료 → 새 사이클에서 재분배")
     print("=" * 70)
+
+    # 폰트 설정 확인
+    font_available = set_korean_font()
+    
+    # JSON 데이터 경로 설정 (호스트명 기반)
+    if CURRENT_HOSTNAME == SERVER_HOSTNAME:
+        DATA_PATH = '/var/AutoBot/json'
+        print(f"[설정] 서버 환경 감지 ({SERVER_HOSTNAME}). 경로: {DATA_PATH}")
+    else:
+        DATA_PATH = r'C:\AutoTrading\Coin\json'
+        print(f"[설정] 로컬 환경 감지. 경로: {DATA_PATH}")
+        
+    CYCLE_STATE_FILE = os.path.join(DATA_PATH, 'cycle_state.json')
     
     # 데이터 가용성 검증 (이동평균 계산에 필요한 데이터가 있는지 확인)
     required_ma_periods = {
@@ -1565,8 +1604,8 @@ if __name__ == '__main__':
         safe_name = symbol.replace('/', '_').replace(':', '_').lower()
         coin_name = safe_name.split('_')[0]
         
-        json_file = f"{DATA_PATH}\\{coin_name}_usdt_bitget_{TIMEFRAME}.json"
-        daily_json_file = f"{DATA_PATH}\\{coin_name}_usdt_bitget_1d.json"
+        json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_{TIMEFRAME}.json")
+        daily_json_file = os.path.join(DATA_PATH, f"{coin_name}_usdt_bitget_1d.json")
         
         try:
             backtest.load_data(symbol, json_file, daily_json_file, START_DATE, END_DATE)
@@ -1585,4 +1624,10 @@ if __name__ == '__main__':
     
     # 탭으로 차트 출력
     if daily_df is not None and not daily_df.empty:
-        plot_results_with_tabs(daily_df, mdd, cycle_mdd, coin_stats, trades, INITIAL_CAPITAL)
+        if CURRENT_HOSTNAME != SERVER_HOSTNAME:
+            if font_available:
+                plot_results_with_tabs(daily_df, mdd, cycle_mdd, coin_stats, trades, INITIAL_CAPITAL)
+            else:
+                print("\n[알림] 한글 폰트를 찾을 수 없어 차트 표시를 생략합니다.")
+        else:
+            print(f"\n[알림] 서버 환경({SERVER_HOSTNAME})이므로 차트 표시를 생략합니다.")

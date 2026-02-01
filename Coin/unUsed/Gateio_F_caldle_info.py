@@ -41,12 +41,13 @@ def check_data_availability(exchange, ticker_list, timeframe, start_date):
         first_date_found = None
         
         try:
-            # GateIO는 since가 제대로 작동하지 않을 수 있어
-            # limit을 크게 설정하여 가능한 모든 과거 데이터 조회
+            # 요청 시작일로부터 데이터를 조회
+            since_ms = int(start_date.timestamp() * 1000)
             ohlcv = exchange.fetch_ohlcv(
                 symbol=ticker,
                 timeframe=timeframe,
-                limit=2000  # 최대한 많이 가져오기
+                since=since_ms,
+                limit=100  # 시작일부터 100개만 조회해도 충분
             )
             
             if ohlcv and len(ohlcv) > 0:
@@ -246,12 +247,12 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
 # 실행 설정
 # ==============================================================================
 TICKER_LIST = [
-    'BTC/USDT:USDT',
+    'DOGE/USDT:USDT',
 ]
 
-timeframe = '1d'
-start_year, start_month, start_day = 2020, 8, 1
-end_year, end_month, end_day = 2025, 12, 22
+timeframe = '15m'
+start_year, start_month, start_day = 2021, 1, 1
+end_year, end_month, end_day = 2026, 1, 8
 
 # 저장 경로
 output_path = r'C:\AutoTrading\Coin\json'

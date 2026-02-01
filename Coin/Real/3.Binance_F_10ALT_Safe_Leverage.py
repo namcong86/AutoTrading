@@ -73,7 +73,7 @@ INVEST_COIN_LIST = [
     {'ticker': '1000BONK/USDT', 'rate':0.09},
     {'ticker': '1000FLOKI/USDT', 'rate': 0.09},
     {'ticker': 'SUI/USDT', 'rate': 0.09},    
-    {'ticker': 'SHIB/USDT', 'rate': 0.09},
+    {'ticker': '1000SHIB/USDT', 'rate': 0.09},
 ]
 # ==============================================================================
 

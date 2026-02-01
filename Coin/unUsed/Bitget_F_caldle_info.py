@@ -48,6 +48,17 @@ def check_data_availability(exchange, ticker_list, timeframe, start_date):
                 since=test_ms,
                 limit=1
             )
+
+            # [Fix] 2015년부터 조회 시 데이터가 없으면, 
+            # 최근 상장 코인일 수 있으므로 요청 시작일(start_date) 기준으로 재조회 시도
+            if not ohlcv:
+                start_ms_check = int(start_date.timestamp() * 1000)
+                ohlcv = exchange.fetch_ohlcv(
+                    symbol=ticker,
+                    timeframe=timeframe,
+                    since=start_ms_check,
+                    limit=1
+                )
             
             if ohlcv and len(ohlcv) > 0:
                 first_timestamp = ohlcv[0][0]
@@ -243,21 +254,18 @@ def fetch_ohlcv_to_json(ticker, timeframe, start_year, start_month, start_day, e
 # 실행 설정
 # ==============================================================================
 TICKER_LIST = [
-    'DOGE/USDT:USDT',
-    'SOL/USDT:USDT',
-    'ADA/USDT:USDT',
-    'AVAX/USDT:USDT',
+    'PEPEUSDT',
 ]
 
-timeframe = '30m'
-start_year, start_month, start_day = 2021, 10, 1
-end_year, end_month, end_day = 2025, 12, 17
+timeframe = '1h'
+start_year, start_month, start_day = 2023, 6, 1
+end_year, end_month, end_day = 2026, 1, 22
 
 # 저장 경로
 output_path = r'C:\AutoTrading\Coin\json'
 
 # ==============================================================================
-# 데이터 가용성 사전 검증
+# 데이터 가용성 사전 검증\
 # ==============================================================================
 start_date = datetime.datetime(start_year, start_month, start_day)
 availability_results, all_available = check_data_availability(

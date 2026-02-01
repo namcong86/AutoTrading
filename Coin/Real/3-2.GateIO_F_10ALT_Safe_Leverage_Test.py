@@ -311,6 +311,17 @@ COIN_LISTS_BY_YEAR = {
         {'ticker': 'FLOKI/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
         {'ticker': 'SUI/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
         {'ticker': 'SHIB/USDT', 'rate': 0.09, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+
+        # {'ticker': 'DOGE/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'ADA/USDT',  'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'XLM/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'XRP/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'HBAR/USDT', 'rate': 0.1, 'start_date': {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'ETH/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'PEPE/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},  
+        # {'ticker': 'BONK/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'FLOKI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
+        # {'ticker': 'SUI/USDT', 'rate': 0.1, 'start_date':  {'year': 2022, 'month': 7, 'day': 1}},
         
     ]
 }
@@ -473,6 +484,7 @@ total_equity_list, cash_only_equity_list, modified_equity_list = [], [], []
 last_cash_only_equity = InvestTotalMoney
 MonthlyTryCnt = {}
 CoinStats = {ticker: {'SuccessCnt': 0, 'FailCnt': 0} for ticker in valid_tickers}
+CoinHoldingTimes = {ticker: 0 for ticker in valid_tickers}  # 코인별 총 보유 시간 (초 단위)
 balance_logs, trade_logs = [], []
 cycle_count = 1
 was_in_position = False
@@ -507,6 +519,13 @@ for date in common_dates:
                 else: CoinStats[ticker]['FailCnt'] += 1
                 del positions[ticker]
                 sold_today_tickers.add(ticker)
+                
+                # 보유 시간 계산
+                entry_date = position.get('entry_date')
+                if entry_date:
+                    duration_sec = (date - entry_date).total_seconds()
+                    CoinHoldingTimes[ticker] += duration_sec
+                
                 month_key = date.strftime('%Y-%m')
                 MonthlyTryCnt[month_key] = MonthlyTryCnt.get(month_key, 0) + 1
 
@@ -547,7 +566,13 @@ for date in common_dates:
 
             investment_for_this_coin = investment_base * coin_spec_to_buy['rate']
             if cash_balance >= investment_for_this_coin and investment_for_this_coin > 0:
-                positions[ticker] = {'margin': investment_for_this_coin, 'entry_price': buy_price, 'quantity': (investment_for_this_coin * leverage) / buy_price, 'leverage': leverage}
+                positions[ticker] = {
+                    'margin': investment_for_this_coin, 
+                    'entry_price': buy_price, 
+                    'quantity': (investment_for_this_coin * leverage) / buy_price, 
+                    'leverage': leverage,
+                    'entry_date': date  # 진입 시간 저장
+                }
                 cash_balance -= investment_for_this_coin
                 log_msg = f"[사이클 {cycle_count}] {ticker} {date} >>> 매수: Entry {buy_price:.8f}, 투자금 {investment_for_this_coin:.2f}, 현재 총자산 {cash_balance:.2f}"
                 trade_logs.append(log_msg)
@@ -1098,6 +1123,14 @@ if __name__ == "__main__":
         overall_win_rate = (total_success_all / total_trades_all * 100) if total_trades_all > 0 else 0
         print(f"총 합계 >>> 성공: {total_success_all} 실패: {total_fail_all} -> 승률: {round(overall_win_rate, 2)}%")
         print("------------------------------")
+        
+        print("\n---------- 코인별 총 포지션 보유 일수 ----------")
+        for sym in sorted(CoinHoldingTimes.keys()):
+            seconds = CoinHoldingTimes[sym]
+            days = seconds / (24 * 3600)
+            print(f"{sym}: {days:.1f}일")
+        print("------------------------------")
+        
         print("\n---------- 총 결과 ----------")
         print(f"최초 금액: {format(round(TotalOri), ',')} USDT, 최종 금액: {format(round(TotalFinal), ',')} USDT")
         print(f"총 수익률: {round(((TotalFinal - TotalOri) / TotalOri) * 100, 2)}%")

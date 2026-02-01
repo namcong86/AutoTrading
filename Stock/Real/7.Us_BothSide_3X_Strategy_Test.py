@@ -711,7 +711,12 @@ if len(ResultList) > 0:
 
     # Show the plot
     plt.tight_layout()
-    plt.show()
+    import socket
+    pcServerGb = socket.gethostname()
+    if pcServerGb != "AutoBotCong":
+        plt.show()
+    else:
+        print("서버 환경이므로 차트 표시를 생략합니다.")
         
     #'''
 
