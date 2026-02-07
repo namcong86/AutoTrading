@@ -56,7 +56,7 @@ ACCOUNT_LIST = [
         "secret_key": Bitget_SecretKey,
         "passphrase": Bitget_Passphrase,
         "leverage": 2,  # 레버리지 설정 (정수 1~10)
-        "effective_leverage": 1.2  # 실제 주문 시 적용할 배수
+        "effective_leverage": 1.8  # 실제 주문 시 적용할 배수
     },
 ]
 
@@ -91,6 +91,7 @@ TAKE_PROFIT_LEVELS = [
     {'profit_pct': 5, 'sell_pct': 10},   # 5% 수익 시 10% 익절
     {'profit_pct': 10, 'sell_pct': 20},  # 10% 수익 시 20% 익절
     {'profit_pct': 20, 'sell_pct': 30},  # 20% 수익 시 30% 익절
+    {'profit_pct': 30, 'sell_pct': 50},  # 30% 수익 시 50% 익절
 ]
 
 # ==============================================================================
@@ -458,11 +459,11 @@ def execute_trading_logic(account_info):
         if TAKE_PROFIT_ENABLED and actual_position != 0 and actual_size > 0 and entry_price > 0:
             prev_close = df['close'].iloc[-2]  # 전 캔들 종가
             
-            # 수익률 계산
+            # 수익률 계산 (ROE 기준, 레버리지 포함)
             if actual_position == 1:  # 롱
-                profit_pct = ((prev_close - entry_price) / entry_price) * 100
+                profit_pct = ((prev_close - entry_price) / entry_price) * 100 * effective_leverage
             else:  # 숏
-                profit_pct = ((entry_price - prev_close) / entry_price) * 100
+                profit_pct = ((entry_price - prev_close) / entry_price) * 100 * effective_leverage
             
             # 익절 레벨 체크
             for tp in TAKE_PROFIT_LEVELS:
